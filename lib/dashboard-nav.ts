@@ -1,0 +1,46 @@
+import {
+  Bot,
+  Brain,
+  CalendarClock,
+  CalendarCheck2,
+  CreditCard,
+  FlaskConical,
+  GraduationCap,
+  LayoutDashboard,
+  ListChecks,
+  MessageCircleQuestion,
+  MessageSquare,
+  Plug,
+  Store,
+  UserCog,
+} from "lucide-react";
+
+export const DASHBOARD_NAV = [
+  { href: "/dashboard", label: "Resumen", icon: LayoutDashboard },
+  { href: "/dashboard/negocio", label: "Negocio", icon: Store },
+  { href: "/dashboard/horarios", label: "Horarios", icon: CalendarClock },
+  { href: "/dashboard/servicios", label: "Servicios", icon: ListChecks },
+  { href: "/dashboard/preguntas-frecuentes", label: "Preguntas frecuentes", icon: MessageCircleQuestion },
+  { href: "/dashboard/turnos", label: "Turnos", icon: CalendarCheck2 },
+  {
+    href: "/dashboard/whatsapp",
+    label: "WhatsApp",
+    icon: MessageSquare,
+    children: [
+      { href: "/dashboard/whatsapp/conexion", label: "Conexión", icon: Plug },
+      { href: "/dashboard/whatsapp/conversaciones", label: "Conversaciones", icon: MessageSquare },
+    ],
+  },
+  {
+    href: "/dashboard/ai-studio",
+    label: "AI Studio",
+    icon: Bot,
+    children: [
+      { href: "/dashboard/ai-studio/training", label: "Entrenamiento", icon: GraduationCap },
+      { href: "/dashboard/ai-studio/employee", label: "Empleado", icon: UserCog },
+      { href: "/dashboard/ai-studio/memory", label: "Memoria", icon: Brain },
+      { href: "/dashboard/ai-studio/simulator", label: "Simulador", icon: FlaskConical },
+    ],
+  },
+  { href: "/dashboard/suscripcion", label: "Suscripción", icon: CreditCard },
+] as const;

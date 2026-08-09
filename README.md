@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mi Agenda
 
-## Getting Started
+Mi Agenda es una plataforma SaaS que automatiza la gestión de reservas mediante WhatsApp e Inteligencia Artificial.
 
-First, run the development server:
+El objetivo es permitir que cualquier negocio pueda comenzar a recibir y administrar turnos en pocos minutos, sin conocimientos técnicos.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Estado del proyecto
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Versión:** Alpha
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Actualmente el proyecto se encuentra en proceso de desarrollo hacia su primer MVP.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+* Next.js 15
+* Prisma ORM
+* PostgreSQL
+* Google Gemini
+* Baileys
+* Mercado Pago
+* Tailwind CSS
+* shadcn/ui
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Objetivos del MVP
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+* Registro de usuarios.
+* Inicio de sesión.
+* Configuración del negocio.
+* Configuración de servicios.
+* Configuración de horarios.
+* Conexión de WhatsApp.
+* Automatización mediante IA.
+* Gestión de reservas.
+* Dashboard administrativo.
+* Suscripción mediante Mercado Pago.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## Documentación
+
+Toda la documentación del proyecto se encuentra en la carpeta `docs`.
+
+### Producto
+
+* Vision
+* Roadmap
+* Backlog
+* MVP
+* Sprints
+
+### Arquitectura
+
+* Overview
+* Database
+* API
+* Auth
+* AI
+* WhatsApp
+* Deployment
+
+### Decisiones técnicas
+
+Architecture Decision Records (ADR).
+
+---
+
+## Filosofía
+
+La prioridad del proyecto es construir un producto simple para el usuario, pero con una arquitectura sólida que permita escalar a miles de negocios sin necesidad de reescrituras importantes.

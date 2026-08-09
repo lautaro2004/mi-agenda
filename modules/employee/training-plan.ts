@@ -1,0 +1,201 @@
+import { prisma } from "@/lib/prisma";
+import type { TrainingPlan, TrainingPlanSectionStatus } from "@/lib/types";
+import type { TrainingPlanGenerationValues } from "@/lib/schemas";
+
+function toClientPlan(row: {
+  id: string;
+  businessId: string;
+  category: string;
+  generatedAt: Date;
+  updatedAt: Date;
+  sections: {
+    id: string;
+    key: string;
+    title: string;
+    description: string;
+    status: string;
+    order: number;
+  }[];
+}): TrainingPlan {
+  return {
+    id: row.id,
+    businessId: row.businessId,
+    category: row.category,
+    generatedAt: row.generatedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    sections: row.sections
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map((s) => ({
+        id: s.id,
+        key: s.key,
+        title: s.title,
+        description: s.description,
+        status: s.status as TrainingPlanSectionStatus,
+        order: s.order,
+      })),
+  };
+}
+
+// section.key es la única fuente de verdad para identificar una sección —
+// nunca se compara por título. Esto la normaliza a un slug estable para que
+// variaciones de mayúsculas/acentos que proponga la IA ("Filosofía y
+// Valores" vs "filosofia y valores") resuelvan siempre a la misma key.
+function normalizeSectionKey(raw: string): string {
+  const slug = raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return slug.slice(0, 60) || "seccion";
+}
+
+const TITLE_STOP_WORDS = new Set(["y", "de", "del", "la", "el", "los", "las", "en", "con", "para", "su", "sus"]);
+
+function titleWords(title: string): Set<string> {
+  return new Set(
+    title
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 2 && !TITLE_STOP_WORDS.has(w))
+  );
+}
+
+// Heurística para atrapar duplicados con keys distintas pero el mismo tema
+// (ej. "Casos de éxito" vs "Portfolio y Casos de Éxito"): si la mayoría de
+// las palabras relevantes del título más corto están en el más largo, se
+// consideran el mismo tema.
+function isSimilarTitle(a: string, b: string): boolean {
+  const wa = titleWords(a);
+  const wb = titleWords(b);
+  if (wa.size === 0 || wb.size === 0) return false;
+  const [smaller, larger] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
+  const overlap = [...smaller].filter((w) => larger.has(w)).length;
+  return overlap / smaller.size >= 0.6;
+}
+
+interface SectionCandidate {
+  key: string;
+  title: string;
+  description: string;
+}
+
+// Reutilizada tanto al generar el plan por primera vez como al sumar
+// secciones a uno existente: descarta cualquier sección propuesta que ya
+// esté cubierta (por key normalizada o por similitud de título) en vez de
+// crear un duplicado.
+function dedupeSections(
+  candidates: TrainingPlanGenerationValues["sections"],
+  existing: { key: string; title: string }[]
+): SectionCandidate[] {
+  const known = existing.map((s) => ({ key: s.key, title: s.title }));
+  const result: SectionCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const key = normalizeSectionKey(candidate.key);
+    const isDuplicate = known.some((k) => k.key === key || isSimilarTitle(k.title, candidate.title));
+    if (isDuplicate) continue;
+
+    const entry = { key, title: candidate.title, description: candidate.description };
+    result.push(entry);
+    known.push(entry);
+  }
+
+  return result;
+}
+
+export async function getTrainingPlan(businessId: string): Promise<TrainingPlan | null> {
+  const row = await prisma.trainingPlan.findUnique({
+    where: { businessId },
+    include: { sections: true },
+  });
+  return row ? toClientPlan(row) : null;
+}
+
+// Genera el plan la primera vez. Si ya existe uno, nunca borra progreso:
+// solo agrega las secciones nuevas (deduplicadas) que todavía no estuvieran.
+export async function generateTrainingPlan(
+  businessId: string,
+  data: TrainingPlanGenerationValues
+): Promise<TrainingPlan> {
+  const existing = await prisma.trainingPlan.findUnique({
+    where: { businessId },
+    include: { sections: true },
+  });
+
+  if (!existing) {
+    const sections = dedupeSections(data.sections, []);
+    const created = await prisma.trainingPlan.create({
+      data: {
+        businessId,
+        category: data.category,
+        sections: { create: sections.map((s, i) => ({ ...s, order: i })) },
+      },
+      include: { sections: true },
+    });
+    return toClientPlan(created);
+  }
+
+  const newSections = dedupeSections(data.sections, existing.sections);
+  const maxOrder = existing.sections.reduce((max, s) => Math.max(max, s.order), -1);
+
+  if (newSections.length > 0) {
+    await prisma.trainingPlanSection.createMany({
+      data: newSections.map((s, i) => ({
+        planId: existing.id,
+        key: s.key,
+        title: s.title,
+        description: s.description,
+        order: maxOrder + 1 + i,
+      })),
+    });
+  }
+
+  const updated = await prisma.trainingPlan.findUniqueOrThrow({
+    where: { id: existing.id },
+    include: { sections: true },
+  });
+  return toClientPlan(updated);
+}
+
+export async function setSectionStatus(
+  businessId: string,
+  key: string,
+  status: TrainingPlanSectionStatus
+): Promise<void> {
+  await prisma.trainingPlanSection.updateMany({
+    where: { key: normalizeSectionKey(key), plan: { businessId } },
+    data: { status },
+  });
+}
+
+// Único punto que decide cuál es la "sección activa" (currentSection): si ya
+// hay una "in_progress" la deja como está; si no, activa la primera
+// "pending" según su orden. No hace nada si no hay plan o no quedan
+// secciones pendientes. Se llama al inicio de cada turno del motor de
+// entrenamiento (ver runTrainingTurn) — es la garantía determinística de que
+// la conversación nunca se queda sin saber de qué hablar.
+export async function activateNextPendingSection(businessId: string): Promise<void> {
+  const plan = await prisma.trainingPlan.findUnique({
+    where: { businessId },
+    include: { sections: true },
+  });
+  if (!plan) return;
+
+  const alreadyActive = plan.sections.some((s) => s.status === "in_progress");
+  if (alreadyActive) return;
+
+  const next = plan.sections
+    .filter((s) => s.status === "pending")
+    .sort((a, b) => a.order - b.order)[0];
+  if (!next) return;
+
+  await prisma.trainingPlanSection.update({
+    where: { id: next.id },
+    data: { status: "in_progress" },
+  });
+}
