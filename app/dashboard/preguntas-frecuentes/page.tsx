@@ -1,16 +1,39 @@
 "use client";
 
+import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { MessageCircleQuestion, Pencil, Plus, Trash2 } from "lucide-react";
+import { MessageCircleQuestion, Pencil, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DeleteIconButton } from "@/components/dashboard/delete-icon-button";
 import { FaqDialog } from "@/components/onboarding/faq-dialog";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { cn } from "@/lib/utils";
 import { useOnboarding } from "@/lib/onboarding-store";
 
 export default function FaqsSettingsPage() {
-  const { state, addFaq, updateFaq, removeFaq } = useOnboarding();
+  const { state, hydrated, refresh, addFaq, updateFaq, removeFaq } = useOnboarding();
+  // Solo se usa para atenuar visualmente la card que se está borrando —
+  // DeleteIconButton ya maneja su propio disabled/spinner.
+  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
+
+  function setItemDeleting(id: string, pending: boolean) {
+    setDeletingIds((prev) => {
+      const next = new Set(prev);
+      if (pending) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  // Ver comentario en OnboardingContextValue.refresh: las FAQs pudieron
+  // haberse creado por chat después de la foto inicial de este Provider.
+  React.useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div>
@@ -37,7 +60,13 @@ export default function FaqsSettingsPage() {
         }
       />
 
-      {state.faqs.length === 0 ? (
+      {!hydrated ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
+        </div>
+      ) : state.faqs.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
           <MessageCircleQuestion className="size-8 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium text-foreground">
@@ -58,7 +87,10 @@ export default function FaqsSettingsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25 }}
-                className="rounded-xl border border-border bg-card p-4"
+                className={cn(
+                  "rounded-xl border border-border bg-card p-4",
+                  deletingIds.has(faq.id) && "pointer-events-none opacity-50"
+                )}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -82,11 +114,10 @@ export default function FaqsSettingsPage() {
                         </Button>
                       }
                     />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-destructive"
-                      onClick={async () => {
+                    <DeleteIconButton
+                      label={`Eliminar pregunta: ${faq.question}`}
+                      onPendingChange={(pending) => setItemDeleting(faq.id, pending)}
+                      onDelete={async () => {
                         try {
                           await removeFaq(faq.id);
                           toast.success("Pregunta eliminada");
@@ -94,10 +125,7 @@ export default function FaqsSettingsPage() {
                           toast.error("No pudimos eliminar la pregunta. Intentá de nuevo.");
                         }
                       }}
-                      aria-label={`Eliminar pregunta: ${faq.question}`}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    />
                   </div>
                 </div>
               </motion.div>

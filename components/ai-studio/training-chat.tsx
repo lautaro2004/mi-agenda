@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api-client";
+import { useOnboarding } from "@/lib/onboarding-store";
 import type { TrainingPlan } from "@/lib/types";
 import type { TrainingMode } from "@/modules/employee/training/engine";
 import type { TrainingProposal } from "@/modules/employee/training/proposal";
@@ -36,6 +37,7 @@ export function TrainingChat({
   mode: TrainingMode;
   onProposalApplied?: (plan: TrainingPlan | null) => void;
 }) {
+  const { refresh: refreshBusinessState } = useOnboarding();
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = React.useState(true);
   const [proposal, setProposal] = React.useState<TrainingProposal | null>(null);
@@ -123,6 +125,13 @@ export function TrainingChat({
       ]);
       setProposal(result.proposal);
       onProposalApplied?.(result.plan);
+      // El guardado ya pasó server-side (Postgres tiene el dato real): esto
+      // solo mantiene sincronizado el snapshot de OnboardingProvider, que
+      // vive en la raíz de la app y no se entera solo. No es indispensable
+      // (las páginas del dashboard ya refrescan al montar), pero evita que
+      // el snapshot quede desactualizado si el dueño ya tenía otra pestaña
+      // del dashboard abierta antes de entrenar.
+      void refreshBusinessState();
     } catch (error) {
       setChatError({
         message: error instanceof Error ? error.message : "No pudimos guardar esta información. ¿Querés reintentar?",

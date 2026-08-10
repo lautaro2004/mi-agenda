@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { ScheduleEditor } from "@/components/onboarding/schedule-editor";
+import { Skeleton } from "@/components/ui/skeleton";
 import { scheduleSchema } from "@/lib/schemas";
 import { type BusinessSchedule } from "@/lib/types";
 import { useOnboarding } from "@/lib/onboarding-store";
@@ -16,7 +18,12 @@ import { useOnboarding } from "@/lib/onboarding-store";
 type ScheduleFormValues = { schedule: z.infer<typeof scheduleSchema> };
 
 export default function ScheduleSettingsPage() {
-  const { state, setSchedule } = useOnboarding();
+  const { state, hydrated, refresh, setSchedule } = useOnboarding();
+
+  React.useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const {
     control,
@@ -34,6 +41,22 @@ export default function ScheduleSettingsPage() {
     } catch {
       toast.error("No pudimos guardar los horarios. Intentá de nuevo.");
     }
+  }
+
+  if (!hydrated) {
+    return (
+      <div>
+        <PageHeader
+          title="Horarios"
+          description="Definí los días y horarios en los que tu negocio atiende."
+        />
+        <div className="max-w-2xl space-y-3">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (

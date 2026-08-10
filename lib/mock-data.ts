@@ -157,11 +157,15 @@ export const PLAN_DETAILS = {
     currency: "ARS",
     period: "mes",
     features: [
+      "Asistente de IA entrenado para tu negocio",
       "Atención automatizada por WhatsApp",
-      "Agenda y recordatorios de turnos",
-      "Servicios y horarios ilimitados",
+      "Servicios y precios ilimitados",
       "Preguntas frecuentes personalizadas",
-      "Soporte por email",
+      "Gestión de turnos y reprogramaciones",
+      "Horarios de atención",
+      "Recursos (canchas, salas, profesionales)",
+      "Entrenamiento conversacional del asistente",
+      "Simulador para probar antes de publicar",
     ],
   },
 } as const;

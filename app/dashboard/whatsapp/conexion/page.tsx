@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2, MessageSquare, Smartphone, XCircle } from "lucid
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ConnectionStatusBadge } from "@/components/whatsapp/connection-status-badge";
 import { useWhatsApp } from "@/lib/whatsapp-store";
 
@@ -17,8 +18,26 @@ const LINK_STEPS = [
 ];
 
 export default function WhatsAppConnectionPage() {
-  const { state, connect, disconnect, setAiEnabled } = useWhatsApp();
+  const { state, loading, connect, disconnect, setAiEnabled } = useWhatsApp();
   const { connection } = state;
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader
+          title="Conexión"
+          description="Vinculá el WhatsApp de tu negocio para que Mi Agenda pueda responder a tus clientes."
+        />
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
+          <Skeleton className="h-72 rounded-2xl" />
+          <div className="space-y-4">
+            <Skeleton className="h-24 rounded-2xl" />
+            <Skeleton className="h-24 rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

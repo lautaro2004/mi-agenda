@@ -7,6 +7,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ConversationListItem } from "@/components/whatsapp/conversation-list-item";
 import { ConversationLabelBadge } from "@/components/whatsapp/conversation-badges";
 import { useWhatsApp } from "@/lib/whatsapp-store";
@@ -20,7 +21,7 @@ function attentionScore(conversation: { labels: ConversationLabel[]; unreadCount
 }
 
 export default function ConversationsPage() {
-  const { state } = useWhatsApp();
+  const { state, loading } = useWhatsApp();
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<ConversationStatus | "all">("all");
   const [labelFilters, setLabelFilters] = React.useState<ConversationLabel[]>([]);
@@ -54,6 +55,22 @@ export default function ConversationsPage() {
     waiting: state.conversations.filter((c) => c.status === "waiting").length,
     closed: state.conversations.filter((c) => c.status === "closed").length,
   };
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader
+          title="Conversaciones"
+          description="Encontrá rápidamente las conversaciones que necesitan tu atención."
+        />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

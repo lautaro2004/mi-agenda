@@ -14,12 +14,11 @@ export function LandingPricing() {
     <section id="planes" className="px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Un plan simple para empezar
+          <h2 className="text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
+            Un plan. Todo lo necesario para empezar.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Sin sorpresas ni configuraciones complicadas. Un único plan con
-            todo lo que necesitás.
+            Sin niveles ni letra chica. Un único plan con todo el producto incluido.
           </p>
         </div>
 
@@ -34,7 +33,7 @@ export function LandingPricing() {
             <div className="flex items-baseline justify-between">
               <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
               <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                Recomendado
+                Todo incluido
               </span>
             </div>
 
@@ -57,7 +56,7 @@ export function LandingPricing() {
             </ul>
 
             <Button className="mt-8 w-full" size="lg" render={<Link href="/registro" />} nativeButton={false}>
-              Empezar ahora
+              Crear mi asistente
             </Button>
 
             <p className="mt-3 text-center text-xs text-muted-foreground">

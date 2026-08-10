@@ -26,13 +26,21 @@ import {
 import { PageHeader } from "@/components/dashboard/page-header";
 import { BusinessPreviewCard } from "@/components/dashboard/business-preview-card";
 import { LogoUploader } from "@/components/onboarding/logo-uploader";
+import { Skeleton } from "@/components/ui/skeleton";
 import { businessInfoSchema, type BusinessInfoValues } from "@/lib/schemas";
 import { BUSINESS_CATEGORIES } from "@/lib/types";
 import { useOnboarding } from "@/lib/onboarding-store";
 
 export default function BusinessSettingsPage() {
-  const { state, updateBusiness } = useOnboarding();
+  const { state, hydrated, refresh, updateBusiness } = useOnboarding();
   const [justSaved, setJustSaved] = React.useState(false);
+
+  // Ver comentario en OnboardingContextValue.refresh: el negocio pudo
+  // haberse entrenado por chat después de la foto inicial de este Provider.
+  React.useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const {
     register,
@@ -65,6 +73,25 @@ export default function BusinessSettingsPage() {
     } catch {
       toast.error("No pudimos guardar los cambios. Intentá de nuevo.");
     }
+  }
+
+  if (!hydrated) {
+    return (
+      <div>
+        <PageHeader
+          title="Negocio"
+          description="Esta información se utiliza para presentar tu negocio a tus clientes."
+        />
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
+          <div className="space-y-6">
+            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-40 rounded-2xl" />
+            <Skeleton className="h-32 rounded-2xl" />
+          </div>
+          <Skeleton className="h-48 rounded-2xl" />
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarCheck2, Search, X } from "lucide-react";
+import { CalendarCheck2, CalendarClock, Loader2, Plus, Search, X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { NewAppointmentDialog } from "@/components/dashboard/new-appointment-dialog";
+import { RescheduleAppointmentDialog } from "@/components/dashboard/reschedule-appointment-dialog";
+import { useOnboarding } from "@/lib/onboarding-store";
 import type { Appointment, AppointmentStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -22,11 +27,13 @@ function formatDate(dateStr: string): string {
 }
 
 export default function TurnosPage() {
+  const { state: onboardingState } = useOnboarding();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [error, setError] = useState<string | null>(null);
+  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -57,19 +64,42 @@ export default function TurnosPage() {
 
   const handleCancel = async (id: string) => {
     if (!confirm("¿Cancelar este turno?")) return;
-    await fetch(`/api/appointments/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancel" }),
-    });
-    void fetchAppointments();
+    setCancellingIds((prev) => new Set(prev).add(id));
+    try {
+      await fetch(`/api/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel" }),
+      });
+      await fetchAppointments();
+    } finally {
+      setCancellingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Turnos</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Todos los turnos reservados a través de WhatsApp.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Turnos</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Turnos reservados por WhatsApp, o agendados manualmente acá.
+          </p>
+        </div>
+        <NewAppointmentDialog
+          services={onboardingState.services}
+          onCreated={() => void fetchAppointments()}
+          trigger={
+            <Button>
+              <Plus className="size-4" data-icon="inline-start" />
+              Agendar turno
+            </Button>
+          }
+        />
       </div>
 
       {/* Filters */}
@@ -114,7 +144,7 @@ export default function TurnosPage() {
       ) : loading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl border border-border bg-muted/30" />
+            <Skeleton key={i} className="h-20 rounded-xl" />
           ))}
         </div>
       ) : appointments.length === 0 ? (
@@ -124,43 +154,68 @@ export default function TurnosPage() {
           </div>
           <p className="text-sm font-medium text-muted-foreground">No hay turnos para mostrar</p>
           <p className="text-xs text-muted-foreground">
-            Los turnos reservados por WhatsApp aparecerán aquí.
+            Los turnos reservados por WhatsApp o agendados manualmente aparecerán aquí.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {appointments.map((appt) => (
-            <div
-              key={appt.id}
-              className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium text-foreground">{appt.customerName}</p>
-                  <span
-                    className={cn(
-                      "rounded-md px-1.5 py-0.5 text-[11px] font-medium",
-                      STATUS_META[appt.status as AppointmentStatus]?.className,
-                    )}
-                  >
-                    {STATUS_META[appt.status as AppointmentStatus]?.label ?? appt.status}
-                  </span>
+          {appointments.map((appt) => {
+            const cancelling = cancellingIds.has(appt.id);
+            return (
+              <div
+                key={appt.id}
+                className={cn(
+                  "flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 transition-opacity",
+                  cancelling && "pointer-events-none opacity-50"
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-foreground">{appt.customerName}</p>
+                    <span
+                      className={cn(
+                        "rounded-md px-1.5 py-0.5 text-[11px] font-medium",
+                        STATUS_META[appt.status as AppointmentStatus]?.className,
+                      )}
+                    >
+                      {STATUS_META[appt.status as AppointmentStatus]?.label ?? appt.status}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {appt.serviceName} · {formatDate(appt.date)} a las {appt.startTime}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{appt.customerPhone}</p>
                 </div>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {appt.serviceName} · {formatDate(appt.date)} a las {appt.startTime}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{appt.customerPhone}</p>
+                {(appt.status === "confirmed" || appt.status === "pending") && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <RescheduleAppointmentDialog
+                      appointment={appt}
+                      onRescheduled={(updated) =>
+                        setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+                      }
+                      trigger={
+                        <button
+                          disabled={cancelling}
+                          className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <CalendarClock className="size-3.5" />
+                          Reprogramar
+                        </button>
+                      }
+                    />
+                    <button
+                      onClick={() => void handleCancel(appt.id)}
+                      disabled={cancelling}
+                      className="flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cancelling && <Loader2 className="size-3 animate-spin" />}
+                      {cancelling ? "Cancelando…" : "Cancelar"}
+                    </button>
+                  </div>
+                )}
               </div>
-              {(appt.status === "confirmed" || appt.status === "pending") && (
-                <button
-                  onClick={() => void handleCancel(appt.id)}
-                  className="shrink-0 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10"
-                >
-                  Cancelar
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

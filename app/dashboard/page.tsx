@@ -6,6 +6,7 @@ import { CalendarCheck2, CalendarClock, ListChecks, MessageCircleQuestion, Messa
 
 import { AccountStatusCard } from "@/components/dashboard/account-status-card";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getCompletionPercentage } from "@/lib/completion";
 import { useOnboarding } from "@/lib/onboarding-store";
 import { useWhatsApp } from "@/lib/whatsapp-store";
@@ -40,8 +41,8 @@ function useTurnoStats() {
 }
 
 export default function DashboardPage() {
-  const { state } = useOnboarding();
-  const { state: whatsapp } = useWhatsApp();
+  const { state, hydrated } = useOnboarding();
+  const { state: whatsapp, loading: whatsappLoading } = useWhatsApp();
   const { data: session } = authClient.useSession();
   const { business, services, faqs, schedule, subscription } = state;
   const { todayCount, nextTime } = useTurnoStats();
@@ -50,6 +51,29 @@ export default function DashboardPage() {
   const scheduledDays = schedule.filter((day) => day.enabled).length;
   const completionPercentage = getCompletionPercentage(state);
   const firstName = session?.user?.name?.split(" ")[0];
+
+  // Ni el % de configuración ni los contadores de servicios/FAQ/horarios son
+  // reales hasta que OnboardingProvider terminó su fetch inicial — antes de
+  // eso "0 servicios" o "0% configurado" es simplemente el estado que no
+  // cargó todavía, no la realidad del negocio. Ver loading !== empty.
+  if (!hydrated) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Hola 👋</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Este es el resumen de la configuración de tu negocio.
+          </p>
+        </div>
+        <Skeleton className="h-[164px] rounded-2xl" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-[132px] rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -105,7 +129,7 @@ export default function DashboardPage() {
         <StatCard
           icon={MessageSquare}
           label="WhatsApp"
-          value={WHATSAPP_STATUS_LABEL[whatsapp.connection.status]}
+          value={whatsappLoading ? "…" : WHATSAPP_STATUS_LABEL[whatsapp.connection.status]}
           description={whatsapp.connection.phoneNumber ?? undefined}
           href="/dashboard/whatsapp/conexion"
         />

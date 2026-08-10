@@ -16,6 +16,15 @@ import { requestJson } from "@/lib/api-client";
 interface OnboardingContextValue {
   state: OnboardingState;
   hydrated: boolean;
+  // Vuelve a pedir /api/business y pisa business/schedule/services/faqs con
+  // lo que haya en Postgres en ese momento. Existe porque este Provider vive
+  // en la raíz de la app (ver app/layout.tsx) y por lo tanto NO se remonta
+  // al navegar entre rutas — su fetch inicial es una sola foto tomada al
+  // loguearse. Cualquier escritura que pase por fuera de este Provider (ej.
+  // el training conversacional, que persiste directo en Postgres server-side)
+  // nunca la actualiza sola. Las páginas del dashboard que muestran estos
+  // datos llaman a esto al montar en vez de implementar su propio fetch.
+  refresh: () => Promise<void>;
   updateBusiness: (business: Partial<Business>) => Promise<void>;
   setSchedule: (schedule: BusinessSchedule) => Promise<void>;
   addService: (service: Omit<Service, "id" | "businessId">) => Promise<void>;
@@ -86,6 +95,27 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     () => ({
       state,
       hydrated,
+      refresh: async () => {
+        try {
+          const response = await fetch("/api/business");
+          if (!response.ok) return;
+          const data: {
+            business: Business;
+            schedule: BusinessSchedule;
+            services: Service[];
+            faqs: FAQ[];
+          } = await response.json();
+          setState((prev) => ({
+            ...prev,
+            business: data.business,
+            schedule: data.schedule,
+            services: data.services,
+            faqs: data.faqs,
+          }));
+        } catch {
+          // Error de red — dejamos el estado como estaba, igual que la carga inicial.
+        }
+      },
       updateBusiness: async (business) => {
         const { business: updated } = await requestJson<{ business: Business }>("/api/business", {
           method: "PATCH",

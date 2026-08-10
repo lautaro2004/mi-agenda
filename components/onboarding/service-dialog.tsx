@@ -3,10 +3,13 @@
 import * as React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -23,9 +26,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { requestJson } from "@/lib/api-client";
 import { serviceSchema, type ServiceFormInput, type ServiceFormValues } from "@/lib/schemas";
-import { SERVICE_CATEGORIES, type Service } from "@/lib/types";
+import { SERVICE_CATEGORIES, type Resource, type Service } from "@/lib/types";
 
 interface ServiceDialogProps {
   trigger: React.ReactElement;
@@ -35,6 +39,14 @@ interface ServiceDialogProps {
 
 export function ServiceDialog({ trigger, service, onSubmit }: ServiceDialogProps) {
   const [open, setOpen] = React.useState(false);
+
+  // Recursos: solo tiene sentido configurarlos sobre un servicio que ya
+  // existe (uno nuevo todavía no tiene id para vincular). Se cargan recién
+  // al abrir el diálogo en modo edición, nunca al crear.
+  const [usesResources, setUsesResources] = React.useState(false);
+  const [allResources, setAllResources] = React.useState<Resource[] | null>(null);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [savingResources, setSavingResources] = React.useState(false);
 
   const {
     register,
@@ -63,11 +75,40 @@ export function ServiceDialog({ trigger, service, onSubmit }: ServiceDialogProps
         durationMinutes: service?.durationMinutes ?? 30,
         price: service?.price ?? 0,
       });
+
+      if (service) {
+        setAllResources(null);
+        Promise.all([
+          requestJson<{ resources: Resource[] }>("/api/business/resources"),
+          requestJson<{ resourceIds: string[] }>(`/api/business/services/${service.id}/resources`),
+        ]).then(([{ resources }, { resourceIds }]) => {
+          setAllResources(resources);
+          setSelectedIds(resourceIds);
+          setUsesResources(resourceIds.length > 0);
+        });
+      }
     }
   }
 
-  function submit(values: ServiceFormValues) {
+  function toggleResource(id: string, checked: boolean) {
+    setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((r) => r !== id)));
+  }
+
+  async function submit(values: ServiceFormValues) {
     onSubmit(values);
+
+    if (service) {
+      setSavingResources(true);
+      try {
+        await requestJson(`/api/business/services/${service.id}/resources`, {
+          method: "PUT",
+          body: JSON.stringify({ resourceIds: usesResources ? selectedIds : [] }),
+        });
+      } finally {
+        setSavingResources(false);
+      }
+    }
+
     setOpen(false);
   }
 
@@ -157,6 +198,54 @@ export function ServiceDialog({ trigger, service, onSubmit }: ServiceDialogProps
                 <FieldError errors={[errors.price]} />
               </Field>
             </div>
+
+            {service && (
+              <Field>
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
+                  <div>
+                    <FieldLabel htmlFor="service-uses-resources">Este servicio utiliza recursos</FieldLabel>
+                    <FieldDescription>
+                      Ej: varias canchas o salas que pueden reservarse al mismo tiempo.
+                    </FieldDescription>
+                  </div>
+                  <Switch
+                    id="service-uses-resources"
+                    checked={usesResources}
+                    onCheckedChange={setUsesResources}
+                    disabled={allResources === null}
+                    aria-label="Este servicio utiliza recursos"
+                  />
+                </div>
+
+                {usesResources && (
+                  <div className="mt-2 space-y-1.5 rounded-lg border border-border p-3">
+                    {allResources === null ? (
+                      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Cargando recursos…
+                      </p>
+                    ) : allResources.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Todavía no creaste recursos. Podés hacerlo desde &ldquo;Recursos&rdquo; en el menú.
+                      </p>
+                    ) : (
+                      allResources.map((resource) => (
+                        <label key={resource.id} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={selectedIds.includes(resource.id)}
+                            onCheckedChange={(checked) => toggleResource(resource.id, !!checked)}
+                          />
+                          {resource.name}
+                          {!resource.active && (
+                            <span className="text-xs text-muted-foreground">(inactivo)</span>
+                          )}
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </Field>
+            )}
           </FieldGroup>
         </form>
 
@@ -164,7 +253,8 @@ export function ServiceDialog({ trigger, service, onSubmit }: ServiceDialogProps
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>
             Cancelar
           </Button>
-          <Button type="submit" form="service-form">
+          <Button type="submit" form="service-form" disabled={savingResources}>
+            {savingResources && <Loader2 className="size-4 animate-spin" data-icon="inline-start" />}
             {service ? "Guardar cambios" : "Agregar servicio"}
           </Button>
         </DialogFooter>

@@ -2,11 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { CalendarClock, CheckCircle2 } from "lucide-react";
 
 import { TrainingChat } from "@/components/ai-studio/training-chat";
 import { TrainingPlanStatus } from "@/components/ai-studio/training-plan-status";
+import { Button } from "@/components/ui/button";
 import { requestJson } from "@/lib/api-client";
-import type { TrainingPlan } from "@/lib/types";
+import type { BusinessSchedule, TrainingPlan } from "@/lib/types";
 
 // Solo para el mensaje de aliento, no para bloquear la navegación: el
 // seguimiento de secciones depende de que la IA etiquete cada propuesta
@@ -21,15 +24,41 @@ function isMinimumTrainingComplete(plan: TrainingPlan | null): boolean {
 export default function OnboardingIndexPage() {
   const [plan, setPlan] = React.useState<TrainingPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = React.useState(true);
+  const [skipping, setSkipping] = React.useState(false);
+  // Horarios vive en su propia tabla (Schedule) y su propia pantalla, aparte
+  // de todo lo que entrena la IA — este estado solo refleja si ya se
+  // configuró o no, para mostrar el CTA correcto. No pasa por el chat.
+  const [scheduleConfigured, setScheduleConfigured] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
     requestJson<{ plan: TrainingPlan | null }>("/api/ai-studio/training-plan")
       .then(({ plan }) => setPlan(plan))
       .catch(() => setPlan(null))
       .finally(() => setLoadingPlan(false));
+
+    requestJson<{ schedule: BusinessSchedule }>("/api/business")
+      .then(({ schedule }) => setScheduleConfigured(schedule.some((day) => day.enabled)))
+      .catch(() => setScheduleConfigured(null));
   }, []);
 
   const readyToContinue = isMinimumTrainingComplete(plan);
+  const pendingSections = plan?.sections.filter((s) => s.status === "pending" || s.status === "in_progress") ?? [];
+
+  async function skipRemaining() {
+    setSkipping(true);
+    try {
+      const { plan: updated } = await requestJson<{ plan: TrainingPlan | null }>(
+        "/api/ai-studio/training-plan/skip-remaining",
+        { method: "POST" }
+      );
+      setPlan(updated);
+      toast.success("Listo, podés continuar. Retomá lo que falte cuando quieras desde AI Studio.");
+    } catch {
+      toast.error("No pudimos actualizar el plan. Intentá de nuevo.");
+    } finally {
+      setSkipping(false);
+    }
+  }
 
   return (
     <div>
@@ -43,7 +72,38 @@ export default function OnboardingIndexPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
         <TrainingChat mode="onboarding" onProposalApplied={setPlan} />
-        <TrainingPlanStatus plan={plan} loading={loadingPlan} />
+        <div className="space-y-4">
+          <TrainingPlanStatus plan={plan} loading={loadingPlan} />
+
+          {plan && (
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <h3 className="text-sm font-semibold text-foreground">Configuración del negocio</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Esto no se conversa con la IA: tiene su propia pantalla.
+              </p>
+
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm text-foreground">
+                  {scheduleConfigured ? (
+                    <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <CalendarClock className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  Horarios de atención
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={scheduleConfigured ? "outline" : "default"}
+                  render={<Link href="/onboarding/horarios?from=training" />}
+                  nativeButton={false}
+                >
+                  {scheduleConfigured ? "Editar" : "Configurar →"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-sm">
@@ -56,11 +116,16 @@ export default function OnboardingIndexPage() {
         </Link>
       </div>
 
-      {!readyToContinue && (
-        <p className="mt-2 text-right text-xs text-muted-foreground">
-          Todavía quedan secciones del plan sin repasar — podés seguir charlando con la IA, o continuar igual y
-          retomarlas después desde AI Studio.
-        </p>
+      {!readyToContinue && pendingSections.length > 0 && (
+        <div className="mt-3 flex flex-col items-end gap-2 text-right">
+          <p className="text-xs text-muted-foreground">
+            Todavía faltan: {pendingSections.map((s) => s.title).join(", ")}. Podés seguir charlando con la IA, o
+            continuar igual y retomarlas después desde AI Studio.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void skipRemaining()} disabled={skipping}>
+            No quiero agregar más información ahora
+          </Button>
+        </div>
       )}
     </div>
   );

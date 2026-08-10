@@ -1,6 +1,7 @@
 import type { BusinessSchedule, Service, WeekDay } from "@/lib/types";
 import type { BusinessContext } from "@/modules/ai/providers/base";
 import type { MessageIntent } from "@/modules/ai/types";
+import { isBookableService } from "@/modules/business/service";
 
 const DAY_NAMES: Record<WeekDay, string> = {
   monday: "Lunes",
@@ -98,8 +99,9 @@ export function applyRules(
       if (!context.services.length) return null;
       const match = findMatchingService(message, context.services);
       if (match) {
+        const durationText = isBookableService(match) ? ` y dura aproximadamente ${match.durationMinutes} minutos` : "";
         return {
-          text: `El ${match.name} tiene un valor de $${match.price.toLocaleString("es-AR")} y dura aproximadamente ${match.durationMinutes} minutos.${match.description ? ` ${match.description}.` : ""}`,
+          text: `El ${match.name} tiene un valor de $${match.price.toLocaleString("es-AR")}${durationText}.${match.description ? ` ${match.description}.` : ""}`,
           rule: "pricing_service_match",
           labelHint: "pricing",
         };
@@ -136,8 +138,9 @@ export function applyRules(
       if (!context.services.length) return null;
       const match = findMatchingService(message, context.services);
       if (match) {
+        const durationText = isBookableService(match) ? `Tiene una duración de ${match.durationMinutes} minutos y un ` : "Tiene un ";
         return {
-          text: `Sí, ofrecemos ${match.name}. ${match.description ? match.description + " " : ""}Tiene una duración de ${match.durationMinutes} minutos y un costo de $${match.price.toLocaleString("es-AR")}.`,
+          text: `Sí, ofrecemos ${match.name}. ${match.description ? match.description + " " : ""}${durationText}costo de $${match.price.toLocaleString("es-AR")}.`,
           rule: "service_specific_match",
           labelHint: "service_inquiry",
         };

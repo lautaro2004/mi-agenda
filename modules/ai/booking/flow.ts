@@ -9,6 +9,7 @@ import type {
 import type { AIResponse } from "@/modules/ai/types";
 import type { BusinessContext } from "@/modules/ai/providers/base";
 import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
+import { isBookableService } from "@/modules/business/service";
 
 import type { BookingSession, BookingStep } from "./types";
 
@@ -229,17 +230,22 @@ async function handleNeedService(
   conversationId: string,
   context: BusinessContext,
 ): Promise<AIResponse> {
-  if (!context.services.length) {
+  // Un servicio sin duración real (ej. "Landing Page" en una agencia web) no
+  // es algo que se reserve como turno de calendario — ver isBookableService().
+  // Ofrecerlo acá terminaría generando un turno de 0 minutos.
+  const bookableServices = context.services.filter(isBookableService);
+
+  if (!bookableServices.length) {
     clearFlow(conversationId);
     return bookingResponse(
-      "No tengo servicios configurados todavía. Te voy a conectar con alguien de nuestro equipo.",
+      "No tengo servicios configurados para reservar por turno. Te voy a conectar con alguien de nuestro equipo.",
       true,
     );
   }
 
-  const service = matchService(message, context.services);
+  const service = matchService(message, bookableServices);
   if (!service) {
-    const list = context.services.map((s) => `• ${s.name}`).join("\n");
+    const list = bookableServices.map((s) => `• ${s.name}`).join("\n");
     updateState(conversationId, "COLLECTING_INTENT", { ...session, step: "need_service" });
     return bookingResponse(`Perfecto 😊 ¿Qué servicio querés reservar?\n\n${list}`);
   }
@@ -270,7 +276,7 @@ async function handleNeedDate(
 
   // Lazy import to avoid circular dep at module load time
   const { getAvailableSlots } = await import("@/modules/appointments/service");
-  const slots = await getAvailableSlots(context.business.id, parsed.date, context.schedule);
+  const slots = await getAvailableSlots(context.business.id, parsed.date, context.schedule, session.serviceId);
 
   if (!slots.length) {
     updateState(conversationId, "COLLECTING_INTENT", { ...session, step: "need_date" });
@@ -344,7 +350,7 @@ async function handleNeedConfirmation(
         durationMinutes: session.serviceDurationMinutes ?? 60,
       });
 
-      if (result.error === "slot_taken") {
+      if ("error" in result) {
         clearFlow(conversationId);
         return bookingResponse(
           `Lo siento, ese horario ya fue tomado mientras coordinábamos. ¿Querés elegir otro? Escribí "quiero turno" para volver a empezar.`,
@@ -503,7 +509,13 @@ async function handleRescheduleDate(
   }
 
   const { getAvailableSlots } = await import("@/modules/appointments/service");
-  const slots = await getAvailableSlots(context.business.id, parsed.date, context.schedule);
+  const slots = await getAvailableSlots(
+    context.business.id,
+    parsed.date,
+    context.schedule,
+    session.serviceId,
+    session.existingAppointmentId,
+  );
 
   if (!slots.length) {
     updateState(conversationId, "COLLECTING_INTENT", { ...session, step: "reschedule_date" });
@@ -552,19 +564,40 @@ async function handleRescheduleConfirm(
   conversationId: string,
 ): Promise<AIResponse> {
   if (CONFIRM_RE.test(message.trim())) {
-    if (session.existingAppointmentId && session.preferredDate && session.selectedSlot) {
-      try {
-        const { rescheduleAppointment } = await import("@/modules/appointments/service");
-        await rescheduleAppointment(
-          session.existingAppointmentId,
-          session.preferredDate,
-          session.selectedSlot,
-          session.serviceDurationMinutes ?? 60,
-        );
-      } catch {
-        // Proceed even if DB fails
-      }
+    if (!session.existingAppointmentId || !session.preferredDate || !session.selectedSlot) {
+      clearFlow(conversationId);
+      return bookingResponse(
+        `Uy, no tengo claro qué turno querías mover. ¿Podés escribir "reprogramar turno" de nuevo?`,
+      );
     }
+
+    // No confiar en que "no tiró excepción" signifique éxito: rescheduleAppointment()
+    // devuelve { error } explícito cuando el horario/recurso ya no está
+    // disponible (revalidado server-side, mismo motor que usa el dashboard) —
+    // nunca hay que confirmarle al cliente algo que en realidad se rechazó.
+    // Un error de conexión real (no un {error} de negocio) sí se sigue
+    // tolerando como en el resto del flujo de WhatsApp (handleNeedConfirmation
+    // hace lo mismo): un hipo de infra no debería trabar la conversación.
+    const { rescheduleAppointment } = await import("@/modules/appointments/service");
+    let result: Awaited<ReturnType<typeof rescheduleAppointment>> | null = null;
+    try {
+      result = await rescheduleAppointment({
+        id: session.existingAppointmentId,
+        newDate: session.preferredDate,
+        newStartTime: session.selectedSlot,
+        durationMinutes: session.serviceDurationMinutes ?? 60,
+      });
+    } catch {
+      // DB no disponible — se procede igual, como en handleNeedConfirmation.
+    }
+
+    if (result && "error" in result) {
+      clearFlow(conversationId);
+      return bookingResponse(
+        `Lo siento, ese horario ya no está disponible. ¿Querés elegir otro? Escribí "reprogramar turno" para volver a empezar.`,
+      );
+    }
+
     updateState(conversationId, "BOOKED", { ...session, step: "confirmed" });
     return bookingResponse(
       `¡Listo! Tu turno quedó reprogramado para *${session.service}* ${session.preferredDateLabel} a las *${session.selectedSlot}*. ¡Te esperamos! 😊`,
@@ -588,8 +621,9 @@ function determineInitialStep(
   message: string,
   services: Service[],
 ): { step: BookingStep; service: Service | null } {
-  if (!services.length) return { step: "need_service", service: null };
-  const service = matchService(message, services);
+  const bookableServices = services.filter(isBookableService);
+  if (!bookableServices.length) return { step: "need_service", service: null };
+  const service = matchService(message, bookableServices);
   return { step: service ? "need_date" : "need_service", service };
 }
 

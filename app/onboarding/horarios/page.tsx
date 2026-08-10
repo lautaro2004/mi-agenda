@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,9 +15,21 @@ import { z } from "zod";
 
 type ScheduleFormValues = { schedule: z.infer<typeof scheduleSchema> };
 
+// Esta misma pantalla se usa desde dos lugares: el wizard clásico paso a
+// paso (backHref="/onboarding/negocio", sigue a /onboarding/servicios) y el
+// onboarding conversacional con IA, que linkea acá con "?from=training" para
+// configurar horarios sin duplicar este formulario — al guardar, vuelve al
+// chat en vez de seguir el wizard. Se lee de window.location en vez de
+// useSearchParams() para no forzar un boundary de Suspense en esta página.
 export default function ScheduleStepPage() {
   const router = useRouter();
   const { state, setSchedule, setStep } = useOnboarding();
+  const [returnTo, setReturnTo] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const fromTraining = new URLSearchParams(window.location.search).get("from") === "training";
+    setReturnTo(fromTraining ? "/onboarding" : null);
+  }, []);
 
   const {
     control,
@@ -30,6 +43,10 @@ export default function ScheduleStepPage() {
   async function onSubmit(values: ScheduleFormValues) {
     try {
       await setSchedule(values.schedule as BusinessSchedule);
+      if (returnTo) {
+        router.push(returnTo);
+        return;
+      }
       setStep(3);
       router.push("/onboarding/servicios");
     } catch {
@@ -61,7 +78,11 @@ export default function ScheduleStepPage() {
           )}
         />
 
-        <StepActions submit backHref="/onboarding/negocio" nextLabel="Continuar" />
+        <StepActions
+          submit
+          backHref={returnTo ?? "/onboarding/negocio"}
+          nextLabel={returnTo ? "Guardar y volver" : "Continuar"}
+        />
       </form>
     </div>
   );

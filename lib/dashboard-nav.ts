@@ -1,5 +1,6 @@
 import {
   Bot,
+  Boxes,
   Brain,
   CalendarClock,
   CalendarCheck2,
@@ -20,6 +21,7 @@ export const DASHBOARD_NAV = [
   { href: "/dashboard/negocio", label: "Negocio", icon: Store },
   { href: "/dashboard/horarios", label: "Horarios", icon: CalendarClock },
   { href: "/dashboard/servicios", label: "Servicios", icon: ListChecks },
+  { href: "/dashboard/recursos", label: "Recursos", icon: Boxes },
   { href: "/dashboard/preguntas-frecuentes", label: "Preguntas frecuentes", icon: MessageCircleQuestion },
   { href: "/dashboard/turnos", label: "Turnos", icon: CalendarCheck2 },
   {

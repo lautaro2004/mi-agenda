@@ -3,8 +3,9 @@
 import * as React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { DeleteIconButton } from "@/components/dashboard/delete-icon-button";
 import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api-client";
 import { employeeProfileSchema, type EmployeeProfileFormValues } from "@/lib/schemas";
@@ -341,6 +343,16 @@ function TextListSection({
 }) {
   const [text, setText] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
+
+  function setItemDeleting(id: string, pending: boolean) {
+    setDeletingIds((prev) => {
+      const next = new Set(prev);
+      if (pending) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
 
   async function add() {
     const value = text.trim();
@@ -379,11 +391,14 @@ function TextListSection({
   }
 
   async function remove(item: TextListItem) {
-    onChange(items.filter((i) => i.id !== item.id));
+    // No optimista a propósito: recién sacamos el item de la lista cuando el
+    // servidor confirmó el borrado. Mientras tanto DeleteIconButton mantiene
+    // el item visible (con su propio spinner/disabled) para que se vea
+    // claramente QUÉ se está eliminando en vez de que desaparezca al toque.
     try {
       await requestJson(`/api/ai-studio/employee/${apiPath}/${item.id}`, { method: "DELETE" });
+      onChange(items.filter((i) => i.id !== item.id));
     } catch {
-      onChange(items);
       toast.error("No pudimos eliminar el ítem.");
     }
   }
@@ -415,34 +430,39 @@ function TextListSection({
         <p className="mt-4 text-sm text-muted-foreground">Todavía no agregaste nada acá.</p>
       ) : (
         <ul className="mt-4 space-y-2">
-          {items.map((item) => (
-            <li
-              key={item.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
-            >
-              <span className={cn("text-sm", !item.active && "text-muted-foreground line-through")}>
-                {item.text}
-              </span>
-              <div className="flex shrink-0 items-center gap-2">
-                <Switch
-                  checked={item.active}
-                  onCheckedChange={() => void toggle(item)}
-                  aria-label={`Activar o desactivar: ${item.text}`}
-                  size="sm"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-destructive"
-                  onClick={() => void remove(item)}
-                  aria-label={`Eliminar: ${item.text}`}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            </li>
-          ))}
+          <AnimatePresence>
+            {items.map((item) => (
+              <motion.li
+                key={item.id}
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25 }}
+                className={cn(
+                  "flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2",
+                  deletingIds.has(item.id) && "pointer-events-none opacity-50"
+                )}
+              >
+                <span className={cn("text-sm", !item.active && "text-muted-foreground line-through")}>
+                  {item.text}
+                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Switch
+                    checked={item.active}
+                    onCheckedChange={() => void toggle(item)}
+                    aria-label={`Activar o desactivar: ${item.text}`}
+                    size="sm"
+                  />
+                  <DeleteIconButton
+                    label={`Eliminar: ${item.text}`}
+                    onPendingChange={(pending) => setItemDeleting(item.id, pending)}
+                    onDelete={() => remove(item)}
+                  />
+                </div>
+              </motion.li>
+            ))}
+          </AnimatePresence>
         </ul>
       )}
     </div>

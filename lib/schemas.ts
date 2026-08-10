@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   AI_PROPOSABLE_SECTION_STATUSES,
   BUSINESS_CATEGORIES,
+  EMPLOYEE_CAPABILITIES,
   EMPLOYEE_COMMERCIAL_LEVEL_LEVELS,
   EMPLOYEE_EMOJI_USAGE_LEVELS,
   EMPLOYEE_FORMALITY_LEVELS,
@@ -11,6 +12,7 @@ import {
   MEMORY_IMPORTANCE_LEVELS,
   SERVICE_CATEGORIES,
   WEEK_DAYS,
+  type EmployeeCapabilityKey,
 } from "@/lib/types";
 
 export const registerSchema = z
@@ -59,6 +61,25 @@ export const businessInfoSchema = z.object({
 });
 
 export type BusinessInfoValues = z.infer<typeof businessInfoSchema>;
+
+// Variante usada únicamente por el flujo de entrenamiento conversacional:
+// mismos campos que businessInfoSchema, pero "category" es texto libre en
+// vez del enum cerrado BUSINESS_CATEGORIES. El formulario del dashboard
+// necesita un <Select> con opciones finitas; el dueño describiendo su rubro
+// en una charla no tiene por qué coincidir con esa lista ("Desarrollo de
+// software y IT" no es una opción del dropdown, pero es un rubro válido).
+export const trainingBusinessUpdateSchema = z.object({
+  name: z.string().min(2, "Ingresá el nombre del negocio").optional(),
+  category: z.string().min(1, "Falta el rubro").max(80, "El rubro es demasiado largo").optional(),
+  description: z.string().max(280, "La descripción es demasiado larga").optional(),
+  phone: z.string().max(40).optional(),
+  whatsappNumber: z.string().max(40).optional(),
+  address: z.string().max(200, "La dirección es demasiado larga").optional(),
+  instagramUrl: z.string().optional(),
+  facebookUrl: z.string().optional(),
+});
+
+export type TrainingBusinessUpdateValues = z.infer<typeof trainingBusinessUpdateSchema>;
 
 const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -110,6 +131,33 @@ export const serviceSchema = z.object({
 export type ServiceFormInput = z.input<typeof serviceSchema>;
 export type ServiceFormValues = z.output<typeof serviceSchema>;
 
+// Variante para el flujo de entrenamiento: dos diferencias respecto de
+// serviceSchema (el del dashboard), ambas por el mismo motivo — el dashboard
+// asume un negocio de turnos (peluquería, consultorio), pero el training
+// tiene que servir para cualquier rubro:
+// - "category" es texto libre en vez de SERVICE_CATEGORIES (ver arriba).
+// - "durationMinutes" es OPCIONAL: no todo servicio es reservable por turno
+//   (ej. "Landing Page — USD 250" en una agencia web). Exigirlo obligaba a
+//   la IA a inventar una duración que nadie dijo, o rechazaba la propuesta
+//   entera si el dueño no daba un dato que no aplica a su negocio. Cuando
+//   se omite, createService() lo persiste como 0 — ver isBookableService()
+//   en modules/business/service.ts, el punto único que decide qué significa
+//   ese 0 para el resto del sistema (booking, rule-engine).
+export const trainingServiceSchema = z.object({
+  name: z.string().min(2, "Ingresá el nombre del servicio"),
+  description: z.string().max(200, "La descripción es demasiado larga").optional(),
+  category: z.string().max(60).optional(),
+  durationMinutes: z.coerce
+    .number()
+    .int("Debe ser un número entero")
+    .min(5, "La duración mínima es 5 minutos")
+    .max(480, "La duración máxima es 8 horas")
+    .optional(),
+  price: z.coerce.number().min(0, "El precio no puede ser negativo"),
+});
+
+export type TrainingServiceValues = z.infer<typeof trainingServiceSchema>;
+
 export const faqSchema = z.object({
   question: z.string().min(5, "Ingresá una pregunta"),
   answer: z.string().min(5, "Ingresá una respuesta"),
@@ -150,6 +198,21 @@ export const employeeCapabilitySchema = z.object({
 
 export type EmployeeCapabilityFormValues = z.infer<typeof employeeCapabilitySchema>;
 
+const EMPLOYEE_CAPABILITY_KEYS = EMPLOYEE_CAPABILITIES.map((c) => c.id) as [
+  EmployeeCapabilityKey,
+  ...EmployeeCapabilityKey[],
+];
+
+// Usado por el flujo de entrenamiento: a diferencia de employeeCapabilitySchema
+// (que ya sabe la key por la URL del endpoint del dashboard), acá la IA tiene
+// que indicar explícitamente qué capacidad está habilitando/deshabilitando.
+export const employeeCapabilityUpdateSchema = z.object({
+  key: z.enum(EMPLOYEE_CAPABILITY_KEYS),
+  enabled: z.boolean(),
+});
+
+export type EmployeeCapabilityUpdateValues = z.infer<typeof employeeCapabilityUpdateSchema>;
+
 export const memoryEntrySchema = z.object({
   title: z.string().min(2, "Ingresá un título").max(120, "El título es demasiado largo"),
   content: z.string().min(5, "Ingresá el contenido").max(2000, "El contenido es demasiado largo"),
@@ -168,6 +231,7 @@ export const trainingPlanSectionInputSchema = z.object({
 
 export const trainingPlanGenerationSchema = z.object({
   category: z.string().min(1, "Falta el rubro del negocio").max(80),
+  description: z.string().max(280, "La descripción es demasiado larga").optional(),
   sections: z.array(trainingPlanSectionInputSchema).min(3).max(12),
 });
 
@@ -185,5 +249,57 @@ export const simulatorCorrectionSchema = z.object({
   originalReply: z.string().min(1),
   correctedReply: z.string().min(3, "Ingresá la respuesta corregida"),
 });
+
+// Turno agendado manualmente desde el dashboard. A propósito tiene la misma
+// forma que necesita createAppointment() (modules/appointments/service.ts):
+// la ruta POST /api/appointments reutiliza esa función tal cual — el turno
+// manual termina siendo un Appointment idéntico a uno creado por WhatsApp,
+// no una entidad paralela.
+export const manualAppointmentSchema = z.object({
+  serviceId: z.string().min(1, "Seleccioná un servicio"),
+  customerName: z.string().min(2, "Ingresá el nombre del cliente"),
+  customerPhone: z.string().min(6, "Ingresá un teléfono válido"),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
+  startTime: z.string().regex(timeRegex, "Hora inválida"),
+  notes: z.string().max(500, "Las notas son demasiado largas").optional(),
+  // Ausente = "asignar automáticamente" (el servidor elige el primer recurso
+  // libre y determinístico). Si el servicio no usa recursos, se ignora.
+  resourceId: z.string().min(1).optional(),
+});
+
+// Reprogramación de un turno existente. "resourceId" tiene tres estados
+// posibles a propósito (ver RescheduleAppointmentParams en
+// modules/appointments/service.ts): campo ausente = mantener el recurso que
+// ya tenía; null = "asignar automáticamente" explícito; string = un recurso
+// puntual elegido a mano. Por eso es .nullable().optional() y no solo
+// .optional() — con solo .optional() no habría forma de distinguir "no
+// mandé nada" de "mandé null a propósito".
+export const rescheduleAppointmentSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
+  startTime: z.string().regex(timeRegex, "Hora inválida"),
+  // Sin z.coerce: a diferencia de serviceSchema, este valor nunca sale de un
+  // <input> de texto — siempre viaja tal cual desde el Appointment existente
+  // (ver RescheduleAppointmentDialog), así que ya es un number real.
+  durationMinutes: z.number().int().min(1),
+  resourceId: z.string().min(1).nullable().optional(),
+});
+
+export type RescheduleAppointmentValues = z.infer<typeof rescheduleAppointmentSchema>;
+
+export const resourceSchema = z.object({
+  name: z.string().min(2, "Ingresá el nombre del recurso"),
+  description: z.string().max(200, "La descripción es demasiado larga").optional(),
+});
+
+export type ResourceFormValues = z.infer<typeof resourceSchema>;
+
+// Reemplaza el conjunto completo de recursos vinculados a un servicio (mismo
+// patrón que replaceSchedule): más simple y menos propenso a errores que
+// exponer add/remove individuales para una lista chica.
+export const serviceResourcesSchema = z.object({
+  resourceIds: z.array(z.string().min(1)),
+});
+
+export type ManualAppointmentValues = z.infer<typeof manualAppointmentSchema>;
 
 export type SimulatorCorrectionValues = z.infer<typeof simulatorCorrectionSchema>;

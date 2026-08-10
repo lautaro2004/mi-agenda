@@ -3,12 +3,13 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { Brain, Pencil, Plus, Trash2 } from "lucide-react";
+import { Brain, Pencil, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { DeleteIconButton } from "@/components/dashboard/delete-icon-button";
 import { MemoryEntryDialog } from "@/components/ai-studio/memory-entry-dialog";
 import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api-client";
@@ -24,6 +25,16 @@ const IMPORTANCE_BADGE_VARIANT: Record<MemoryEntry["importance"], "secondary" | 
 export default function MemoryPage() {
   const [entries, setEntries] = React.useState<MemoryEntry[] | null>(null);
   const [loadError, setLoadError] = React.useState(false);
+  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
+
+  function setItemDeleting(id: string, pending: boolean) {
+    setDeletingIds((prev) => {
+      const next = new Set(prev);
+      if (pending) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
 
   React.useEffect(() => {
     requestJson<{ entries: MemoryEntry[] }>("/api/ai-studio/memory")
@@ -81,13 +92,14 @@ export default function MemoryPage() {
   }
 
   async function removeEntry(id: string) {
-    const previous = entries;
-    setEntries((prev) => prev?.filter((e) => e.id !== id) ?? prev);
+    // No optimista: recién sacamos la entrada de la lista cuando el servidor
+    // confirmó el borrado, para que DeleteIconButton pueda mostrar el
+    // spinner/disabled mientras la card real sigue visible y atenuada.
     try {
       await requestJson(`/api/ai-studio/memory/${id}`, { method: "DELETE" });
+      setEntries((prev) => prev?.filter((e) => e.id !== id) ?? prev);
       toast.success("Entrada eliminada");
     } catch {
-      setEntries(previous);
       toast.error("No pudimos eliminar la entrada.");
     }
   }
@@ -139,7 +151,10 @@ export default function MemoryPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25 }}
-                className="rounded-xl border border-border bg-card p-4"
+                className={cn(
+                  "rounded-xl border border-border bg-card p-4",
+                  deletingIds.has(entry.id) && "pointer-events-none opacity-50"
+                )}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -175,15 +190,11 @@ export default function MemoryPage() {
                         </Button>
                       }
                     />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-destructive"
-                      onClick={() => void removeEntry(entry.id)}
-                      aria-label={`Eliminar: ${entry.title}`}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    <DeleteIconButton
+                      label={`Eliminar: ${entry.title}`}
+                      onPendingChange={(pending) => setItemDeleting(entry.id, pending)}
+                      onDelete={() => removeEntry(entry.id)}
+                    />
                   </div>
                 </div>
               </motion.div>

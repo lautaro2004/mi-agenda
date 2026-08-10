@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Plus, PackageOpen } from "lucide-react";
@@ -8,10 +9,20 @@ import { Button } from "@/components/ui/button";
 import { ServiceDialog } from "@/components/onboarding/service-dialog";
 import { ServiceCard } from "@/components/onboarding/service-card";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useOnboarding } from "@/lib/onboarding-store";
 
 export default function ServicesSettingsPage() {
-  const { state, addService, updateService, removeService } = useOnboarding();
+  const { state, hydrated, refresh, addService, updateService, removeService } = useOnboarding();
+
+  // El estado de OnboardingProvider es una foto tomada al loguearse (vive en
+  // la raíz de la app, no se remonta al navegar) — si el negocio se entrenó
+  // por chat después de esa foto, acá seguía vacío. Al entrar a esta pantalla
+  // pedimos el estado real de Postgres en vez de confiar en esa foto.
+  React.useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div>
@@ -38,7 +49,13 @@ export default function ServicesSettingsPage() {
         }
       />
 
-      {state.services.length === 0 ? (
+      {!hydrated ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 rounded-2xl" />
+          ))}
+        </div>
+      ) : state.services.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
           <PackageOpen className="size-8 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium text-foreground">Todavía no agregaste servicios</p>

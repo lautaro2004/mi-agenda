@@ -173,6 +173,27 @@ export async function setSectionStatus(
   });
 }
 
+// El avance de sección no puede depender de que la IA se acuerde de taguear
+// cada propuesta con "sectionKey": si no lo hizo, applyTrainingProposal()
+// usa esto para inferir cuál sección estaba activa y cerrarla igual.
+export async function getActiveSectionKey(businessId: string): Promise<string | null> {
+  const plan = await prisma.trainingPlan.findUnique({
+    where: { businessId },
+    include: { sections: { where: { status: "in_progress" }, take: 1 } },
+  });
+  return plan?.sections[0]?.key ?? null;
+}
+
+// Escape hatch determinístico para terminar el onboarding: el dueño puede
+// decidir "no quiero configurar más por ahora" sin depender de que la IA
+// proponga ignorar cada sección restante una por una.
+export async function ignoreRemainingSections(businessId: string): Promise<void> {
+  await prisma.trainingPlanSection.updateMany({
+    where: { plan: { businessId }, status: { in: ["pending", "in_progress"] } },
+    data: { status: "ignored" },
+  });
+}
+
 // Único punto que decide cuál es la "sección activa" (currentSection): si ya
 // hay una "in_progress" la deja como está; si no, activa la primera
 // "pending" según su orden. No hace nada si no hay plan o no quedan

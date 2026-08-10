@@ -6,14 +6,14 @@ import { Check, Minus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const rows: { label: string; whatsapp: boolean | "partial"; miAgenda: boolean }[] = [
-  { label: "Respuestas rápidas", whatsapp: "partial", miAgenda: true },
-  { label: "Perfil del negocio", whatsapp: true, miAgenda: true },
-  { label: "Catálogo de servicios", whatsapp: "partial", miAgenda: true },
-  { label: "Base de preguntas frecuentes", whatsapp: false, miAgenda: true },
-  { label: "Detección de turnos", whatsapp: false, miAgenda: true },
-  { label: "Traspaso a un humano", whatsapp: false, miAgenda: true },
-  { label: "Asistente con IA", whatsapp: false, miAgenda: true },
-  { label: "Estadísticas del negocio", whatsapp: false, miAgenda: true },
+  { label: "Responder mensajes", whatsapp: true, miAgenda: true },
+  { label: "Conocer tus servicios y precios", whatsapp: false, miAgenda: true },
+  { label: "Responder preguntas frecuentes", whatsapp: false, miAgenda: true },
+  { label: "Consultar disponibilidad", whatsapp: false, miAgenda: true },
+  { label: "Gestionar reservas", whatsapp: "partial", miAgenda: true },
+  { label: "Gestionar recursos (canchas, salas...)", whatsapp: false, miAgenda: true },
+  { label: "Reglas propias del negocio", whatsapp: false, miAgenda: true },
+  { label: "IA configurada para tu negocio", whatsapp: false, miAgenda: true },
 ];
 
 function StatusIcon({ value }: { value: boolean | "partial" }) {
@@ -26,7 +26,10 @@ function StatusIcon({ value }: { value: boolean | "partial" }) {
   }
   if (value === "partial") {
     return (
-      <span className="inline-flex size-6 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+      <span
+        className="inline-flex size-6 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        title="Limitado"
+      >
         <Minus className="size-3.5" />
       </span>
     );
@@ -43,12 +46,14 @@ export function LandingComparison() {
     <section className="px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
       <div className="mx-auto max-w-4xl">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            ¿Por qué no usar solo WhatsApp Business?
+          <h2 className="text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
+            WhatsApp es el canal.
+            <br />
+            Mi Agenda es el sistema.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            WhatsApp Business es un buen punto de partida. Mi Agenda lo
-            potencia con todo lo que tu negocio necesita para crecer.
+            WhatsApp Business es donde tu cliente escribe. Mi Agenda es lo que sabe qué
+            responderle, cuándo hay lugar y cómo reservarlo.
           </p>
         </div>
 

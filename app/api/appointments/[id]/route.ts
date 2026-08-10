@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { cancelAppointment, rescheduleAppointment } from "@/modules/appointments/service";
+import { rescheduleAppointmentSchema } from "@/lib/schemas";
 
 export async function PATCH(
   request: Request,
@@ -9,12 +10,7 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const body = (await request.json()) as {
-      action: "cancel" | "reschedule";
-      date?: string;
-      startTime?: string;
-      durationMinutes?: number;
-    };
+    const body = (await request.json()) as { action: "cancel" | "reschedule" } & Record<string, unknown>;
 
     if (body.action === "cancel") {
       const appointment = await cancelAppointment(id);
@@ -22,11 +18,34 @@ export async function PATCH(
     }
 
     if (body.action === "reschedule") {
-      if (!body.date || !body.startTime || !body.durationMinutes) {
+      const parsed = rescheduleAppointmentSchema.safeParse(body);
+      if (!parsed.success) {
         return NextResponse.json({ error: "Faltan parámetros para reprogramar." }, { status: 400 });
       }
-      const appointment = await rescheduleAppointment(id, body.date, body.startTime, body.durationMinutes);
-      return NextResponse.json({ appointment });
+
+      const result = await rescheduleAppointment({
+        id,
+        newDate: parsed.data.date,
+        newStartTime: parsed.data.startTime,
+        durationMinutes: parsed.data.durationMinutes,
+        resourceId: parsed.data.resourceId,
+      });
+
+      // Nunca devolver 200 con una reprogramación que en realidad no pasó:
+      // el frontend/WhatsApp dependen de este status para saber si mostrar
+      // éxito o pedir que se elija otro horario/recurso.
+      if ("error" in result) {
+        if (result.error === "not_found") {
+          return NextResponse.json({ error: "Turno no encontrado." }, { status: 404 });
+        }
+        const message =
+          result.error === "invalid_resource"
+            ? "El recurso seleccionado no es válido para este servicio."
+            : "Ese horario ya no está disponible. Elegí otro.";
+        return NextResponse.json({ error: message }, { status: 409 });
+      }
+
+      return NextResponse.json({ appointment: result.appointment });
     }
 
     return NextResponse.json({ error: "Acción no válida." }, { status: 400 });

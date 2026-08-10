@@ -2,7 +2,16 @@ import { prisma } from "@/lib/prisma";
 import { defaultSchedule } from "@/lib/mock-data";
 import { WEEK_DAYS } from "@/lib/types";
 import type { Business, BusinessSchedule, FAQ, Service } from "@/lib/types";
-import type { ServiceFormValues, BusinessInfoValues, FaqFormValues } from "@/lib/schemas";
+import type { ServiceFormValues, FaqFormValues } from "@/lib/schemas";
+import type { Prisma } from "@prisma/client";
+
+// Cliente de Prisma inyectable: por defecto el singleton de siempre, pero
+// applyTrainingProposal() puede pasar un "tx" de prisma.$transaction() para
+// que varias de estas llamadas (ej. 3 servicios + 1 FAQ en un mismo
+// knowledge_batch) se confirmen o se reviertan todas juntas. Ningún otro
+// caller pasa nada distinto de "prisma", así que esto no cambia el
+// comportamiento de las rutas del dashboard.
+type Db = Prisma.TransactionClient;
 
 function toClientBusiness(
   businessId: string,
@@ -84,8 +93,26 @@ export async function getBusinessState(businessId: string) {
   };
 }
 
-export async function updateBusinessInfo(businessId: string, data: Partial<BusinessInfoValues>) {
-  const row = await prisma.business.upsert({
+// Superset laxo de BusinessInfoValues: "category" es string libre en vez del
+// enum cerrado, para que el mismo servicio sirva tanto al formulario del
+// dashboard (siempre valida contra businessInfoSchema antes de llamar acá)
+// como al flujo de entrenamiento (valida contra trainingBusinessUpdateSchema,
+// que acepta cualquier rubro que el dueño describa). Prisma ya guarda
+// "category" como texto libre, así que esto no relaja nada a nivel de datos.
+export interface BusinessUpdateInput {
+  name?: string;
+  logoUrl?: string | null;
+  category?: string;
+  description?: string;
+  phone?: string;
+  whatsappNumber?: string;
+  address?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
+}
+
+export async function updateBusinessInfo(businessId: string, data: BusinessUpdateInput, db: Db = prisma) {
+  const row = await db.business.upsert({
     where: { id: businessId },
     update: data,
     create: { ...data, id: businessId, name: data.name ?? "" },
@@ -125,10 +152,46 @@ export async function replaceSchedule(businessId: string, schedule: BusinessSche
   return toClientSchedule(rows);
 }
 
-export async function createService(businessId: string, data: ServiceFormValues) {
-  const row = await prisma.service.create({ data: { businessId, ...data } });
+// Superset laxo de ServiceFormValues: dos diferencias respecto del tipo del
+// dashboard, mismo motivo en ambas — "category" es opcional y string libre
+// en vez del enum cerrado SERVICE_CATEGORIES (ver BusinessUpdateInput más
+// arriba), y "durationMinutes" es opcional porque no todo servicio es
+// reservable por turno (ver isBookableService() debajo). El formulario del
+// dashboard sigue validando contra serviceSchema (que SÍ exige duración)
+// antes de llamar acá, así que esto no afecta esa vía.
+export interface ServiceCreateInput {
+  name: string;
+  description?: string;
+  category?: string;
+  durationMinutes?: number;
+  price: number;
+}
+
+// Upsert por (businessId, name) en vez de un create plano: esto es lo que
+// hace que guardar un servicio sea idempotente. No es solo por reintentos de
+// red o doble-click (eso ya lo bloquea el "disabled" del botón en el chat) —
+// el caso real que motivó esto es que el turno de "continuación" automática
+// del entrenamiento (ver CONTINUATION_MESSAGE en engine.ts) puede volver a
+// proponer una sección que ya se cerró, con los mismos servicios. Sin esto,
+// cada confirmación de esa propuesta repetida creaba una fila nueva. Con el
+// unique constraint (ver schema.prisma), da igual cuántas veces se confirme
+// "Landing Pages" para el mismo negocio: converge a una sola fila con los
+// valores más recientes.
+export async function createService(businessId: string, data: ServiceCreateInput | ServiceFormValues, db: Db = prisma) {
+  const payload = { description: "", category: "", durationMinutes: 0, ...data };
+  const row = await db.service.upsert({
+    where: { businessId_name: { businessId, name: payload.name } },
+    create: { businessId, ...payload },
+    update: payload,
+  });
   return toClientService(row);
 }
+
+// Reexportado desde lib/types.ts (no Prisma) para que también lo puedan usar
+// componentes cliente como ServiceCard sin arrastrar el cliente de Prisma al
+// bundle del browser. Los imports existentes desde "@/modules/business/service"
+// (rule-engine.ts, booking/flow.ts) siguen funcionando igual.
+export { isBookableService } from "@/lib/types";
 
 export async function updateService(businessId: string, id: string, data: ServiceFormValues) {
   const result = await prisma.service.updateMany({ where: { id, businessId }, data });
@@ -142,8 +205,8 @@ export async function deleteService(businessId: string, id: string) {
   return result.count > 0;
 }
 
-export async function createFaq(businessId: string, data: FaqFormValues) {
-  const row = await prisma.fAQ.create({ data: { businessId, ...data } });
+export async function createFaq(businessId: string, data: FaqFormValues, db: Db = prisma) {
+  const row = await db.fAQ.create({ data: { businessId, ...data } });
   return toClientFaq(row);
 }
 

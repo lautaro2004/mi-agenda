@@ -16,16 +16,18 @@ export function LandingCta() {
         transition={{ duration: 0.5 }}
         className="relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/10 via-card to-card px-8 py-16 text-center sm:px-16"
       >
-        <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          Dejá de vivir pendiente del chat
+        <h2 className="text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
+          Tu negocio sigue funcionando
+          <br />
+          aunque vos estés ocupado.
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-          Configurá tu negocio en minutos y enfocate en tus clientes, no en tu
-          bandeja de entrada. La conexión con WhatsApp llega en el próximo módulo.
+          Configurá tu asistente, conectá WhatsApp y dejá que Mi Agenda se encargue de las
+          consultas y las reservas.
         </p>
         <div className="mt-8 flex justify-center">
           <Button size="lg" className="h-11 px-6 text-base" render={<Link href="/registro" />} nativeButton={false}>
-            Automatizar mi WhatsApp
+            Crear mi asistente
             <ArrowRight className="ml-1 size-4" data-icon="inline-end" />
           </Button>
         </div>

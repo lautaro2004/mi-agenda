@@ -17,10 +17,40 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://miagenda.com";
+const SITE_TITLE = "Mi Agenda — El asistente operativo de tu negocio";
+const SITE_DESCRIPTION =
+  "Configurá un asistente de IA que conoce tus servicios, precios, horarios y reglas. Atiende a tus clientes por WhatsApp y gestiona sus reservas automáticamente.";
+
 export const metadata: Metadata = {
-  title: "Mi Agenda — Automatiza tu WhatsApp",
-  description:
-    "La forma más simple de automatizar la atención por WhatsApp de tu negocio.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_TITLE,
+    template: "%s — Mi Agenda",
+  },
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "asistente de WhatsApp",
+    "reservas por WhatsApp",
+    "agenda online para negocios",
+    "automatizar turnos",
+    "asistente IA para negocios",
+    "gestión de reservas",
+    "agenda para negocios",
+  ],
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    url: SITE_URL,
+    siteName: "Mi Agenda",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

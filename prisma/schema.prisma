@@ -24,6 +24,7 @@ model Business {
   faqs           FAQ[]
   memberships    Membership[]
   memoryEntries  MemoryEntry[]
+  resources      Resource[]
   schedules      Schedule[]
   services       Service[]
   trainingPlan   TrainingPlan?
@@ -43,8 +44,57 @@ model Service {
   updatedAt       DateTime      @updatedAt
   appointments    Appointment[]
   business        Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // Ausente/vacío = comportamiento actual (agenda general del negocio). Un
+  // service con filas acá pasa a repartirse entre varios recursos físicos
+  // intercambiables (ver Resource) en vez de compartir un único slot.
+  resources       ServiceResource[]
 
+  // Único por negocio, no global: dos negocios distintos pueden tener
+  // perfectamente un servicio con el mismo nombre. Esto es lo que hace que
+  // createService() pueda ser un upsert idempotente — si el training
+  // conversacional re-propone "Landing Pages" (ej. por un turno de
+  // continuación que repite una sección ya cerrada), converge a la misma
+  // fila en vez de crear un duplicado.
+  @@unique([businessId, name])
   @@index([businessId])
+}
+
+// Recurso físico reservable (cancha, sala, silla, profesional...). Un mismo
+// Resource puede prestar servicio a varios Service distintos (ver
+// ServiceResource) — ej. "Sala 1" usada tanto para "Consulta" como para
+// "Reunión" — así que la disponibilidad siempre se calcula a nivel de
+// Resource, nunca a nivel de Service: eso es lo único que garantiza que
+// reservar Sala 1 para una Consulta también la bloquee para una Reunión a
+// esa hora. Diseñado para poder sumarle más adelante su propio Schedule
+// (horario propio por recurso) sin romper nada de lo de acá.
+model Resource {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  services     ServiceResource[]
+  appointments Appointment[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+// Tabla puente N:M entre Service y Resource.
+model ServiceResource {
+  serviceId  String
+  resourceId String
+  createdAt  DateTime @default(now())
+
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, resourceId])
+  @@index([resourceId])
 }
 
 model Schedule {
@@ -155,27 +205,35 @@ model TrainingMessage {
 }
 
 model Appointment {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   businessId      String
   serviceId       String?
   serviceName     String
+  // Nullable a propósito: un turno de un servicio sin recursos configurados
+  // (el caso de hoy, ej. peluquería) nunca tiene resourceId — sigue
+  // funcionando exactamente igual que antes de que existiera este campo. Solo
+  // se completa cuando el servicio SÍ usa recursos, con el recurso concreto
+  // que quedó asignado (automático o elegido a mano).
+  resourceId      String?
   customerName    String
   customerPhone   String
   date            String
   startTime       String
   endTime         String
   durationMinutes Int
-  status          String   @default("confirmed")
+  status          String    @default("confirmed")
   notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  service         Service? @relation(fields: [serviceId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service         Service?  @relation(fields: [serviceId], references: [id])
+  resource        Resource? @relation(fields: [resourceId], references: [id])
 
   @@index([businessId])
   @@index([businessId, date])
   @@index([customerPhone])
   @@index([status])
+  @@index([resourceId])
 }
 
 model User {

@@ -63,9 +63,13 @@ export default function ServicesStepPage() {
                     toast.error("No pudimos actualizar el servicio.")
                   )
                 }
-                onDelete={() =>
-                  removeService(service.id).catch(() => toast.error("No pudimos eliminar el servicio."))
-                }
+                onDelete={async () => {
+                  try {
+                    await removeService(service.id);
+                  } catch {
+                    toast.error("No pudimos eliminar el servicio.");
+                  }
+                }}
               />
             ))}
           </AnimatePresence>

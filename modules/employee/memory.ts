@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import type { MemoryCategory, MemoryEntry, MemoryImportance, MemorySource } from "@/lib/types";
 import type { MemoryEntryFormValues } from "@/lib/schemas";
+
+type Db = Prisma.TransactionClient;
 
 const IMPORTANCE_RANK: Record<MemoryImportance, number> = { high: 0, medium: 1, low: 2 };
 
@@ -48,9 +51,10 @@ export async function getActiveMemoryEntries(businessId: string): Promise<Memory
 export async function createMemoryEntry(
   businessId: string,
   data: MemoryEntryFormValues,
-  source: MemorySource = "manual"
+  source: MemorySource = "manual",
+  db: Db = prisma
 ): Promise<MemoryEntry> {
-  const row = await prisma.memoryEntry.create({ data: { businessId, ...data, source } });
+  const row = await db.memoryEntry.create({ data: { businessId, ...data, source } });
   return toClientEntry(row);
 }
 

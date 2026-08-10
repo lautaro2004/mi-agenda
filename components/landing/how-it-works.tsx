@@ -1,33 +1,33 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Building2, CalendarDays, ListChecks, MessageCircleQuestion, Rocket } from "lucide-react";
+import { Boxes, Building2, FlaskConical, GraduationCap, MessageSquare } from "lucide-react";
 
 const steps = [
   {
     icon: Building2,
-    title: "Contanos sobre tu negocio",
-    description: "Nombre, logo, rubro y una breve descripción para presentarte a tus clientes.",
+    title: "Contale sobre tu negocio",
+    description: "Rubro, servicios y cómo trabajás.",
   },
   {
-    icon: CalendarDays,
-    title: "Definí tus horarios",
-    description: "Elegí los días y horarios en los que tu negocio atiende.",
+    icon: GraduationCap,
+    title: "La IA arma tu configuración",
+    description: "Servicios, FAQs, reglas y objetivos.",
   },
   {
-    icon: ListChecks,
-    title: "Cargá tus servicios",
-    description: "Agregá cada servicio con su duración y precio.",
+    icon: Boxes,
+    title: "Configurá horarios y recursos",
+    description: "Definí cuándo y qué puede reservar.",
   },
   {
-    icon: MessageCircleQuestion,
-    title: "Sumá preguntas frecuentes",
-    description: "Anticipate a las dudas más comunes de tus clientes.",
+    icon: MessageSquare,
+    title: "Conectá WhatsApp",
+    description: "Tu asistente empieza a atender.",
   },
   {
-    icon: Rocket,
-    title: "Activá tu suscripción",
-    description: "Elegí tu plan y quedá listo para conectar WhatsApp.",
+    icon: FlaskConical,
+    title: "Probalo antes de publicarlo",
+    description: "Usá el simulador para conversar con tu asistente como si fueras un cliente.",
   },
 ];
 
@@ -36,12 +36,11 @@ export function LandingHowItWorks() {
     <section id="como-funciona" className="px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Cómo funciona
+          <h2 className="text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
+            De cero a asistente en minutos
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Un asistente de configuración te acompaña paso a paso para que tu
-            negocio quede listo en minutos.
+            Sin planillas, sin manuales. Un proceso guiado, en el mismo orden de principio a fin.
           </p>
         </div>
 
@@ -64,12 +63,8 @@ export function LandingHowItWorks() {
                 </span>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-foreground">
-                  {step.title}
-                </h3>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  {step.description}
-                </p>
+                <h3 className="text-sm font-semibold text-foreground">{step.title}</h3>
+                <p className="mt-1.5 text-sm text-muted-foreground">{step.description}</p>
               </div>
             </motion.div>
           ))}

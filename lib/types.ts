@@ -35,7 +35,13 @@ export interface Business {
   id: string;
   name: string;
   logoUrl: string | null;
-  category: BusinessCategory | "";
+  // String libre, no BusinessCategory: el dashboard sigue restringiendo a
+  // BUSINESS_CATEGORIES en su <Select> (businessInfoSchema), pero el rubro
+  // contado en el onboarding conversacional puede ser cualquier texto — no
+  // tiene sentido rechazar "Desarrollo de software y IT" solo porque no está
+  // en la lista cerrada del formulario. La columna en Postgres ya era texto
+  // libre; esto solo hace que el tipo de TypeScript refleje la realidad.
+  category: string;
   description: string;
   phone: string;
   whatsappNumber: string;
@@ -75,9 +81,37 @@ export interface Service {
   businessId: string;
   name: string;
   description: string;
-  category: ServiceCategory | "";
+  // String libre, no ServiceCategory: SERVICE_CATEGORIES es una lista para
+  // el <Select> del dashboard, pensada para rubros de belleza/estética. Un
+  // servicio de "Landing Pages" (o cualquier rubro no cubierto por esa
+  // lista) sigue siendo un Service real aunque su categoría no esté en el
+  // dropdown — la columna en Postgres ya era texto libre.
+  category: string;
   durationMinutes: number;
   price: number;
+}
+
+// "0" (o ausente al crear) es el sentinel para "no es un servicio reservable
+// por turno" — nunca un valor real de duración (serviceSchema, el que valida
+// el formulario del dashboard, exige mínimo 5 minutos, así que 0 nunca puede
+// significar otra cosa). Vive acá (no en modules/business/service.ts, que
+// importa Prisma) para poder usarse también desde componentes cliente como
+// ServiceCard sin arrastrar el cliente de Prisma al bundle del browser.
+export function isBookableService(service: Pick<Service, "durationMinutes">): boolean {
+  return service.durationMinutes > 0;
+}
+
+// ---- Resource (recurso físico reservable: cancha, sala, silla...) ----
+// N:M con Service vía ServiceResource — ver comentario en schema.prisma.
+// Un service sin recursos asociados sigue usando la agenda general del
+// negocio exactamente como antes; esto es estrictamente aditivo.
+
+export interface Resource {
+  id: string;
+  businessId: string;
+  name: string;
+  description: string | null;
+  active: boolean;
 }
 
 export interface FAQ {
@@ -265,6 +299,9 @@ export interface Appointment {
   businessId: string;
   serviceId: string | null;
   serviceName: string;
+  // null si el servicio no usa recursos (comportamiento actual) o si el
+  // negocio nunca configuró Resources — nunca se inventa un valor acá.
+  resourceId: string | null;
   customerName: string;
   customerPhone: string;
   date: string;
