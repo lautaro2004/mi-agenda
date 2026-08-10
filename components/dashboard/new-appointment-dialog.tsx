@@ -198,7 +198,15 @@ export function NewAppointmentDialog({ trigger, services, onCreated }: NewAppoin
                     }}
                   >
                     <SelectTrigger id="appointment-service" className="w-full" aria-invalid={!!errors.serviceId}>
-                      <SelectValue placeholder="Seleccioná un servicio" />
+                      {/* Sin esta función, Select.Value muestra el id crudo
+                          en vez del nombre — ver el mismo fix en
+                          app/s/[slug]/booking-widget.tsx. */}
+                      <SelectValue placeholder="Seleccioná un servicio">
+                        {(value: string) => {
+                          const service = bookableServices.find((s) => s.id === value);
+                          return service ? `${service.name} · ${service.durationMinutes} min` : null;
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {bookableServices.length === 0 ? (

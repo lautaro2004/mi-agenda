@@ -4,6 +4,7 @@ import { getCurrentBusinessId } from "@/modules/business/current";
 import { applyTrainingProposal, trainingProposalSchema } from "@/modules/employee/training/proposal";
 import { getTrainingPlan } from "@/modules/employee/training-plan";
 import { CONTINUATION_MESSAGE, runTrainingTurn } from "@/modules/employee/training/engine";
+import { maybeAutoGenerateSeo } from "@/modules/business/seo";
 import type { TrainingMode } from "@/modules/ai/prompt/training";
 
 interface ApplyRequestBody {
@@ -40,6 +41,12 @@ export async function POST(request: Request) {
     // El estado del panel (checklist en vivo) viaja en la misma respuesta:
     // el cliente lo aplica directo, sin otra ida y vuelta al servidor.
     const plan = await getTrainingPlan(businessId);
+
+    // Si esta propuesta fue la que terminó de cerrar el entrenamiento
+    // inicial, es el otro punto natural para chequear si ya es momento de
+    // generar el SEO automático (ver maybeAutoGenerateSeo). No bloquea nada
+    // si falla ni si todavía no corresponde.
+    await maybeAutoGenerateSeo(businessId);
 
     return NextResponse.json({ ok: true, reply: continuation.reply, proposal: continuation.proposal, plan });
   } catch (error) {

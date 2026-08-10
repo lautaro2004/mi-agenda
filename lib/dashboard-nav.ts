@@ -6,6 +6,7 @@ import {
   CalendarCheck2,
   CreditCard,
   FlaskConical,
+  Globe,
   GraduationCap,
   LayoutDashboard,
   ListChecks,
@@ -44,5 +45,6 @@ export const DASHBOARD_NAV = [
       { href: "/dashboard/ai-studio/simulator", label: "Simulador", icon: FlaskConical },
     ],
   },
+  { href: "/dashboard/sitio", label: "Sitio web", icon: Globe },
   { href: "/dashboard/suscripcion", label: "Suscripción", icon: CreditCard },
 ] as const;

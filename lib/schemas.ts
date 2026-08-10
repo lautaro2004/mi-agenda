@@ -302,4 +302,21 @@ export const serviceResourcesSchema = z.object({
 
 export type ManualAppointmentValues = z.infer<typeof manualAppointmentSchema>;
 
+// Contrato de salida de Gemini para generateSeoConfig() (modules/business/seo.ts).
+// Límites de longitud alineados a lo que Google realmente trunca en resultados
+// de búsqueda — no son arbitrarios.
+export const seoConfigGenerationSchema = z.object({
+  seoTitle: z.string().min(10, "Muy corto").max(70, "Muy largo para un <title>"),
+  metaDescription: z.string().min(50, "Muy corta").max(160, "Muy larga para una meta description"),
+  h1: z.string().min(5).max(90),
+  ogTitle: z.string().min(10).max(70),
+  ogDescription: z.string().min(50).max(200),
+  // Uso interno (ver comentario en el modelo SeoConfig) — nunca se renderiza
+  // como meta tag.
+  keywords: z.array(z.string().min(2).max(40)).min(3, "Necesito al menos 3").max(12),
+  extraText: z.string().max(500).optional(),
+});
+
+export type SeoConfigGenerationValues = z.infer<typeof seoConfigGenerationSchema>;
+
 export type SimulatorCorrectionValues = z.infer<typeof simulatorCorrectionSchema>;

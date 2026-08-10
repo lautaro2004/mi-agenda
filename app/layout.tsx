@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { OnboardingProvider } from "@/lib/onboarding-store";
 import { WhatsAppProvider } from "@/lib/whatsapp-store";
+import { SITE_URL } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,7 +18,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = "https://miagenda.com";
 const SITE_TITLE = "Mi Agenda — El asistente operativo de tu negocio";
 const SITE_DESCRIPTION =
   "Configurá un asistente de IA que conoce tus servicios, precios, horarios y reglas. Atiende a tus clientes por WhatsApp y gestiona sus reservas automáticamente.";

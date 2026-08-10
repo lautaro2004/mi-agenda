@@ -19,6 +19,12 @@ model Business {
   whatsappNumber String?
   instagramUrl   String?
   facebookUrl    String?
+  // URL pública en /s/[slug]. Se genera una sola vez a partir del nombre (ver
+  // modules/business/slug.ts) y a propósito NUNCA se regenera sola si el
+  // nombre cambia después — cambiar el slug rompería la URL pública ya
+  // compartida/indexada. Nullable porque los negocios creados antes de esta
+  // feature no tienen uno hasta que se genera de forma perezosa.
+  slug           String?       @unique
   appointments   Appointment[]
   employee       Employee?
   faqs           FAQ[]
@@ -29,6 +35,30 @@ model Business {
   services       Service[]
   trainingPlan   TrainingPlan?
   trainingConversations TrainingConversation[]
+  seoConfig      SeoConfig?
+}
+
+// Configuración SEO generada por IA a partir de datos reales del negocio —
+// nunca se genera en el request público (ver app/s/[slug]/page.tsx), solo se
+// LEE ahí. 1:1 con Business a propósito: es un conjunto cohesivo con su
+// propio ciclo de vida (se genera, se puede regenerar, puede no existir
+// todavía), no un puñado de columnas sueltas en Business.
+model SeoConfig {
+  id              String   @id @default(cuid())
+  businessId      String   @unique
+  seoTitle        String
+  metaDescription String
+  h1              String
+  ogTitle         String
+  ogDescription   String
+  // Uso interno únicamente (orientar futuras features) — nunca se renderiza
+  // como <meta name="keywords">, eso no aporta nada a Google hoy.
+  keywords        String[]
+  extraText       String?
+  generatedAt     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
 model Service {

@@ -48,6 +48,10 @@ export interface Business {
   address: string;
   instagramUrl: string;
   facebookUrl: string;
+  // URL pública en /s/[slug]. null hasta que se genera (ver
+  // modules/business/slug.ts) — se crea una sola vez y después no cambia
+  // solo, aunque el nombre del negocio cambie.
+  slug: string | null;
 }
 
 export interface BusinessScheduleDay {
@@ -119,6 +123,23 @@ export interface FAQ {
   businessId: string;
   question: string;
   answer: string;
+}
+
+// ---- SEO automático (ver modules/business/seo.ts) ----
+// Generado por IA a partir de datos reales, guardado una vez, consumido por
+// el sitio público sin volver a llamar a Gemini. keywords es uso interno,
+// nunca se renderiza como <meta name="keywords">.
+
+export interface SeoConfig {
+  seoTitle: string;
+  metaDescription: string;
+  h1: string;
+  ogTitle: string;
+  ogDescription: string;
+  keywords: string[];
+  extraText: string | null;
+  generatedAt: string;
+  updatedAt: string;
 }
 
 export type SubscriptionStatus = "pending" | "active" | "expired";

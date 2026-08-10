@@ -19,6 +19,7 @@ export const emptyBusiness: Business = {
   address: "",
   instagramUrl: "",
   facebookUrl: "",
+  slug: null,
 };
 
 export const defaultSchedule: BusinessSchedule = WEEK_DAYS.map((day) => ({

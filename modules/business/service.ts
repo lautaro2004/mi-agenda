@@ -28,6 +28,7 @@ function toClientBusiness(
     address: row?.address ?? "",
     instagramUrl: row?.instagramUrl ?? "",
     facebookUrl: row?.facebookUrl ?? "",
+    slug: row?.slug ?? null,
   };
 }
 
