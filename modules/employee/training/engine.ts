@@ -36,6 +36,14 @@ const UNAVAILABLE_REPLY =
 export const CONTINUATION_MESSAGE =
   "(Mensaje del sistema: la propuesta anterior ya se guardó exitosamente en la base de datos. No la repitas ni la vuelvas a proponer. Continuá la conversación con naturalidad hacia la siguiente sección pendiente del plan, o cerrá la charla si ya no queda nada pendiente.)";
 
+// Turno sintético análogo a CONTINUATION_MESSAGE, pero para cuando el dueño
+// decide saltear la sección activa (botón "Completar después" — ver
+// app/api/ai-studio/training-plan/[key]/skip/route.ts). El sistema ya la
+// marcó "ignored" y activó la siguiente ANTES de este turno: la IA solo
+// tiene que presentarla, no decidir nada.
+export const SKIP_SECTION_MESSAGE =
+  "(Mensaje del sistema: el dueño prefiere completar la sección activa más adelante. El sistema ya la marcó como 'ignored' y activó la siguiente sección pendiente, si existe — no vuelvas a preguntar por la que se saltó. Presentá la nueva sección activa con naturalidad y preguntá si quiere contarte sobre eso ahora o prefiere completarlo después también, o cerrá la charla si ya no queda nada pendiente.)";
+
 function geminiProvider(): GeminiProvider | null {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;

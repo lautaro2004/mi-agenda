@@ -5,9 +5,10 @@ import { notFound } from "next/navigation";
 
 import { getBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
+import { getActiveServiceResources } from "@/modules/business/resource";
 import { buildFallbackSeoConfig, buildLocalBusinessJsonLd, getSeoConfig } from "@/modules/business/seo";
 import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
-import { getBookingHref, getBookingIntent, getVisibleServices } from "@/lib/booking-intent";
+import { getBookingHref, getBookingIntent, getFeaturedBookableService, getVisibleServices } from "@/lib/booking-intent";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import { isBookableService } from "@/lib/types";
 
@@ -91,16 +92,25 @@ export default async function PublicSitePage({ params }: PageProps) {
   const bookingHref = getBookingHref(slug, services, intent);
   const jsonLd = buildLocalBusinessJsonLd({ business, services, schedule, slug });
 
+  // Servicio a destacar en la hero booking card — mismo criterio que
+  // getBookingHref (primer reservable en orden existente), nunca uno nuevo.
+  // Solo se consulta si usa recursos cuando efectivamente hay uno destacado:
+  // una query liviana y puntual, no un fetch por cada servicio de la página.
+  const featuredService = getFeaturedBookableService(services);
+  const featuredServiceResources = featuredService
+    ? await getActiveServiceResources(business.id, featuredService.id)
+    : [];
+  const featuredServiceHref = featuredService ? `/s/${slug}/reservar?servicio=${featuredService.id}` : null;
+
   const whatsappHref = buildWhatsappHref(business.whatsappNumber);
   // Mensaje propio (no genérico) para el botón flotante — los demás puntos
   // de contacto por WhatsApp (navbar, footer, CTA intermedio/final) abren un
   // chat sin mensaje o con uno contextualizado a un servicio puntual.
   const floatingWhatsappHref = buildWhatsappHref(business.whatsappNumber, "Hola, vi su sitio web y quería hacer una consulta.");
 
-  // Ver lib/brand-color.ts: hoy siempre null (no hay campo de color en
-  // Business todavía), así que "--brand-primary" nunca se define y todo el
-  // acento de marca de las secciones cae en el --primary del tema, sin
-  // ningún cambio visual — el mecanismo queda listo, no hay nada inventado.
+  // Ver lib/brand-color.ts: si Business.brandColor no está configurado, esto
+  // da null y "--brand-primary" nunca se define — todo el acento de marca
+  // cae en el --primary del tema, sin ningún cambio visual.
   const brandColor = sanitizeHexColor(getBrandColor(business));
 
   return (
@@ -127,8 +137,10 @@ export default async function PublicSitePage({ params }: PageProps) {
           intent={intent}
           bookingHref={bookingHref}
           whatsappHref={whatsappHref}
-          servicesCount={visibleServices.length}
           heroImageUrl={business.heroImageUrl}
+          featuredService={featuredService}
+          featuredServiceUsesResources={featuredServiceResources.length > 0}
+          featuredServiceHref={featuredServiceHref}
         />
         <AboutSection description={business.description} />
         <ServicesSection services={visibleServices} slug={slug} whatsappNumber={business.whatsappNumber} />

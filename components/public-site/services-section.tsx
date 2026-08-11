@@ -3,6 +3,7 @@ import { ArrowRight, Clock, MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
+import { formatPrice } from "@/lib/currency";
 import { isBookableService, type Service } from "@/lib/types";
 
 interface ServicesSectionProps {
@@ -10,8 +11,6 @@ interface ServicesSectionProps {
   slug: string;
   whatsappNumber: string | null;
 }
-
-const currencyFormatter = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
 
 export function ServicesSection({ services, slug, whatsappNumber }: ServicesSectionProps) {
   if (services.length === 0) return null;
@@ -32,7 +31,7 @@ export function ServicesSection({ services, slug, whatsappNumber }: ServicesSect
           // servicio puntual — no un link genérico igual para todos.
           const consultHref = buildWhatsappHref(
             whatsappNumber,
-            `Hola, vi el servicio de ${service.name} en su sitio web y quería consultar.`
+            `Hola, vi su sitio web y quería consultar por ${service.name}.`
           );
 
           return (
@@ -52,7 +51,7 @@ export function ServicesSection({ services, slug, whatsappNumber }: ServicesSect
                 {service.price > 0 && (
                   <span className="font-semibold text-foreground">
                     {bookable ? "" : "Desde "}
-                    {currencyFormatter.format(service.price)}
+                    {formatPrice(service.price)}
                   </span>
                 )}
                 {/* durationMinutes solo se muestra cuando el servicio es
@@ -75,7 +74,7 @@ export function ServicesSection({ services, slug, whatsappNumber }: ServicesSect
                     render={<Link href={`/s/${slug}/reservar?servicio=${service.id}`} />}
                     nativeButton={false}
                   >
-                    Reservar
+                    Reservar turno
                     <ArrowRight className="size-3.5" data-icon="inline-end" />
                   </Button>
                 ) : consultHref ? (

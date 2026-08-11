@@ -220,3 +220,23 @@ export async function activateNextPendingSection(businessId: string): Promise<vo
     data: { status: "in_progress" },
   });
 }
+
+// A diferencia de activateNextPendingSection() (que sigue el orden
+// automático y nunca reemplaza una sección ya activa), esto deja que el
+// dueño salte directo a una sección puntual — "pending" o "ignored" — desde
+// el dashboard (ver "Completar {sección} →" en TrainingPlanStatus). Cualquier
+// otra sección que estuviera "in_progress" vuelve a "pending" (no se pierde,
+// sigue disponible para retomarla después).
+export async function activateSection(businessId: string, key: string): Promise<void> {
+  const normalized = normalizeSectionKey(key);
+  await prisma.$transaction([
+    prisma.trainingPlanSection.updateMany({
+      where: { plan: { businessId }, status: "in_progress" },
+      data: { status: "pending" },
+    }),
+    prisma.trainingPlanSection.updateMany({
+      where: { key: normalized, plan: { businessId } },
+      data: { status: "in_progress" },
+    }),
+  ]);
+}

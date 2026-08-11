@@ -32,9 +32,15 @@ const OPENING: Record<TrainingMode, string> = {
 
 export function TrainingChat({
   mode,
+  plan,
   onProposalApplied,
 }: {
   mode: TrainingMode;
+  // Controlado por la página (misma fuente que TrainingPlanStatus): de acá
+  // sale la sección activa para ofrecer los botones "Continuar" / "Completar
+  // después" sin depender de que el dueño escriba algo — ver sección 14 de
+  // la tarea que originó esto.
+  plan?: TrainingPlan | null;
   onProposalApplied?: (plan: TrainingPlan | null) => void;
 }) {
   const { refresh: refreshBusinessState } = useOnboarding();
@@ -46,6 +52,8 @@ export function TrainingChat({
   const [sending, setSending] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const bottomRef = React.useRef<HTMLDivElement>(null);
+
+  const activeSection = plan?.sections.find((s) => s.status === "in_progress") ?? null;
 
   // El historial vive en el servidor (TrainingConversation/TrainingMessage),
   // no en el estado del navegador: al montar, se retoma la conversación
@@ -153,6 +161,46 @@ export function TrainingChat({
     inputRef.current?.focus();
   }
 
+  function handleContinueSection() {
+    turn("Sí, quiero contarte.");
+  }
+
+  // Determinístico: la sección pasa a "ignored" en el servidor antes de
+  // pedirle nada a la IA — no depende de que interprete correctamente un
+  // "mejor después" en texto libre (ver sección 14/15 de la tarea).
+  async function skipSection() {
+    if (!activeSection) return;
+    setSending(true);
+    setChatError(null);
+    const key = activeSection.key;
+
+    try {
+      const result = await requestJson<{
+        reply: string;
+        proposal: TrainingProposal | null;
+        plan: TrainingPlan | null;
+      }>(`/api/ai-studio/training-plan/${encodeURIComponent(key)}/skip`, {
+        method: "POST",
+        body: JSON.stringify({ mode }),
+      });
+      setMessages((prev) => [
+        ...prev,
+        { role: "owner", text: "Prefiero completar esto después." },
+        { role: "ai", text: result.reply },
+      ]);
+      setProposal(result.proposal);
+      onProposalApplied?.(result.plan);
+      void refreshBusinessState();
+    } catch (error) {
+      setChatError({
+        message: error instanceof Error ? error.message : "No pudimos actualizar el plan. ¿Querés reintentar?",
+        retry: () => void skipSection(),
+      });
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div className="flex h-[32rem] flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto pr-1">
@@ -191,6 +239,18 @@ export function TrainingChat({
                     Cancelar
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {!proposal && !chatError && !sending && activeSection && (
+              <div className="ml-1 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">Tema actual: {activeSection.title}</span>
+                <Button type="button" size="sm" onClick={handleContinueSection}>
+                  Continuar
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => void skipSection()}>
+                  Completar después
+                </Button>
               </div>
             )}
 

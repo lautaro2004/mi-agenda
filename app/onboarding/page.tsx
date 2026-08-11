@@ -7,9 +7,10 @@ import { CalendarClock, CheckCircle2 } from "lucide-react";
 
 import { TrainingChat } from "@/components/ai-studio/training-chat";
 import { TrainingPlanStatus } from "@/components/ai-studio/training-plan-status";
+import { DocumentUploader } from "@/components/ai-studio/document-uploader";
 import { Button } from "@/components/ui/button";
 import { requestJson } from "@/lib/api-client";
-import type { BusinessSchedule, TrainingPlan } from "@/lib/types";
+import type { BusinessSchedule, MemoryEntry, TrainingPlan } from "@/lib/types";
 
 // Solo para el mensaje de aliento, no para bloquear la navegación: el
 // seguimiento de secciones depende de que la IA etiquete cada propuesta
@@ -25,6 +26,9 @@ export default function OnboardingIndexPage() {
   const [plan, setPlan] = React.useState<TrainingPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = React.useState(true);
   const [skipping, setSkipping] = React.useState(false);
+  const [resumingKey, setResumingKey] = React.useState<string | null>(null);
+  const [uploadedDocs, setUploadedDocs] = React.useState<MemoryEntry[]>([]);
+  const [uploadingCount, setUploadingCount] = React.useState(0);
   // Horarios vive en su propia tabla (Schedule) y su propia pantalla, aparte
   // de todo lo que entrena la IA — este estado solo refleja si ya se
   // configuró o no, para mostrar el CTA correcto. No pasa por el chat.
@@ -43,6 +47,21 @@ export default function OnboardingIndexPage() {
 
   const readyToContinue = isMinimumTrainingComplete(plan);
   const pendingSections = plan?.sections.filter((s) => s.status === "pending" || s.status === "in_progress") ?? [];
+
+  async function resumeSection(key: string) {
+    setResumingKey(key);
+    try {
+      const { plan: updated } = await requestJson<{ plan: TrainingPlan | null }>(
+        `/api/ai-studio/training-plan/${encodeURIComponent(key)}/resume`,
+        { method: "POST" }
+      );
+      setPlan(updated);
+    } catch {
+      toast.error("No pudimos activar esa sección. Intentá de nuevo.");
+    } finally {
+      setResumingKey(null);
+    }
+  }
 
   async function skipRemaining() {
     setSkipping(true);
@@ -71,9 +90,9 @@ export default function OnboardingIndexPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
-        <TrainingChat mode="onboarding" onProposalApplied={setPlan} />
+        <TrainingChat mode="onboarding" plan={plan} onProposalApplied={setPlan} />
         <div className="space-y-4">
-          <TrainingPlanStatus plan={plan} loading={loadingPlan} />
+          <TrainingPlanStatus plan={plan} loading={loadingPlan} onResume={resumeSection} resumingKey={resumingKey} />
 
           {plan && (
             <div className="rounded-2xl border border-border bg-card p-5">
@@ -103,8 +122,43 @@ export default function OnboardingIndexPage() {
               </div>
             </div>
           )}
+
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="text-sm font-semibold text-foreground">Recursos de conocimiento</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              ¿Tenés documentos que puedan ayudar a tu empleado a responder mejor?
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Podés subir manuales, listas de precios, políticas, catálogos o documentación de tu negocio.
+            </p>
+
+            <div className="mt-3">
+              <DocumentUploader
+                onUploaded={(entry) => setUploadedDocs((prev) => [entry, ...prev])}
+                onUploadingChange={setUploadingCount}
+              />
+            </div>
+
+            {uploadedDocs.length > 0 && (
+              <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                {uploadedDocs.map((doc) => (
+                  <li key={doc.id} className="flex items-center gap-1.5">
+                    <CheckCircle2 className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    {doc.title}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
+
+      {uploadingCount > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+          Algunos recursos todavía se están subiendo. Esperá a que termine antes de salir para no perder esa
+          subida — los que ya terminaron quedan guardados igual.
+        </div>
+      )}
 
       <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-sm">
         <Link href="/onboarding/negocio" className="text-muted-foreground hover:text-foreground hover:underline">

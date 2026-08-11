@@ -471,6 +471,7 @@ export const MEMORY_CATEGORIES = [
   "Datos importantes",
   "Respuestas frecuentes",
   "Observaciones del dueño",
+  "Documentos",
   "Otro",
 ] as const;
 
@@ -500,6 +501,18 @@ export const MEMORY_SOURCE_META: Record<MemorySource, { label: string }> = {
   correction: { label: "Corrección" },
 };
 
+// Estado de procesamiento de un documento subido (source = "document") — ver
+// modules/employee/document-extract.ts. Entradas manuales no tienen estado
+// (siempre null): no hay nada que "procesar" en texto tipeado a mano.
+export const DOCUMENT_PROCESSING_STATUSES = ["uploading", "processing", "ready", "error"] as const;
+export type DocumentProcessingStatus = (typeof DOCUMENT_PROCESSING_STATUSES)[number];
+export const DOCUMENT_PROCESSING_STATUS_META: Record<DocumentProcessingStatus, { label: string }> = {
+  uploading: { label: "Subiendo…" },
+  processing: { label: "Procesando…" },
+  ready: { label: "Listo" },
+  error: { label: "Error" },
+};
+
 export interface MemoryEntry {
   id: string;
   businessId: string;
@@ -509,6 +522,13 @@ export interface MemoryEntry {
   importance: MemoryImportance;
   source: MemorySource;
   active: boolean;
+  // Presentes solo cuando source = "document" — ver
+  // modules/employee/memory.ts createDocumentMemoryEntry().
+  fileName: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  processingStatus: DocumentProcessingStatus | null;
+  processingError: string | null;
 }
 
 // ---- Training Plan ----

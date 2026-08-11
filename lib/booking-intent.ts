@@ -17,6 +17,14 @@ export function getBookingIntent(services: Service[]): BookingIntent {
   return hasNonBookable ? "meeting" : "booking";
 }
 
+// Servicio reservable a destacar (ej. en la hero booking card) cuando hace
+// falta elegir UNO solo — determinístico: el primero reservable en el orden
+// ya existente (services llega ordenado por createdAt asc desde
+// getBusinessState), nunca inventado ni elegido al azar.
+export function getFeaturedBookableService(services: Service[]): Service | null {
+  return services.find(isBookableService) ?? null;
+}
+
 // Único punto que arma el link "ir a reservar" para todo el sitio público
 // (header, hero, CTA intermedio, CTA final) — evita que cada componente
 // reconstruya la misma URL por su cuenta. En intent "meeting" el turno
@@ -26,7 +34,7 @@ export function getBookingIntent(services: Service[]): BookingIntent {
 export function getBookingHref(slug: string, services: Service[], intent: BookingIntent): string {
   const base = `/s/${slug}/reservar`;
   if (intent !== "meeting") return base;
-  const meetingService = services.find(isBookableService);
+  const meetingService = getFeaturedBookableService(services);
   return meetingService ? `${base}?servicio=${meetingService.id}` : base;
 }
 

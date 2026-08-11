@@ -12,7 +12,7 @@ const ignoreNodeSchemePlugin: webpack.WebpackPluginInstance = {
 };
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["baileys", "pino", "@prisma/client"],
+  serverExternalPackages: ["baileys", "pino", "@prisma/client", "pdf-parse", "mammoth"],
   webpack: (config, { nextRuntime }) => {
     if (nextRuntime === "edge") {
       // instrumentation.ts must be able to compile for the Edge runtime (Next

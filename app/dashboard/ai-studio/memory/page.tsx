@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { Brain, Pencil, Plus } from "lucide-react";
+import { AlertCircle, Brain, ExternalLink, FileText, Pencil, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +11,12 @@ import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { DeleteIconButton } from "@/components/dashboard/delete-icon-button";
 import { MemoryEntryDialog } from "@/components/ai-studio/memory-entry-dialog";
+import { DocumentUploader } from "@/components/ai-studio/document-uploader";
 import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api-client";
+import { DOCUMENT_MIME_LABELS, formatFileSize } from "@/lib/document-limits";
 import type { MemoryEntryFormValues } from "@/lib/schemas";
-import { MEMORY_IMPORTANCE_META, type MemoryEntry } from "@/lib/types";
+import { DOCUMENT_PROCESSING_STATUS_META, MEMORY_IMPORTANCE_META, type MemoryEntry } from "@/lib/types";
 
 const IMPORTANCE_BADGE_VARIANT: Record<MemoryEntry["importance"], "secondary" | "outline" | "default"> = {
   low: "outline",
@@ -56,6 +58,10 @@ export default function MemoryPage() {
     } catch {
       toast.error("No pudimos agregar la entrada. Intentá de nuevo.");
     }
+  }
+
+  function addDocument(entry: MemoryEntry) {
+    setEntries((prev) => [entry, ...(prev ?? [])]);
   }
 
   async function editEntry(id: string, values: MemoryEntryFormValues) {
@@ -104,21 +110,33 @@ export default function MemoryPage() {
     }
   }
 
+  async function viewFile(id: string) {
+    try {
+      const { url } = await requestJson<{ url: string }>(`/api/ai-studio/memory/${id}/file-url`);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      toast.error("No pudimos generar el link del archivo.");
+    }
+  }
+
   return (
     <div>
       <PageHeader
-        title="Memoria del negocio"
-        description="Información que tu empleado usa automáticamente para responder: políticas, procedimientos, promociones y cualquier dato relevante."
+        title="Memoria y recursos"
+        description="Información que tu empleado usa automáticamente para responder: políticas, procedimientos, promociones, y documentos que subas (manuales, listas de precios, catálogos)."
         action={
-          <MemoryEntryDialog
-            onSubmit={addEntry}
-            trigger={
-              <Button>
-                <Plus className="size-4" data-icon="inline-start" />
-                Agregar
-              </Button>
-            }
-          />
+          <div className="flex items-center gap-2">
+            <DocumentUploader onUploaded={addDocument} />
+            <MemoryEntryDialog
+              onSubmit={addEntry}
+              trigger={
+                <Button>
+                  <Plus className="size-4" data-icon="inline-start" />
+                  Agregar
+                </Button>
+              }
+            />
+          </div>
         }
       />
 
@@ -137,68 +155,117 @@ export default function MemoryPage() {
           <Brain className="size-8 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium text-foreground">Todavía no agregaste memoria</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sumá políticas, procedimientos o cualquier dato que tu empleado deba conocer.
+            Sumá políticas, procedimientos, o subí un documento con información de tu negocio.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           <AnimatePresence>
-            {entries.map((entry) => (
-              <motion.div
-                key={entry.id}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-                className={cn(
-                  "rounded-xl border border-border bg-card p-4",
-                  deletingIds.has(entry.id) && "pointer-events-none opacity-50"
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-semibold text-foreground">{entry.title}</h3>
-                      <Badge variant="outline">{entry.category}</Badge>
-                      <Badge variant={IMPORTANCE_BADGE_VARIANT[entry.importance]}>
-                        {MEMORY_IMPORTANCE_META[entry.importance].label}
-                      </Badge>
-                    </div>
-                    <p
-                      className={cn(
-                        "mt-1 text-sm text-muted-foreground",
-                        !entry.active && "text-muted-foreground/60 line-through"
+            {entries.map((entry) => {
+              const isDocument = entry.source === "document";
+
+              return (
+                <motion.div
+                  key={entry.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25 }}
+                  className={cn(
+                    "rounded-xl border border-border bg-card p-4",
+                    deletingIds.has(entry.id) && "pointer-events-none opacity-50"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isDocument && <FileText className="size-4 shrink-0 text-muted-foreground" />}
+                        <h3 className="text-sm font-semibold text-foreground">{entry.title}</h3>
+                        <Badge variant="outline">{entry.category}</Badge>
+                        {!isDocument && (
+                          <Badge variant={IMPORTANCE_BADGE_VARIANT[entry.importance]}>
+                            {MEMORY_IMPORTANCE_META[entry.importance].label}
+                          </Badge>
+                        )}
+                        {isDocument && entry.processingStatus && (
+                          <Badge variant={entry.processingStatus === "error" ? "outline" : "secondary"}>
+                            {DOCUMENT_PROCESSING_STATUS_META[entry.processingStatus].label}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {isDocument ? (
+                        <>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {entry.mimeType ? (DOCUMENT_MIME_LABELS[entry.mimeType] ?? "Archivo") : "Archivo"}
+                            {entry.fileSizeBytes != null && ` · ${formatFileSize(entry.fileSizeBytes)}`}
+                          </p>
+                          {entry.processingStatus === "error" ? (
+                            <p className="mt-1.5 flex items-center gap-1.5 text-sm text-destructive">
+                              <AlertCircle className="size-3.5 shrink-0" />
+                              {entry.processingError ?? "No pudimos procesar este documento."}
+                            </p>
+                          ) : (
+                            <p
+                              className={cn(
+                                "mt-1.5 line-clamp-2 text-sm text-muted-foreground",
+                                !entry.active && "text-muted-foreground/60 line-through"
+                              )}
+                            >
+                              {entry.content}
+                            </p>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="mt-1.5 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => void viewFile(entry.id)}
+                          >
+                            Ver archivo
+                            <ExternalLink className="size-3" data-icon="inline-end" />
+                          </Button>
+                        </>
+                      ) : (
+                        <p
+                          className={cn(
+                            "mt-1 text-sm text-muted-foreground",
+                            !entry.active && "text-muted-foreground/60 line-through"
+                          )}
+                        >
+                          {entry.content}
+                        </p>
                       )}
-                    >
-                      {entry.content}
-                    </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Switch
+                        checked={entry.active}
+                        onCheckedChange={() => void toggleActive(entry)}
+                        aria-label={`Activar o desactivar: ${entry.title}`}
+                        size="sm"
+                      />
+                      {!isDocument && (
+                        <MemoryEntryDialog
+                          entry={entry}
+                          onSubmit={(values) => editEntry(entry.id, values)}
+                          trigger={
+                            <Button variant="ghost" size="icon-sm" aria-label={`Editar: ${entry.title}`}>
+                              <Pencil className="size-3.5" />
+                            </Button>
+                          }
+                        />
+                      )}
+                      <DeleteIconButton
+                        label={`Eliminar: ${entry.title}`}
+                        onPendingChange={(pending) => setItemDeleting(entry.id, pending)}
+                        onDelete={() => removeEntry(entry.id)}
+                      />
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Switch
-                      checked={entry.active}
-                      onCheckedChange={() => void toggleActive(entry)}
-                      aria-label={`Activar o desactivar: ${entry.title}`}
-                      size="sm"
-                    />
-                    <MemoryEntryDialog
-                      entry={entry}
-                      onSubmit={(values) => editEntry(entry.id, values)}
-                      trigger={
-                        <Button variant="ghost" size="icon-sm" aria-label={`Editar: ${entry.title}`}>
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      }
-                    />
-                    <DeleteIconButton
-                      label={`Eliminar: ${entry.title}`}
-                      onPendingChange={(pending) => setItemDeleting(entry.id, pending)}
-                      onDelete={() => removeEntry(entry.id)}
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
       )}

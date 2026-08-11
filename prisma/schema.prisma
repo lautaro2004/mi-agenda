@@ -175,6 +175,18 @@ model MemoryEntry {
   importance String   @default("medium")
   source     String   @default("manual")
   active     Boolean  @default(true)
+  // Presentes solo cuando source = "document" (ver modules/employee/memory.ts
+  // createDocumentMemoryEntry). El archivo original vive en Supabase Storage
+  // (bucket privado "knowledge-documents", ver lib/knowledge-documents.ts) —
+  // acá solo se guarda la referencia/path, nunca el binario. "content" en
+  // ese caso es el texto ya extraído del archivo (lo que efectivamente lee
+  // el empleado), no el archivo en sí.
+  filePath         String?
+  fileName         String?
+  mimeType         String?
+  fileSizeBytes    Int?
+  processingStatus String?
+  processingError  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)

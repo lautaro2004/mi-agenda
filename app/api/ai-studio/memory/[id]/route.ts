@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentBusinessId } from "@/modules/business/current";
 import { deleteMemoryEntry, updateMemoryEntry } from "@/modules/employee/memory";
+import { deleteDocument } from "@/lib/knowledge-documents";
 import { memoryEntrySchema } from "@/lib/schemas";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -33,9 +34,20 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   }
 
   const { id } = await params;
-  const deleted = await deleteMemoryEntry(businessId, id);
+  const { deleted, filePath } = await deleteMemoryEntry(businessId, id);
   if (!deleted) {
     return NextResponse.json({ error: "Entrada no encontrada." }, { status: 404 });
+  }
+
+  // Best-effort: la entrada ya se borró. Si esto falla, el archivo queda
+  // huérfano en Storage — no revertimos el borrado ni le devolvemos un error
+  // al dueño por algo que ya no puede solucionar desde acá.
+  if (filePath) {
+    try {
+      await deleteDocument(filePath);
+    } catch (error) {
+      console.error(`[api/ai-studio/memory/[id]] No pudimos borrar el archivo ${filePath}:`, error);
+    }
   }
 
   return NextResponse.json({ ok: true });

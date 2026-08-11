@@ -1,13 +1,24 @@
 "use client";
 
-import { CheckCircle2, Circle, Loader2, MinusCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle, Loader2, MinusCircle } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import type { TrainingPlan } from "@/lib/types";
+
+interface TrainingPlanStatusProps {
+  plan: TrainingPlan | null;
+  loading: boolean;
+  // Opcional: quien la pase habilita "Completar {sección} →" en Pendientes/
+  // Omitidas — activa esa sección puntual (ver activateSection) para
+  // retomarla desde acá sin tener que esperar a que la IA la ofrezca sola.
+  onResume?: (key: string) => void;
+  resumingKey?: string | null;
+}
 
 // Componente controlado: el dueño del fetch es la página (para poder
 // actualizar el estado al instante con la respuesta de /training/apply, sin
 // una segunda ida y vuelta al servidor cada vez que se guarda una sección).
-export function TrainingPlanStatus({ plan, loading }: { plan: TrainingPlan | null; loading: boolean }) {
+export function TrainingPlanStatus({ plan, loading, onResume, resumingKey }: TrainingPlanStatusProps) {
   if (loading) {
     return <div className="h-40 animate-pulse rounded-2xl border border-border bg-muted/30" />;
   }
@@ -65,11 +76,26 @@ export function TrainingPlanStatus({ plan, loading }: { plan: TrainingPlan | nul
       {pending.length > 0 && (
         <div className="mt-4">
           <p className="text-xs font-medium text-muted-foreground">Pendientes</p>
-          <ul className="mt-1.5 space-y-1">
+          <ul className="mt-1.5 space-y-1.5">
             {pending.map((s) => (
-              <li key={s.id} className="flex items-start gap-2 text-sm text-foreground" title={s.description}>
-                <Circle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                {s.title}
+              <li key={s.id} className="flex items-start justify-between gap-2 text-sm text-foreground" title={s.description}>
+                <span className="flex items-start gap-2">
+                  <Circle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                  {s.title}
+                </span>
+                {onResume && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    disabled={resumingKey === s.key}
+                    onClick={() => onResume(s.key)}
+                  >
+                    Completar
+                    <ArrowRight className="size-3" data-icon="inline-end" />
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -78,12 +104,27 @@ export function TrainingPlanStatus({ plan, loading }: { plan: TrainingPlan | nul
 
       {ignored.length > 0 && (
         <div className="mt-4">
-          <p className="text-xs font-medium text-muted-foreground">No aplica</p>
-          <ul className="mt-1.5 space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Omitidas</p>
+          <ul className="mt-1.5 space-y-1.5">
             {ignored.map((s) => (
-              <li key={s.id} className="flex items-start gap-2 text-sm text-muted-foreground/70">
-                <MinusCircle className="mt-0.5 size-3.5 shrink-0" />
-                {s.title}
+              <li key={s.id} className="flex items-start justify-between gap-2 text-sm text-muted-foreground/70">
+                <span className="flex items-start gap-2">
+                  <MinusCircle className="mt-0.5 size-3.5 shrink-0" />
+                  {s.title}
+                </span>
+                {onResume && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    disabled={resumingKey === s.key}
+                    onClick={() => onResume(s.key)}
+                  >
+                    Completar
+                    <ArrowRight className="size-3" data-icon="inline-end" />
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
