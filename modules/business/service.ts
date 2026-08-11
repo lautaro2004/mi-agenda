@@ -21,6 +21,8 @@ function toClientBusiness(
     id: businessId,
     name: row?.name ?? "",
     logoUrl: row?.logoUrl ?? null,
+    heroImageUrl: row?.heroImageUrl ?? null,
+    brandColor: row?.brandColor ?? null,
     category: (row?.category as Business["category"]) ?? "",
     description: row?.description ?? "",
     phone: row?.phone ?? "",
@@ -103,6 +105,8 @@ export async function getBusinessState(businessId: string) {
 export interface BusinessUpdateInput {
   name?: string;
   logoUrl?: string | null;
+  heroImageUrl?: string | null;
+  brandColor?: string | null;
   category?: string;
   description?: string;
   phone?: string;

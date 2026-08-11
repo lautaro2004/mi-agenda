@@ -1,4 +1,6 @@
-const HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+// Exportado para que lib/schemas.ts valide con la misma regla al guardar
+// (única fuente de verdad del formato — nunca dos regex del mismo patrón).
+export const HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 // Nunca confiar en un color que eventualmente pueda venir de un dato
 // editable por el usuario — se usa como custom property CSS, así que un
@@ -10,13 +12,10 @@ export function sanitizeHexColor(value: string | null | undefined): string | nul
   return HEX_COLOR_RE.test(trimmed) ? trimmed : null;
 }
 
-// Business todavía no tiene ningún campo de color — agregarlo requeriría
-// migración, y esta tarea explícitamente pide no hacer una si no es
-// imprescindible. Por eso esto siempre devuelve null hoy: el sitio público
-// usa "var(--brand-primary, var(--primary))" en los puntos de acento (ver
-// components/public-site/header.tsx y hero.tsx), así que en cuanto exista
-// una fuente real de color por negocio, alcanza con hacer que esta función
-// la lea — no hay que tocar ningún componente visual.
-export function getBrandColor(_business: { id: string }): string | null {
-  return null;
+// El sitio público usa "var(--brand-primary, var(--primary))" en los puntos
+// de acento (header, hero, CTAs) — este es el único lugar que lee
+// Business.brandColor, así que si el mecanismo de fallback cambia alguna
+// vez, no hay que tocar ningún componente visual.
+export function getBrandColor(business: { brandColor: string | null }): string | null {
+  return business.brandColor;
 }

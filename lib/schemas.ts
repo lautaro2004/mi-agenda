@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HEX_COLOR_RE } from "@/lib/brand-color";
 import {
   AI_PROPOSABLE_SECTION_STATUSES,
   BUSINESS_CATEGORIES,
@@ -40,6 +41,16 @@ export type LoginFormValues = z.infer<typeof loginSchema>;
 export const businessInfoSchema = z.object({
   name: z.string().min(2, "Ingresá el nombre de tu negocio"),
   logoUrl: z.string().nullable(),
+  // heroImageUrl no vive acá: se maneja por separado vía
+  // /api/business/assets/hero (sube el archivo, nunca recibe una URL cruda
+  // del cliente). brandColor sí es un valor simple (no un upload), así que
+  // reusa este mismo PATCH — misma regex que sanitizeHexColor(), única
+  // fuente de verdad del formato.
+  brandColor: z
+    .string()
+    .nullable()
+    .optional()
+    .refine((value) => value == null || HEX_COLOR_RE.test(value), "Ingresá un color hexadecimal válido"),
   category: z.enum(BUSINESS_CATEGORIES, {
     message: "Seleccioná un rubro",
   }),

@@ -32,7 +32,7 @@ export function ServicesSection({ services, slug, whatsappNumber }: ServicesSect
           // servicio puntual — no un link genérico igual para todos.
           const consultHref = buildWhatsappHref(
             whatsappNumber,
-            `Hola, vi el servicio de ${service.name} y me gustaría consultar por un proyecto.`
+            `Hola, vi el servicio de ${service.name} en su sitio web y quería consultar.`
           );
 
           return (
@@ -75,18 +75,19 @@ export function ServicesSection({ services, slug, whatsappNumber }: ServicesSect
                     render={<Link href={`/s/${slug}/reservar?servicio=${service.id}`} />}
                     nativeButton={false}
                   >
-                    Reservar turno
+                    Reservar
                     <ArrowRight className="size-3.5" data-icon="inline-end" />
                   </Button>
                 ) : consultHref ? (
                   <Button size="sm" variant="outline" className="w-full" render={<a href={consultHref} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>
                     <MessageCircle className="size-3.5" data-icon="inline-start" />
-                    Consultar
+                    Quiero más información
                     <ArrowRight className="size-3.5" data-icon="inline-end" />
                   </Button>
                 ) : (
                   // Sin WhatsApp configurado no hay a dónde mandar la
-                  // consulta — mejor no mostrar un botón roto.
+                  // consulta — mejor no mostrar un botón roto (nunca
+                  // "Reservar" para un servicio no reservable, ver isBookableService).
                   <p className="text-center text-xs text-muted-foreground">Consultanos por este servicio</p>
                 )}
               </div>

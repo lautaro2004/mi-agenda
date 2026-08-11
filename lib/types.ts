@@ -35,6 +35,10 @@ export interface Business {
   id: string;
   name: string;
   logoUrl: string | null;
+  // Apariencia mínima del sitio público — ver lib/site-assets.ts (Supabase
+  // Storage) y lib/brand-color.ts. Nunca base64, siempre una URL pública.
+  heroImageUrl: string | null;
+  brandColor: string | null;
   // String libre, no BusinessCategory: el dashboard sigue restringiendo a
   // BUSINESS_CATEGORIES en su <Select> (businessInfoSchema), pero el rubro
   // contado en el onboarding conversacional puede ser cualquier texto — no

@@ -1,9 +1,11 @@
+import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { getBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { buildFallbackSeoConfig, getSeoConfig } from "@/modules/business/seo";
+import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
 import { getBookingHref, getBookingIntent } from "@/lib/booking-intent";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import { isBookableService } from "@/lib/types";
@@ -60,10 +62,14 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
   const bookingHref = getBookingHref(slug, services, intent);
 
   const whatsappHref = buildWhatsappHref(business.whatsappNumber);
-  const floatingWhatsappHref = buildWhatsappHref(business.whatsappNumber, "Hola, quiero hacer una consulta.");
+  const floatingWhatsappHref = buildWhatsappHref(business.whatsappNumber, "Hola, vi su sitio web y quería hacer una consulta.");
+  const brandColor = sanitizeHexColor(getBrandColor(business));
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className="min-h-screen bg-background"
+      style={brandColor ? ({ "--brand-primary": brandColor } as CSSProperties) : undefined}
+    >
       <PublicHeader
         business={business}
         slug={slug}

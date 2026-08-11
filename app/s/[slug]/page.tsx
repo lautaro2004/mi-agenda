@@ -95,7 +95,7 @@ export default async function PublicSitePage({ params }: PageProps) {
   // Mensaje propio (no genérico) para el botón flotante — los demás puntos
   // de contacto por WhatsApp (navbar, footer, CTA intermedio/final) abren un
   // chat sin mensaje o con uno contextualizado a un servicio puntual.
-  const floatingWhatsappHref = buildWhatsappHref(business.whatsappNumber, "Hola, quiero hacer una consulta.");
+  const floatingWhatsappHref = buildWhatsappHref(business.whatsappNumber, "Hola, vi su sitio web y quería hacer una consulta.");
 
   // Ver lib/brand-color.ts: hoy siempre null (no hay campo de color en
   // Business todavía), así que "--brand-primary" nunca se define y todo el
@@ -128,6 +128,7 @@ export default async function PublicSitePage({ params }: PageProps) {
           bookingHref={bookingHref}
           whatsappHref={whatsappHref}
           servicesCount={visibleServices.length}
+          heroImageUrl={business.heroImageUrl}
         />
         <AboutSection description={business.description} />
         <ServicesSection services={visibleServices} slug={slug} whatsappNumber={business.whatsappNumber} />

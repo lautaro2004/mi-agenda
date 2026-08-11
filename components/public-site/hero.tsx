@@ -12,6 +12,7 @@ interface PublicHeroProps {
   bookingHref: string;
   whatsappHref: string | null;
   servicesCount: number;
+  heroImageUrl: string | null;
 }
 
 const PRIMARY_CTA_LABEL: Record<BookingIntent, string> = {
@@ -26,12 +27,21 @@ const INTENT_INDICATOR: Record<BookingIntent, string> = {
   contact: "Contacto directo",
 };
 
-// Composición en dos columnas en desktop (texto + panel decorativo) para que
-// el hero tenga presencia visual sin usar fotos de stock: el panel se arma
-// solo con el logo/inicial del negocio y dos datos reales (cantidad de
-// servicios, tipo de conversión) — nunca texto o cifras inventadas. En
-// mobile el panel se oculta y queda solo el bloque de texto, ya compacto.
-export function PublicHero({ business, seo, intent, bookingHref, whatsappHref, servicesCount }: PublicHeroProps) {
+// Composición en dos columnas en desktop (texto + panel visual) — sin
+// heroImageUrl configurado, el panel es decorativo (grid sutil + blob +
+// logo/inicial + dos datos reales, nunca stock images). Con heroImageUrl, el
+// panel pasa a ser la foto real del negocio (object-cover, sin deformar),
+// con el logo superpuesto como sello y las mismas chips flotantes encima.
+// En mobile el panel se oculta y queda solo el bloque de texto, ya compacto.
+export function PublicHero({
+  business,
+  seo,
+  intent,
+  bookingHref,
+  whatsappHref,
+  servicesCount,
+  heroImageUrl,
+}: PublicHeroProps) {
   const primaryHref = intent !== "contact" ? bookingHref : "#servicios";
 
   return (
@@ -84,34 +94,56 @@ export function PublicHero({ business, seo, intent, bookingHref, whatsappHref, s
         </div>
 
         <div className="relative hidden aspect-square max-h-[380px] w-full lg:block">
-          <div
-            className="absolute inset-6 rounded-full bg-[var(--brand-primary,var(--primary))]/15 blur-3xl"
-            aria-hidden
-          />
-          <div
-            className="absolute inset-0 rounded-[2rem] border border-border bg-card/60"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle, var(--border) 1px, transparent 1px)",
-              backgroundSize: "18px 18px",
-            }}
-            aria-hidden
-          />
-
-          <div className="absolute inset-0 flex items-center justify-center p-10">
-            {business.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={business.logoUrl}
-                alt={business.name}
-                className="size-32 rounded-3xl border border-border bg-card object-cover shadow-sm"
-              />
-            ) : (
-              <div className="flex size-32 items-center justify-center rounded-3xl border border-border bg-[var(--brand-primary,var(--primary))] text-5xl font-semibold text-primary-foreground shadow-sm">
-                {business.name.charAt(0).toUpperCase() || "?"}
+          {heroImageUrl ? (
+            <>
+              <div className="absolute inset-0 overflow-hidden rounded-[2rem] border border-border">
+                {/* object-cover: nunca deforma la imagen, solo la recorta al
+                    contenedor cuadrado. Ver eslint-disable: mismo criterio
+                    que el resto del sitio público (no se usa next/image para
+                    no tener que dar de alta cada host de logo/hero posible en
+                    next.config). */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={heroImageUrl} alt="" className="size-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" aria-hidden />
               </div>
-            )}
-          </div>
+              {business.logoUrl && (
+                <div className="absolute top-5 right-5 flex size-12 items-center justify-center overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={business.logoUrl} alt={business.name} className="size-full object-cover" />
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div
+                className="absolute inset-6 rounded-full bg-[var(--brand-primary,var(--primary))]/15 blur-3xl"
+                aria-hidden
+              />
+              <div
+                className="absolute inset-0 rounded-[2rem] border border-border bg-card/60"
+                style={{
+                  backgroundImage: "radial-gradient(circle, var(--border) 1px, transparent 1px)",
+                  backgroundSize: "18px 18px",
+                }}
+                aria-hidden
+              />
+
+              <div className="absolute inset-0 flex items-center justify-center p-10">
+                {business.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={business.logoUrl}
+                    alt={business.name}
+                    className="size-32 rounded-3xl border border-border bg-card object-cover shadow-sm"
+                  />
+                ) : (
+                  <div className="flex size-32 items-center justify-center rounded-3xl border border-border bg-[var(--brand-primary,var(--primary))] text-5xl font-semibold text-primary-foreground shadow-sm">
+                    {business.name.charAt(0).toUpperCase() || "?"}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {servicesCount > 0 && (
             <div className="absolute top-5 left-0 flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-xs font-medium text-foreground shadow-sm">

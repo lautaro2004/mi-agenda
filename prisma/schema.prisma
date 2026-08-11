@@ -16,6 +16,15 @@ model Business {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   logoUrl        String?
+  // URL pública de Supabase Storage (bucket "site-assets") — nunca se guarda
+  // el binario ni un base64 acá. Ver lib/site-assets.ts: el path dentro del
+  // bucket se deriva de esta URL cuando hace falta (reemplazo, limpieza de
+  // huérfanos), así que no hace falta una columna aparte solo para el path.
+  heroImageUrl   String?
+  // Hex validado en el borde de entrada (ver HEX_COLOR_RE en
+  // lib/brand-color.ts) antes de guardarse — nunca se usa un valor crudo del
+  // cliente directamente como CSS custom property.
+  brandColor     String?
   whatsappNumber String?
   instagramUrl   String?
   facebookUrl    String?

@@ -12,6 +12,8 @@ export const emptyBusiness: Business = {
   id: "business-1",
   name: "",
   logoUrl: null,
+  heroImageUrl: null,
+  brandColor: null,
   category: "",
   description: "",
   phone: "",
