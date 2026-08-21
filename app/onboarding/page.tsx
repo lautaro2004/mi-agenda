@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { CalendarClock, CheckCircle2 } from "lucide-react";
 
@@ -23,6 +25,7 @@ function isMinimumTrainingComplete(plan: TrainingPlan | null): boolean {
 }
 
 export default function OnboardingIndexPage() {
+  const router = useRouter();
   const [plan, setPlan] = React.useState<TrainingPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = React.useState(true);
   const [skipping, setSkipping] = React.useState(false);
@@ -33,6 +36,7 @@ export default function OnboardingIndexPage() {
   // de todo lo que entrena la IA — este estado solo refleja si ya se
   // configuró o no, para mostrar el CTA correcto. No pasa por el chat.
   const [scheduleConfigured, setScheduleConfigured] = React.useState<boolean | null>(null);
+  const [showCompletionCelebration, setShowCompletionCelebration] = React.useState(false);
 
   React.useEffect(() => {
     requestJson<{ plan: TrainingPlan | null }>("/api/ai-studio/training-plan")
@@ -47,6 +51,35 @@ export default function OnboardingIndexPage() {
 
   const readyToContinue = isMinimumTrainingComplete(plan);
   const pendingSections = plan?.sections.filter((s) => s.status === "pending" || s.status === "in_progress") ?? [];
+
+  // Festeja y avanza solo en una transición EN VIVO durante esta sesión (el
+  // último tema se cerró recién, con el dueño mirando) — no cuando el plan
+  // ya estaba completo desde antes de que esta pantalla cargara (ej. volvió
+  // acá con el back del navegador): ahí no hay nada que celebrar, solo se
+  // muestra el estado resuelto tal cual.
+  const planInitializedRef = React.useRef(false);
+  const wasReadyRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!plan) return;
+
+    if (!planInitializedRef.current) {
+      planInitializedRef.current = true;
+      wasReadyRef.current = readyToContinue;
+      return;
+    }
+
+    if (readyToContinue && !wasReadyRef.current) {
+      wasReadyRef.current = true;
+      setShowCompletionCelebration(true);
+      const timeout = setTimeout(() => router.push("/onboarding/suscripcion"), 1900);
+      return () => clearTimeout(timeout);
+    }
+
+    if (!readyToContinue) {
+      wasReadyRef.current = false;
+    }
+  }, [plan, readyToContinue, router]);
 
   async function resumeSection(key: string) {
     setResumingKey(key);
@@ -181,6 +214,35 @@ export default function OnboardingIndexPage() {
           </Button>
         </div>
       )}
+
+      <AnimatePresence>
+        {showCompletionCelebration && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-8 text-center shadow-lg"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.15, type: "spring" }}
+                className="flex size-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              >
+                <CheckCircle2 className="size-9" />
+              </motion.div>
+              <h2 className="text-lg font-semibold text-foreground">¡Listo! Tu negocio ya está configurado.</h2>
+              <p className="text-sm text-muted-foreground">Te llevamos al siguiente paso...</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

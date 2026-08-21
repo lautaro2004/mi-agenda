@@ -60,6 +60,29 @@ export function TrainingChat({
 
   const activeSection = plan?.sections.find((s) => s.status === "in_progress") ?? null;
 
+  // El botón "Continuar" manda el literal "Sí, quiero contarte." — una
+  // respuesta que SOLO tiene sentido para el primer mensaje de una sección
+  // nueva (el prompt le pide a la IA una pregunta sí/no ahí, ver
+  // modules/ai/prompt/training.ts). El bug real reportado: el botón seguía
+  // visible en CUALQUIER punto de la sección, así que si el dueño lo
+  // apretaba después de ya haber contado algo (en vez de escribir), la IA
+  // recibía "Sí, quiero contarte." como respuesta a una pregunta de
+  // seguimiento puntual ("¿hay algo más que quieras sumar?") — no tiene
+  // sentido ahí, y la IA quedaba repreguntando en loop sin poder cerrar
+  // nunca la sección. Este estado apaga el botón apenas el dueño manda
+  // CUALQUIER respuesta real en la sección activa, y se reactiva solo
+  // cuando cambia a una sección nueva.
+  const [repliedInActiveSection, setRepliedInActiveSection] = React.useState(false);
+  const activeSectionKeyRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    const key = activeSection?.key ?? null;
+    if (key !== activeSectionKeyRef.current) {
+      activeSectionKeyRef.current = key;
+      setRepliedInActiveSection(false);
+    }
+  }, [activeSection?.key]);
+
   // El historial vive en el servidor (TrainingConversation/TrainingMessage),
   // no en el estado del navegador: al montar, se retoma la conversación
   // donde quedó en vez de arrancar de cero cada vez que se recarga la página
@@ -106,6 +129,7 @@ export function TrainingChat({
   function turn(text: string) {
     setMessages((prev) => [...prev, { role: "owner", text }]);
     setProposal(null);
+    setRepliedInActiveSection(true);
     void sendTurn(text);
   }
 
@@ -257,10 +281,14 @@ export function TrainingChat({
 
             {!limitReached && !proposal && !chatError && !sending && activeSection && (
               <div className="ml-1 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground">Tema actual: {activeSection.title}</span>
-                <Button type="button" size="sm" onClick={handleContinueSection}>
-                  Continuar
-                </Button>
+                {!repliedInActiveSection && (
+                  <>
+                    <span className="text-xs text-muted-foreground">Tema actual: {activeSection.title}</span>
+                    <Button type="button" size="sm" onClick={handleContinueSection}>
+                      Continuar
+                    </Button>
+                  </>
+                )}
                 <Button type="button" size="sm" variant="ghost" onClick={() => void skipSection()}>
                   Completar después
                 </Button>
