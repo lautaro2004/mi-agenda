@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import type { AIProvider } from "@/modules/ai/providers/base";
 import type { BuiltPrompt } from "@/modules/ai/prompt/builder";
+import { recordAiUsage, type AiUsageMeta } from "@/modules/ai/usage";
 
 const MODEL_ID = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
 
@@ -60,20 +61,46 @@ export class GeminiProvider implements AIProvider {
   async generateResponse(
     message: string,
     history: Array<{ role: "user" | "model"; text: string }>,
-    prompt: BuiltPrompt
+    prompt: BuiltPrompt,
+    meta?: AiUsageMeta
   ): Promise<string> {
     const model = this.client.getGenerativeModel({
       model: MODEL_ID,
       systemInstruction: prompt.systemInstruction,
     });
 
-    // generateContent() en vez de startChat()+sendMessage(): startChat()
-    // modela una sesión de chat con estado que vive en memoria entre
-    // llamadas — acá se creaba una instancia nueva en cada request y se
-    // usaba para un único sendMessage(), sin aprovechar nada de esa
-    // estatalidad. generateContent() es el primitivo stateless correcto
-    // para "mandar todo el contexto de una y listo".
-    const result = await model.generateContent({ contents: buildContents(history, message) });
-    return result.response.text().trim();
+    try {
+      // generateContent() en vez de startChat()+sendMessage(): startChat()
+      // modela una sesión de chat con estado que vive en memoria entre
+      // llamadas — acá se creaba una instancia nueva en cada request y se
+      // usaba para un único sendMessage(), sin aprovechar nada de esa
+      // estatalidad. generateContent() es el primitivo stateless correcto
+      // para "mandar todo el contexto de una y listo".
+      const result = await model.generateContent({ contents: buildContents(history, message) });
+      const text = result.response.text().trim();
+
+      if (meta) {
+        const usage = result.response.usageMetadata;
+        recordAiUsage(
+          meta,
+          MODEL_ID,
+          { promptTokens: usage?.promptTokenCount ?? null, completionTokens: usage?.candidatesTokenCount ?? null },
+          true
+        );
+      }
+
+      return text;
+    } catch (error) {
+      if (meta) {
+        recordAiUsage(
+          meta,
+          MODEL_ID,
+          { promptTokens: null, completionTokens: null },
+          false,
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+      throw error;
+    }
   }
 }

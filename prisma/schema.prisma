@@ -405,6 +405,30 @@ model EmployeeCapability {
   @@index([employeeId])
 }
 
+// Ledger de consumo real de IA — sin relación FK a Business a propósito: es
+// una tabla de analítica/costos, no de dominio, y no debe poder bloquear ni
+// verse bloqueada por el ciclo de vida de un negocio (ej. no debe impedir
+// borrar un Business, y un insert acá nunca debe poder fallar por una FK).
+// Se escribe en modules/ai/usage.ts, siempre "best effort" (nunca bloquea ni
+// rompe una respuesta de IA si el insert falla). Pensado para poder calcular
+// costo real por negocio/operación antes de definir límites por plan (ver
+// lib/ai-limits.ts).
+model AiUsageEvent {
+  id               String   @id @default(cuid())
+  businessId       String?
+  operation        String // training_onboarding | training_continuous | whatsapp_reply | simulator | seo_generate
+  model            String
+  promptTokens     Int?
+  completionTokens Int?
+  success          Boolean  @default(true)
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+
+  @@index([businessId])
+  @@index([businessId, createdAt])
+  @@index([operation])
+}
+
 model Membership {
   id         String   @id @default(cuid())
   userId     String

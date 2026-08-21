@@ -1,5 +1,6 @@
 import type { BusinessContext } from "@/modules/ai/providers/base";
 import type { BuiltPrompt } from "@/modules/ai/prompt/builder";
+import { CLOSING_WARNING_THRESHOLD } from "@/lib/ai-limits";
 
 // Prompt hermano de buildPrompt(): misma arquitectura (context -> BuiltPrompt),
 // pero para el rol de entrevistador que entrena al empleado, no el rol
@@ -141,7 +142,17 @@ Reglas estrictas sobre el bloque "proposal":
 // contó en el medio se pierde apenas cierra la pestaña. exchangeCount es la
 // cantidad de mensajes ya intercambiados en esta conversación (aproximación
 // simple, ver runTrainingTurn).
-function closingUrgency(exchangeCount: number): string {
+//
+// Esto es SOLO presión vía prompt — no reemplaza el corte real: el backend
+// tiene su propio límite duro e independiente (ver getAiResponseLimit /
+// runTrainingTurn) que deja de llamar a Gemini directamente si esto no
+// alcanzó para cerrar a tiempo. responsesRemaining, cuando se pasa, es
+// cuántas respuestas de IA quedan antes de ese corte duro — mientras que
+// exchangeCount es solo un conteo de mensajes sin relación con ningún límite.
+function closingUrgency(exchangeCount: number, responsesRemaining: number | null): string {
+  if (responsesRemaining !== null && responsesRemaining <= CLOSING_WARNING_THRESHOLD) {
+    return `\n\nURGENTE — LÍMITE DE LA CONVERSACIÓN CERCA: quedan ${responsesRemaining} respuestas tuyas antes de que el sistema cierre automáticamente el onboarding con lo que haya hasta ese momento. Decile al dueño, con esta frase o una muy similar: "Ya tenemos casi toda la información necesaria. Voy a cerrar la configuración con lo que tenemos y después podés completar o modificar cualquier dato desde el panel." Y cerrá la sección activa YA MISMO con lo que ya tengas, aunque sea parcial. No hagas ninguna pregunta más antes de proponer.`;
+  }
   if (exchangeCount >= 8) {
     return `\n\nURGENTE: ya van ${exchangeCount} mensajes en esta conversación. Cerrá la sección activa AHORA MISMO, en esta respuesta: armá el resumen con lo que ya tenés (aunque sea parcial) y proponelo. No hagas ninguna pregunta más antes de proponer.`;
   }
@@ -151,7 +162,12 @@ function closingUrgency(exchangeCount: number): string {
   return "";
 }
 
-export function buildTrainingPrompt(context: BusinessContext, mode: TrainingMode, exchangeCount = 0): BuiltPrompt {
+export function buildTrainingPrompt(
+  context: BusinessContext,
+  mode: TrainingMode,
+  exchangeCount = 0,
+  responsesRemaining: number | null = null
+): BuiltPrompt {
   const systemInstruction = `Sos el asistente de configuración de Mi Agenda. Tu trabajo es entrevistar al dueño del negocio para entrenar a su AI Employee — vos NO sos el empleado que habla con los clientes, sos quien lo entrena. El dueño no está configurando un software: está entrenando a un empleado nuevo.
 
 ${MODE_INTRO[mode]}
@@ -162,7 +178,10 @@ ${summarizeContext(context)}
 ${TRAINING_PLAN_CONTRACT}
 
 ${PROPOSAL_CONTRACT}
-${closingUrgency(exchangeCount)}
+
+SI EL DUEÑO SE VA DEL TEMA:
+No sos un chatbot general. Si te pregunta algo sin relación con configurar su negocio (trivia, clima, opiniones, pedidos de ayuda con otra cosa), respondé en una frase breve que no podés ayudar con eso y retomá el tema actual de inmediato — ej. "Eso no lo puedo ayudar por acá. Sigamos con [tema actual]." No entres en esa conversación aunque insista.
+${closingUrgency(exchangeCount, responsesRemaining)}
 
 Respondé siempre en español rioplatense, tono cercano y directo, sin rodeos innecesarios. Texto plano, sin asteriscos ni formato markdown fuera del bloque "proposal".`.trim();
 

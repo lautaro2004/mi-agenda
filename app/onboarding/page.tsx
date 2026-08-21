@@ -177,7 +177,7 @@ export default function OnboardingIndexPage() {
             continuar igual y retomarlas después desde AI Studio.
           </p>
           <Button type="button" variant="outline" size="sm" onClick={() => void skipRemaining()} disabled={skipping}>
-            No quiero agregar más información ahora
+            Terminar configuración por ahora
           </Button>
         </div>
       )}

@@ -125,7 +125,12 @@ export async function generateSeoConfig(businessId: string): Promise<GenerateSeo
   let raw: string;
   try {
     const prompt = await buildSeoPrompt(businessId);
-    raw = await provider.generateResponse("Generá la configuración SEO ahora, en el formato indicado.", [], prompt);
+    raw = await provider.generateResponse(
+      "Generá la configuración SEO ahora, en el formato indicado.",
+      [],
+      prompt,
+      { businessId, operation: "seo_generate" }
+    );
   } catch (error) {
     console.error("[seo] Error llamando a Gemini:", error);
     return { success: false, error: "No pudimos generar el SEO en este momento." };

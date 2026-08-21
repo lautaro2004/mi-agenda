@@ -50,6 +50,11 @@ export function TrainingChat({
   const [chatError, setChatError] = React.useState<ChatError | null>(null);
   const [input, setInput] = React.useState("");
   const [sending, setSending] = React.useState(false);
+  // Corte duro del backend (ver getAiResponseLimit): a partir de acá la
+  // conversación quedó cerrada server-side, no tiene sentido seguir
+  // mostrando el input ni los botones de la sección — el dueño sigue desde
+  // el dashboard.
+  const [limitReached, setLimitReached] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
@@ -78,12 +83,16 @@ export function TrainingChat({
     setChatError(null);
 
     try {
-      const result = await requestJson<{ reply: string; proposal: TrainingProposal | null }>(
-        "/api/ai-studio/training/chat",
-        { method: "POST", body: JSON.stringify({ mode, message: text }) }
-      );
+      const result = await requestJson<{
+        reply: string;
+        proposal: TrainingProposal | null;
+        limitReached: boolean;
+        plan: TrainingPlan | null;
+      }>("/api/ai-studio/training/chat", { method: "POST", body: JSON.stringify({ mode, message: text }) });
       setMessages((prev) => [...prev, { role: "ai", text: result.reply }]);
       setProposal(result.proposal);
+      setLimitReached(result.limitReached);
+      onProposalApplied?.(result.plan);
     } catch (error) {
       setChatError({
         message: error instanceof Error ? error.message : "No pudimos enviar el mensaje. ¿Querés reintentar?",
@@ -120,6 +129,7 @@ export function TrainingChat({
       const result = await requestJson<{
         reply: string;
         proposal: TrainingProposal | null;
+        limitReached: boolean;
         plan: TrainingPlan | null;
       }>("/api/ai-studio/training/apply", {
         method: "POST",
@@ -132,6 +142,7 @@ export function TrainingChat({
         { role: "ai", text: result.reply },
       ]);
       setProposal(result.proposal);
+      setLimitReached(result.limitReached);
       onProposalApplied?.(result.plan);
       // El guardado ya pasó server-side (Postgres tiene el dato real): esto
       // solo mantiene sincronizado el snapshot de OnboardingProvider, que
@@ -178,6 +189,7 @@ export function TrainingChat({
       const result = await requestJson<{
         reply: string;
         proposal: TrainingProposal | null;
+        limitReached: boolean;
         plan: TrainingPlan | null;
       }>(`/api/ai-studio/training-plan/${encodeURIComponent(key)}/skip`, {
         method: "POST",
@@ -189,6 +201,7 @@ export function TrainingChat({
         { role: "ai", text: result.reply },
       ]);
       setProposal(result.proposal);
+      setLimitReached(result.limitReached);
       onProposalApplied?.(result.plan);
       void refreshBusinessState();
     } catch (error) {
@@ -242,7 +255,7 @@ export function TrainingChat({
               </div>
             )}
 
-            {!proposal && !chatError && !sending && activeSection && (
+            {!limitReached && !proposal && !chatError && !sending && activeSection && (
               <div className="ml-1 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-muted-foreground">Tema actual: {activeSection.title}</span>
                 <Button type="button" size="sm" onClick={handleContinueSection}>
@@ -251,6 +264,15 @@ export function TrainingChat({
                 <Button type="button" size="sm" variant="ghost" onClick={() => void skipSection()}>
                   Completar después
                 </Button>
+              </div>
+            )}
+
+            {limitReached && (
+              <div className="ml-1 max-w-[80%] rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+                <p className="text-sm text-foreground">
+                  Llegamos al máximo de mensajes para esta charla. Guardamos todo lo que ya contaste — lo que quedó
+                  pendiente lo podés completar cuando quieras desde el panel.
+                </p>
               </div>
             )}
 
@@ -293,10 +315,15 @@ export function TrainingChat({
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Escribí tu respuesta..."
-          disabled={sending || loadingHistory}
+          placeholder={limitReached ? "Esta charla ya se cerró — seguí desde el panel." : "Escribí tu respuesta..."}
+          disabled={sending || loadingHistory || limitReached}
         />
-        <Button type="submit" size="icon" disabled={sending || loadingHistory || !input.trim()} aria-label="Enviar">
+        <Button
+          type="submit"
+          size="icon"
+          disabled={sending || loadingHistory || limitReached || !input.trim()}
+          aria-label="Enviar"
+        >
           <Send className="size-4" />
         </Button>
       </form>

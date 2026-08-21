@@ -45,6 +45,9 @@ export async function runSimulatorTurn(params: {
     text: m.text,
   }));
 
-  const reply = await provider.generateResponse(message, geminiHistory, prompt);
+  const reply = await provider.generateResponse(message, geminiHistory, prompt, {
+    businessId,
+    operation: "simulator",
+  });
   return { reply };
 }

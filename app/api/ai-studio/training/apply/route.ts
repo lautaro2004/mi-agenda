@@ -48,7 +48,13 @@ export async function POST(request: Request) {
     // si falla ni si todavía no corresponde.
     await maybeAutoGenerateSeo(businessId);
 
-    return NextResponse.json({ ok: true, reply: continuation.reply, proposal: continuation.proposal, plan });
+    return NextResponse.json({
+      ok: true,
+      reply: continuation.reply,
+      proposal: continuation.proposal,
+      limitReached: continuation.limitReached,
+      plan,
+    });
   } catch (error) {
     console.error("[training/apply] error al guardar:", error);
     return NextResponse.json(

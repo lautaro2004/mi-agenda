@@ -8,6 +8,7 @@ import type {
   TrainingPlan,
 } from "@/lib/types";
 import type { BuiltPrompt } from "@/modules/ai/prompt/builder";
+import type { AiUsageMeta } from "@/modules/ai/usage";
 
 export interface BusinessContext {
   business: Business;
@@ -21,9 +22,14 @@ export interface BusinessContext {
 
 export interface AIProvider {
   readonly modelId: string;
+  // meta es opcional para no romper callers existentes, pero cuando se pasa
+  // habilita el registro de consumo real (tokens, modelo, operación) en
+  // AiUsageEvent — ver modules/ai/usage.ts. Sin meta, la llamada funciona
+  // igual, solo que ese consumo queda sin contabilizar.
   generateResponse(
     message: string,
     history: Array<{ role: "user" | "model"; text: string }>,
-    prompt: BuiltPrompt
+    prompt: BuiltPrompt,
+    meta?: AiUsageMeta
   ): Promise<string>;
 }

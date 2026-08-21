@@ -65,7 +65,10 @@ async function callGemini(
   const strategyContext = strategy.shapeContext(context, conversation);
   const prompt = buildPrompt(strategyContext, conversation, message);
 
-  const text = await provider.generateResponse(message, history, prompt);
+  const text = await provider.generateResponse(message, history, prompt, {
+    businessId: context.business.id,
+    operation: "whatsapp_reply",
+  });
   const escalateToHuman = text.includes("derivar con") || text.includes("nuestro equipo");
 
   aiLogger.log({ type: "response_generated", conversationId, source: "gemini", escalate: escalateToHuman });

@@ -34,5 +34,10 @@ export async function POST(request: Request, { params }: RouteParams) {
   const continuation = await runTrainingTurn({ businessId, mode, message: SKIP_SECTION_MESSAGE });
   const plan = await getTrainingPlan(businessId);
 
-  return NextResponse.json({ reply: continuation.reply, proposal: continuation.proposal, plan });
+  return NextResponse.json({
+    reply: continuation.reply,
+    proposal: continuation.proposal,
+    limitReached: continuation.limitReached,
+    plan,
+  });
 }
