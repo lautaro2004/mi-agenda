@@ -1,6 +1,7 @@
 import type { BusinessContext } from "@/modules/ai/providers/base";
 import type { BuiltPrompt } from "@/modules/ai/prompt/builder";
 import { CLOSING_WARNING_THRESHOLD } from "@/lib/ai-limits";
+import { MEMORY_CATEGORIES } from "@/lib/types";
 
 // Prompt hermano de buildPrompt(): misma arquitectura (context -> BuiltPrompt),
 // pero para el rol de entrevistador que entrena al empleado, no el rol
@@ -124,7 +125,7 @@ La forma casi siempre va a ser "knowledge_batch" — junta TODO lo que aprendist
 - "employee_goal": { text, active: true }
 - "employee_restriction": { text, active: true }
 - "employee_capability": { key: "appointments"|"inquiries"|"sales"|"reminders"|"cancellations"|"rescheduling", enabled }
-- "memory_entry": { title, content, category, importance: "low"|"medium"|"high", active: true } — solo para conocimiento adicional sin entidad propia y que NO esté fraseado como una duda puntual de cliente (eso es "faq"): proceso de trabajo, tecnologías que usan, diferenciales, clientes objetivo, casos de éxito, filosofía de trabajo, etc.
+- "memory_entry": { title, content, category: ${MEMORY_CATEGORIES.map((c) => `"${c}"`).join("|")}, importance: "low"|"medium"|"high", active: true } — solo para conocimiento adicional sin entidad propia y que NO esté fraseado como una duda puntual de cliente (eso es "faq"): proceso de trabajo, tecnologías que usan, diferenciales, clientes objetivo, casos de éxito, filosofía de trabajo, etc. "category" tiene que ser EXACTAMENTE uno de esos valores (si ninguno encaja bien, usá "Otro") — nunca inventes una categoría nueva.
 
 Para "training_plan" y "training_plan_section" (generar o ignorar una sección del plan) seguí usando su forma propia, sin "items" — ver SOBRE EL TRAINING PLAN.
 

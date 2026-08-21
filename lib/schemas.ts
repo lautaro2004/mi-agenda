@@ -235,6 +235,28 @@ export const memoryEntrySchema = z.object({
 
 export type MemoryEntryFormValues = z.infer<typeof memoryEntrySchema>;
 
+// Variante para el flujo de entrenamiento — mismo motivo exacto que
+// trainingServiceSchema más abajo: "category" acá es z.enum(MEMORY_CATEGORIES),
+// una lista fija pensada para el dropdown del formulario manual del
+// dashboard. Pedirle a la IA que acierte uno de esos 10 strings EXACTOS sin
+// dárselos nunca en el prompt causaba un rechazo determinístico de Zod en
+// cualquier memory_entry (ver modules/ai/prompt/training.ts: "category" se
+// mencionaba sin enumerar sus valores válidos) — el bloque proposal entero
+// se descartaba, el reintento fallaba por el mismo motivo, y la sección
+// quedaba trabada en "in_progress" para siempre. category, importance y
+// active quedan opcionales acá; se normalizan/completan recién al persistir
+// (ver applyItem en modules/employee/training/proposal.ts), nunca se
+// inventa un valor closer a "adivinar" en el propio schema.
+export const trainingMemoryEntrySchema = z.object({
+  title: z.string().min(2, "Ingresá un título").max(120, "El título es demasiado largo"),
+  content: z.string().min(5, "Ingresá el contenido").max(2000, "El contenido es demasiado largo"),
+  category: z.string().max(60).optional(),
+  importance: z.enum(MEMORY_IMPORTANCE_LEVELS).optional(),
+  active: z.boolean().optional(),
+});
+
+export type TrainingMemoryEntryValues = z.infer<typeof trainingMemoryEntrySchema>;
+
 export const trainingPlanSectionInputSchema = z.object({
   key: z.string().min(1, "Falta la clave de la sección").max(60),
   title: z.string().min(1, "Falta el título de la sección").max(80),

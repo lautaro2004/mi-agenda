@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import type { TrainingPlan, TrainingPlanSectionStatus } from "@/lib/types";
 import type { TrainingPlanGenerationValues } from "@/lib/schemas";
+
+// db opcional (default prisma) en las funciones que applyTrainingProposal()
+// necesita encadenar dentro de UNA sola transacción — ver
+// modules/employee/training/proposal.ts. Mismo patrón que ya usan
+// modules/business/service.ts y modules/employee/memory.ts.
+type Db = Prisma.TransactionClient;
 
 function toClientPlan(row: {
   id: string;
@@ -120,16 +127,17 @@ export async function getTrainingPlan(businessId: string): Promise<TrainingPlan 
 // solo agrega las secciones nuevas (deduplicadas) que todavía no estuvieran.
 export async function generateTrainingPlan(
   businessId: string,
-  data: TrainingPlanGenerationValues
+  data: TrainingPlanGenerationValues,
+  db: Db = prisma
 ): Promise<TrainingPlan> {
-  const existing = await prisma.trainingPlan.findUnique({
+  const existing = await db.trainingPlan.findUnique({
     where: { businessId },
     include: { sections: true },
   });
 
   if (!existing) {
     const sections = dedupeSections(data.sections, []);
-    const created = await prisma.trainingPlan.create({
+    const created = await db.trainingPlan.create({
       data: {
         businessId,
         category: data.category,
@@ -144,7 +152,7 @@ export async function generateTrainingPlan(
   const maxOrder = existing.sections.reduce((max, s) => Math.max(max, s.order), -1);
 
   if (newSections.length > 0) {
-    await prisma.trainingPlanSection.createMany({
+    await db.trainingPlanSection.createMany({
       data: newSections.map((s, i) => ({
         planId: existing.id,
         key: s.key,
@@ -155,7 +163,7 @@ export async function generateTrainingPlan(
     });
   }
 
-  const updated = await prisma.trainingPlan.findUniqueOrThrow({
+  const updated = await db.trainingPlan.findUniqueOrThrow({
     where: { id: existing.id },
     include: { sections: true },
   });
@@ -165,9 +173,10 @@ export async function generateTrainingPlan(
 export async function setSectionStatus(
   businessId: string,
   key: string,
-  status: TrainingPlanSectionStatus
+  status: TrainingPlanSectionStatus,
+  db: Db = prisma
 ): Promise<void> {
-  await prisma.trainingPlanSection.updateMany({
+  await db.trainingPlanSection.updateMany({
     where: { key: normalizeSectionKey(key), plan: { businessId } },
     data: { status },
   });
@@ -176,8 +185,8 @@ export async function setSectionStatus(
 // El avance de sección no puede depender de que la IA se acuerde de taguear
 // cada propuesta con "sectionKey": si no lo hizo, applyTrainingProposal()
 // usa esto para inferir cuál sección estaba activa y cerrarla igual.
-export async function getActiveSectionKey(businessId: string): Promise<string | null> {
-  const plan = await prisma.trainingPlan.findUnique({
+export async function getActiveSectionKey(businessId: string, db: Db = prisma): Promise<string | null> {
+  const plan = await db.trainingPlan.findUnique({
     where: { businessId },
     include: { sections: { where: { status: "in_progress" }, take: 1 } },
   });
@@ -200,8 +209,8 @@ export async function ignoreRemainingSections(businessId: string): Promise<void>
 // secciones pendientes. Se llama al inicio de cada turno del motor de
 // entrenamiento (ver runTrainingTurn) — es la garantía determinística de que
 // la conversación nunca se queda sin saber de qué hablar.
-export async function activateNextPendingSection(businessId: string): Promise<void> {
-  const plan = await prisma.trainingPlan.findUnique({
+export async function activateNextPendingSection(businessId: string, db: Db = prisma): Promise<void> {
+  const plan = await db.trainingPlan.findUnique({
     where: { businessId },
     include: { sections: true },
   });
@@ -215,7 +224,7 @@ export async function activateNextPendingSection(businessId: string): Promise<vo
     .sort((a, b) => a.order - b.order)[0];
   if (!next) return;
 
-  await prisma.trainingPlanSection.update({
+  await db.trainingPlanSection.update({
     where: { id: next.id },
     data: { status: "in_progress" },
   });
