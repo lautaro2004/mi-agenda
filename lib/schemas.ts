@@ -9,6 +9,7 @@ import {
   EMPLOYEE_FORMALITY_LEVELS,
   EMPLOYEE_RESPONSE_LENGTH_LEVELS,
   EMPLOYEE_WARMTH_LEVELS,
+  BILLING_SUBSCRIPTION_STATUSES,
   MEMORY_CATEGORIES,
   MEMORY_IMPORTANCE_LEVELS,
   SERVICE_CATEGORIES,
@@ -331,3 +332,43 @@ export const seoConfigGenerationSchema = z.object({
 export type SeoConfigGenerationValues = z.infer<typeof seoConfigGenerationSchema>;
 
 export type SimulatorCorrectionValues = z.infer<typeof simulatorCorrectionSchema>;
+
+// ── Superadmin: Planes y suscripciones ───────────────────────────────────
+
+const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+export const planSchema = z.object({
+  name: z.string().min(2, "Ingresá el nombre del plan").max(60),
+  slug: z.string().min(2).max(40).regex(SLUG_RE, "Solo minúsculas, números y guiones"),
+  description: z.string().max(300, "La descripción es demasiado larga").optional(),
+  monthlyPrice: z.coerce.number().min(0, "El precio no puede ser negativo"),
+  currency: z.string().min(3, "Ej: ARS").max(6),
+  // Cantidad de respuestas de IA, no tokens — ver comentario en el modelo
+  // Plan (prisma/schema.prisma) y modules/billing/subscription.ts.
+  aiCredits: z.coerce.number().int().min(1, "Necesita al menos 1 crédito"),
+  active: z.boolean().default(true),
+});
+
+// input/output separados (no z.infer) por el mismo motivo que ServiceFormInput
+// en este mismo archivo: monthlyPrice/aiCredits usan z.coerce.number(), así
+// que el tipo ANTES de validar (lo que produce un <input>, string) difiere
+// del tipo DESPUÉS (number) — react-hook-form necesita los dos por separado
+// (ver useForm<Input, unknown, Output> en components/superadmin/plan-dialog.tsx).
+export type PlanFormInput = z.input<typeof planSchema>;
+export type PlanFormValues = z.output<typeof planSchema>;
+
+export const planUpdateSchema = planSchema.partial();
+export type PlanUpdateValues = z.infer<typeof planUpdateSchema>;
+
+// Asignación manual de plan desde /superadmin/empresas/[id] — sin checkout,
+// sin Mercado Pago todavía (ver sección 12 del pedido original). Las fechas
+// llegan como string (input type="date", formato YYYY-MM-DD) y se parsean
+// en el server.
+export const assignSubscriptionSchema = z.object({
+  planId: z.string().min(1, "Elegí un plan"),
+  status: z.enum(BILLING_SUBSCRIPTION_STATUSES),
+  currentPeriodStart: z.string().min(1, "Falta la fecha de inicio"),
+  currentPeriodEnd: z.string().optional(),
+});
+
+export type AssignSubscriptionValues = z.infer<typeof assignSubscriptionSchema>;

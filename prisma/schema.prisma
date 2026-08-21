@@ -45,6 +45,7 @@ model Business {
   trainingPlan   TrainingPlan?
   trainingConversations TrainingConversation[]
   seoConfig      SeoConfig?
+  subscription   Subscription?
 }
 
 // Configuración SEO generada por IA a partir de datos reales del negocio —
@@ -427,6 +428,69 @@ model AiUsageEvent {
   @@index([businessId])
   @@index([businessId, createdAt])
   @@index([operation])
+}
+
+// ── Planes y suscripciones ───────────────────────────────────────────────
+// Reemplaza los límites de IA hardcodeados por env var (ver
+// lib/ai-limits.ts, ahora delegado a modules/billing/subscription.ts) por
+// una fuente real en Postgres. Preparado para que Mercado Pago sea quien
+// cree/actualice Subscription más adelante (provider/providerSubscriptionId
+// quedan listos para eso) pero en esta etapa toda asignación es manual desde
+// /superadmin/empresas/[id] — sin checkout, sin webhooks, sin cobros.
+
+model Plan {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  description  String?
+  monthlyPrice Float    @default(0)
+  currency     String   @default("ARS")
+  // Unidad: cantidad de respuestas de IA permitidas — el mismo significado
+  // que tenían ONBOARDING_MAX_AI_RESPONSES/CONTINUOUS_MAX_AI_RESPONSES antes
+  // de este cambio, NUNCA tokens. AiUsageEvent sigue siendo la fuente de
+  // verdad del consumo en tokens; esa es una medida distinta que se muestra
+  // aparte en Superadmin, nunca convertida a créditos ni viceversa. Ver
+  // modules/billing/subscription.ts para cómo se aplica este número.
+  aiCredits    Int      @default(40)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  // @unique (no solo un índice): un Business tiene A LO SUMO una
+  // Subscription, garantizado por la base — "asignar un plan" siempre es un
+  // upsert sobre esta única fila, nunca un insert que pueda competir con
+  // otra "activa". Esto es lo que pide la sección "un Business debería tener
+  // como máximo una suscripción activa/principal" sin necesitar un índice
+  // parcial: no existe una segunda fila con la que inconsistir.
+  businessId String @unique
+  planId     String
+  // trialing | active | past_due | canceled | expired — ver
+  // modules/billing/subscription.ts (SUBSCRIPTION_STATUSES) para la
+  // semántica de cada uno y qué implica para el acceso a IA.
+  status                 String    @default("trialing")
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  // "manual" (asignado desde Superadmin, todo lo que existe hoy) |
+  // "mercadopago" (cuando exista esa integración — no implementada acá).
+  provider               String?
+  providerSubscriptionId String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // Sin onDelete: Cascade a propósito — borrar un Plan mientras tenga
+  // Subscriptions debe fallar (comportamiento default de Postgres), nunca
+  // arrastrar suscripciones activas a un plan borrado. La UI de Superadmin
+  // ni siquiera expone un borrado físico: solo activar/desactivar.
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+  @@index([status])
 }
 
 model Membership {

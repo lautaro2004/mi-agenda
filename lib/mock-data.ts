@@ -4,7 +4,6 @@ import {
   FAQ,
   OnboardingState,
   Service,
-  Subscription,
   WEEK_DAYS,
 } from "@/lib/types";
 
@@ -34,22 +33,12 @@ export const defaultSchedule: BusinessSchedule = WEEK_DAYS.map((day) => ({
   breakEnd: "14:00",
 }));
 
-export const defaultSubscription: Subscription = {
-  id: "sub-1",
-  businessId: "business-1",
-  plan: "unico",
-  status: "pending",
-  startDate: null,
-  renewsAt: null,
-};
-
 export const initialOnboardingState: OnboardingState = {
   step: 1,
   business: emptyBusiness,
   schedule: defaultSchedule,
   services: [],
   faqs: [],
-  subscription: defaultSubscription,
   completed: false,
 };
 

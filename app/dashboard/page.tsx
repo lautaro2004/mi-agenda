@@ -9,6 +9,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCompletionPercentage } from "@/lib/completion";
 import { useOnboarding } from "@/lib/onboarding-store";
+import { useBusinessSubscription } from "@/lib/subscription-client";
 import { useWhatsApp } from "@/lib/whatsapp-store";
 import { authClient } from "@/lib/auth/auth-client";
 import type { WhatsAppConnectionStatus } from "@/lib/types";
@@ -44,8 +45,9 @@ export default function DashboardPage() {
   const { state, hydrated } = useOnboarding();
   const { state: whatsapp, loading: whatsappLoading } = useWhatsApp();
   const { data: session } = authClient.useSession();
-  const { business, services, faqs, schedule, subscription } = state;
+  const { business, services, faqs, schedule } = state;
   const { todayCount, nextTime } = useTurnoStats();
+  const { data: subscriptionData } = useBusinessSubscription();
 
   const configIncomplete = !business.name || !business.category || services.length === 0;
   const scheduledDays = schedule.filter((day) => day.enabled).length;
@@ -89,7 +91,7 @@ export default function DashboardPage() {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <AccountStatusCard
           business={business}
-          subscriptionStatus={subscription.status}
+          subscriptionStatus={subscriptionData?.subscription?.status ?? null}
           configIncomplete={configIncomplete}
           completionPercentage={completionPercentage}
         />

@@ -7,7 +7,6 @@ import {
   FAQ,
   type OnboardingState,
   Service,
-  Subscription,
 } from "@/lib/types";
 import { initialOnboardingState } from "@/lib/mock-data";
 import { authClient } from "@/lib/auth/auth-client";
@@ -33,7 +32,6 @@ interface OnboardingContextValue {
   addFaq: (faq: Omit<FAQ, "id" | "businessId">) => Promise<void>;
   updateFaq: (id: string, faq: Omit<FAQ, "id" | "businessId">) => Promise<void>;
   removeFaq: (id: string) => Promise<void>;
-  setSubscription: (subscription: Partial<Subscription>) => void;
   setStep: (step: number) => void;
   completeOnboarding: () => void;
   reset: () => void;
@@ -51,7 +49,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     if (sessionPending) return;
 
     if (!userId) {
-      setState((prev) => ({ ...initialOnboardingState, subscription: prev.subscription }));
+      setState(initialOnboardingState);
       setHydrated(true);
       return;
     }
@@ -172,11 +170,6 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         await requestJson(`/api/business/faqs/${id}`, { method: "DELETE" });
         setState((prev) => ({ ...prev, faqs: prev.faqs.filter((f) => f.id !== id) }));
       },
-      setSubscription: (subscription) =>
-        setState((prev) => ({
-          ...prev,
-          subscription: { ...prev.subscription, ...subscription },
-        })),
       setStep: (step) => setState((prev) => ({ ...prev, step })),
       completeOnboarding: () => setState((prev) => ({ ...prev, completed: true })),
       reset: () => setState(initialOnboardingState),

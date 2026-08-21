@@ -1,24 +1,19 @@
 import type { TrainingMode } from "@/modules/ai/prompt/training";
+import { resolveAiResponseLimit } from "@/modules/billing/subscription";
 
-// Seam para límites de IA por plan. Hoy no existe todavía un modelo
-// Subscription/Plan persistido (Subscription en lib/types.ts es un mock de
-// un único plan, nunca guardado en Postgres) — hasta que exista, el límite
-// sale de configuración por entorno, con estos defaults. El día que haya un
-// Plan real, getAiResponseLimit() es el ÚNICO lugar que hay que tocar: pasa
-// a leer plan.aiCredits / plan.aiTokenLimit según el negocio en vez de estas
-// constantes. Todo el resto del sistema (motor de entrenamiento, UI) ya
-// consume el número a través de esta función, nunca la env var directo.
-const DEFAULT_ONBOARDING_MAX_AI_RESPONSES = 40;
-const DEFAULT_CONTINUOUS_MAX_AI_RESPONSES = 200;
+// Seam para límites de IA por plan — ya conectado a Postgres (ver
+// modules/billing/subscription.ts): Subscription → Plan → aiCredits. Este
+// archivo queda como el import estable que ya usan
+// modules/employee/training/engine.ts, modules/ai/prompt/training.ts y
+// lib/superadmin/queries.ts, sin que ninguno tenga que saber que el número
+// ahora sale de la base en vez de una env var. La lógica de qué estado de
+// Subscription permite qué límite (trialing vencido, canceled, etc.) vive
+// toda en modules/billing/subscription.ts — acá no se reimplementa nada de
+// eso.
 
 // A partir de qué tanto falta para el límite el prompt empieza a presionar
 // fuerte para cerrar (ver closingUrgency en modules/ai/prompt/training.ts).
 export const CLOSING_WARNING_THRESHOLD = 3;
-
-function readPositiveInt(envValue: string | undefined, fallback: number): number {
-  const parsed = envValue ? Number(envValue) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
-}
 
 // Cantidad máxima de respuestas de IA (no de caracteres, no de tokens) que
 // una conversación de entrenamiento puede consumir. Se cuenta sobre
@@ -26,11 +21,8 @@ function readPositiveInt(envValue: string | undefined, fallback: number): number
 // modules/employee/training/engine.ts) — nunca sobre un contador en memoria,
 // para que el límite sea el mismo sin importar de qué instancia del server
 // venga el request.
-export async function getAiResponseLimit(_businessId: string, mode: TrainingMode): Promise<number> {
-  if (mode === "onboarding") {
-    return readPositiveInt(process.env.ONBOARDING_MAX_AI_RESPONSES, DEFAULT_ONBOARDING_MAX_AI_RESPONSES);
-  }
-  return readPositiveInt(process.env.CONTINUOUS_MAX_AI_RESPONSES, DEFAULT_CONTINUOUS_MAX_AI_RESPONSES);
+export async function getAiResponseLimit(businessId: string, mode: TrainingMode): Promise<number> {
+  return resolveAiResponseLimit(businessId, mode);
 }
 
 // Protección de abuso simple (sección 17 del pedido original): un mensaje

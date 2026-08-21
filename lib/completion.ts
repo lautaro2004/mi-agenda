@@ -6,8 +6,13 @@ export interface CompletionCheck {
   href: string;
 }
 
+// Suscripción activa quedó afuera de esta lista a propósito: state.subscription
+// (mock) ya no existe — el estado real vive en Postgres (ver
+// modules/billing/subscription.ts) y se muestra aparte, en su propia tarjeta
+// de estado (ver AccountStatusCard / lib/subscription-client.ts), no como un
+// ítem más de "configuración completa".
 export function getCompletionChecks(state: OnboardingState): CompletionCheck[] {
-  const { business, schedule, services, faqs, subscription } = state;
+  const { business, schedule, services, faqs } = state;
 
   return [
     {
@@ -34,11 +39,6 @@ export function getCompletionChecks(state: OnboardingState): CompletionCheck[] {
       label: "Preguntas frecuentes",
       done: faqs.length > 0,
       href: "/dashboard/preguntas-frecuentes",
-    },
-    {
-      label: "Suscripción activa",
-      done: subscription.status === "active",
-      href: "/dashboard/suscripcion",
     },
   ];
 }

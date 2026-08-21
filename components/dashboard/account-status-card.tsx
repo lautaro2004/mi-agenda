@@ -3,12 +3,15 @@ import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
-import type { OnboardingState } from "@/lib/types";
+import type { BillingSubscriptionStatus, OnboardingState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface AccountStatusCardProps {
   business: OnboardingState["business"];
-  subscriptionStatus: OnboardingState["subscription"]["status"];
+  // null mientras carga o si el negocio no tiene Subscription todavía (caso
+  // legacy) — se trata igual que "activa" acá: no queremos alarmar al dueño
+  // por un estado que todavía no terminamos de confirmar.
+  subscriptionStatus: BillingSubscriptionStatus | null;
   configIncomplete: boolean;
   completionPercentage: number;
 }
@@ -27,18 +30,20 @@ export function AccountStatusCard({
     action?: { label: string; href: string };
   };
 
-  if (subscriptionStatus === "expired") {
+  if (subscriptionStatus === "canceled" || subscriptionStatus === "expired") {
     status = {
       label: "Suscripción vencida",
-      description: "Renová tu suscripción para seguir usando Mi Agenda.",
+      description: "Elegí un plan para que tu asistente de IA vuelva a responder.",
       icon: AlertCircle,
       tone: "text-destructive bg-destructive/10",
-      action: { label: "Renovar suscripción", href: "/dashboard/suscripcion" },
+      action: { label: "Ver suscripción", href: "/dashboard/suscripcion" },
     };
-  } else if (subscriptionStatus === "pending") {
+  } else if (subscriptionStatus === "past_due") {
+    // Sigue con acceso (regla del sistema, ver modules/billing/subscription.ts)
+    // — el aviso es informativo, no bloqueante.
     status = {
-      label: "Pendiente de pago",
-      description: "Activá tu suscripción para habilitar todas las funciones.",
+      label: "Pago pendiente",
+      description: "Todavía tenés acceso, pero convendría regularizar el pago.",
       icon: Clock,
       tone: "text-amber-600 dark:text-amber-400 bg-amber-500/10",
       action: { label: "Ir a suscripción", href: "/dashboard/suscripcion" },

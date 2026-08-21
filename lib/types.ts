@@ -146,6 +146,15 @@ export interface SeoConfig {
   updatedAt: string;
 }
 
+// Mock cliente-only preexistente (nunca persistido en Postgres). Ya NO lo
+// usan /dashboard/suscripcion, /onboarding/suscripcion ni
+// lib/onboarding-store.tsx — esas pantallas consumen la Subscription real
+// (ver modules/billing/subscription.ts + lib/subscription-client.ts). Se
+// mantiene acá SOLO porque lib/payments/mercado-pago.ts (scaffolding sin
+// checkout real todavía, fuera de alcance) sigue tipando su función contra
+// esto — cuando esa integración se implemente de verdad, este tipo debería
+// desaparecer junto con ese archivo. El modelo real usa
+// BillingSubscriptionStatus más abajo, nombre distinto a propósito.
 export type SubscriptionStatus = "pending" | "active" | "expired";
 
 export interface Subscription {
@@ -369,7 +378,6 @@ export interface OnboardingState {
   schedule: BusinessSchedule;
   services: Service[];
   faqs: FAQ[];
-  subscription: Subscription;
   completed: boolean;
 }
 
@@ -561,6 +569,18 @@ export interface TrainingPlan {
   updatedAt: string;
   sections: TrainingPlanSection[];
 }
+
+// ---- Planes y suscripciones (Prisma Subscription/Plan reales) ----
+// Constantes puras (sin acceso a Prisma) a propósito: lib/schemas.ts y
+// componentes cliente (ver components/superadmin/assign-plan-dialog.tsx)
+// necesitan esta lista, y ambos se empaquetan para el browser. Importarla
+// desde modules/billing/subscription.ts (que sí toca Prisma/pg) rompía el
+// build — pg necesita módulos de Node (fs/net/tls) que no existen en el
+// bundle de cliente. modules/billing/subscription.ts importa este array
+// desde ACÁ, nunca al revés. Nombre distinto de SubscriptionStatus (arriba)
+// para no colisionar con el mock cliente-only preexistente.
+export const BILLING_SUBSCRIPTION_STATUSES = ["trialing", "active", "past_due", "canceled", "expired"] as const;
+export type BillingSubscriptionStatus = (typeof BILLING_SUBSCRIPTION_STATUSES)[number];
 
 export const ONBOARDING_STEPS = [
   { id: 1, slug: "negocio", title: "Tu negocio", description: "Contanos sobre tu negocio" },

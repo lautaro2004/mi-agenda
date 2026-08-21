@@ -10,6 +10,16 @@ export type AiOperation =
   | "simulator"
   | "seo_generate";
 
+// Usado por los filtros del dashboard de superadmin (ver lib/superadmin/queries.ts)
+// para no repetir esta lista de literales en otro lado.
+export const AI_OPERATIONS: AiOperation[] = [
+  "training_onboarding",
+  "training_continuous",
+  "whatsapp_reply",
+  "simulator",
+  "seo_generate",
+];
+
 export interface AiUsageMeta {
   businessId: string;
   operation: AiOperation;
