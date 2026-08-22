@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Menu, Sparkles } from "lucide-react";
+import { Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -17,7 +17,7 @@ import {
 const NAV_LINKS = [
   { href: "#producto", label: "Producto" },
   { href: "#como-funciona", label: "Cómo funciona" },
-  { href: "#recursos", label: "Recursos" },
+  { href: "#demo", label: "Demo" },
   { href: "#planes", label: "Precios" },
 ];
 
@@ -28,10 +28,10 @@ export function LandingNavbar() {
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Sparkles className="size-4" />
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
+            N
           </span>
-          <span>Mi Agenda</span>
+          <span className="text-base">Nexo</span>
         </Link>
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">
@@ -48,7 +48,7 @@ export function LandingNavbar() {
             Ingresar
           </Button>
           <Button size="sm" render={<Link href="/registro" />} nativeButton={false}>
-            Crear mi asistente
+            Empezar gratis
           </Button>
         </div>
 
@@ -87,7 +87,7 @@ export function LandingNavbar() {
                   Ingresar
                 </Button>
                 <Button render={<Link href="/registro" />} nativeButton={false}>
-                  Crear mi asistente
+                  Empezar gratis
                 </Button>
               </div>
             </SheetContent>

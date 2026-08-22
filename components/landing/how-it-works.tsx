@@ -1,33 +1,23 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Boxes, Building2, FlaskConical, GraduationCap, MessageSquare } from "lucide-react";
+import { MessageCircle, Settings2, Sparkles } from "lucide-react";
 
 const steps = [
   {
-    icon: Building2,
-    title: "Contale sobre tu negocio",
-    description: "Rubro, servicios y cómo trabajás.",
+    icon: MessageCircle,
+    title: "Contale",
+    description: "Contale a Nexo cómo funciona tu negocio.",
   },
   {
-    icon: GraduationCap,
-    title: "La IA arma tu configuración",
-    description: "Servicios, FAQs, reglas y objetivos.",
+    icon: Settings2,
+    title: "Configurá",
+    description: "Revisá servicios, horarios, información y canales.",
   },
   {
-    icon: Boxes,
-    title: "Configurá horarios y recursos",
-    description: "Definí cuándo y qué puede reservar.",
-  },
-  {
-    icon: MessageSquare,
-    title: "Conectá WhatsApp",
-    description: "Tu asistente empieza a atender.",
-  },
-  {
-    icon: FlaskConical,
-    title: "Probalo antes de publicarlo",
-    description: "Usá el simulador para conversar con tu asistente como si fueras un cliente.",
+    icon: Sparkles,
+    title: "Dejalo trabajar",
+    description: "Nexo empieza a ayudarte con las consultas y tareas de tu negocio.",
   },
 ];
 
@@ -40,22 +30,22 @@ export function LandingHowItWorks() {
             De cero a asistente en minutos
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Sin planillas, sin manuales. Un proceso guiado, en el mismo orden de principio a fin.
+            Sin planillas, sin manuales. Un recorrido simple, de principio a fin.
           </p>
         </div>
 
-        <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-5">
+        <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-3">
           {steps.map((step, index) => (
             <motion.div
               key={step.title}
               initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.5, delay: index * 0.06 }}
-              className="flex flex-col gap-4 bg-card p-6"
+              transition={{ duration: 0.5, delay: index * 0.08 }}
+              className="flex flex-col gap-4 bg-card p-8"
             >
               <div className="flex items-center justify-between">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <step.icon className="size-5" />
                 </div>
                 <span className="text-xs font-medium text-muted-foreground">
@@ -63,7 +53,7 @@ export function LandingHowItWorks() {
                 </span>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-foreground">{step.title}</h3>
+                <h3 className="text-base font-semibold text-foreground">{step.title}</h3>
                 <p className="mt-1.5 text-sm text-muted-foreground">{step.description}</p>
               </div>
             </motion.div>

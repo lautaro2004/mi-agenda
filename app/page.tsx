@@ -1,15 +1,16 @@
 import { LandingNavbar } from "@/components/landing/navbar";
 import { LandingHero } from "@/components/landing/hero";
 import { LandingPainPoints } from "@/components/landing/pain-points";
-import { LandingKnowsYourBusiness } from "@/components/landing/knows-your-business";
 import { LandingTeachNotConfigure } from "@/components/landing/teach-not-configure";
-import { LandingKnowledgeGrid } from "@/components/landing/knowledge-grid";
-import { LandingBookingShowcase } from "@/components/landing/booking-showcase";
-import { LandingResourcesShowcase } from "@/components/landing/resources-showcase";
+import { LandingKnowsYourBusiness } from "@/components/landing/knows-your-business";
 import { LandingComparison } from "@/components/landing/comparison";
-import { LandingProductPreview } from "@/components/landing/product-preview";
 import { LandingHowItWorks } from "@/components/landing/how-it-works";
 import { LandingSimulatorShowcase } from "@/components/landing/simulator-showcase";
+import { LandingProductPreview } from "@/components/landing/product-preview";
+import { LandingBookingShowcase } from "@/components/landing/booking-showcase";
+import { LandingResourcesShowcase } from "@/components/landing/resources-showcase";
+import { LandingAudience } from "@/components/landing/audience";
+import { LandingOnboardingHighlight } from "@/components/landing/onboarding-highlight";
 import { LandingPricing } from "@/components/landing/pricing";
 import { LandingCta } from "@/components/landing/cta";
 import { LandingFooter } from "@/components/landing/footer";
@@ -21,15 +22,16 @@ export default function Home() {
       <main className="flex-1">
         <LandingHero />
         <LandingPainPoints />
-        <LandingKnowsYourBusiness />
         <LandingTeachNotConfigure />
-        <LandingKnowledgeGrid />
-        <LandingBookingShowcase />
-        <LandingResourcesShowcase />
+        <LandingKnowsYourBusiness />
         <LandingComparison />
-        <LandingProductPreview />
         <LandingHowItWorks />
         <LandingSimulatorShowcase />
+        <LandingProductPreview />
+        <LandingBookingShowcase />
+        <LandingResourcesShowcase />
+        <LandingAudience />
+        <LandingOnboardingHighlight />
         <LandingPricing />
         <LandingCta />
       </main>

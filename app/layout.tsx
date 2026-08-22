@@ -18,31 +18,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_TITLE = "Mi Agenda — El asistente operativo de tu negocio";
+const SITE_TITLE = "Nexo — El asistente inteligente para tu negocio";
 const SITE_DESCRIPTION =
-  "Configurá un asistente de IA que conoce tus servicios, precios, horarios y reglas. Atiende a tus clientes por WhatsApp y gestiona sus reservas automáticamente.";
+  "Nexo aprende cómo funciona tu negocio y te ayuda a atender clientes, responder consultas, gestionar reservas y centralizar tu información desde un solo lugar.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: SITE_TITLE,
-    template: "%s — Mi Agenda",
+    template: "%s — Nexo",
   },
   description: SITE_DESCRIPTION,
   keywords: [
-    "asistente de WhatsApp",
-    "reservas por WhatsApp",
-    "agenda online para negocios",
-    "automatizar turnos",
     "asistente IA para negocios",
+    "automatización para empresas",
+    "atención al cliente con IA",
     "gestión de reservas",
-    "agenda para negocios",
+    "asistente virtual para empresas",
+    "IA para pymes",
   ],
+  publisher: "Kodexa",
   openGraph: {
     type: "website",
     locale: "es_AR",
     url: SITE_URL,
-    siteName: "Mi Agenda",
+    siteName: "Nexo",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
   },

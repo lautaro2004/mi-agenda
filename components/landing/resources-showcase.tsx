@@ -17,14 +17,14 @@ export function LandingResourcesShowcase() {
       <div className="mx-auto max-w-6xl">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div className="order-2 lg:order-1">
-            <p className="text-sm font-medium text-primary">Más que una agenda simple</p>
+            <p className="text-sm font-medium text-primary">Recursos físicos</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
-              Una agenda que entiende tus recursos
+              Nexo entiende tus espacios y profesionales
             </h2>
             <p className="mt-5 text-muted-foreground">
-              Si un mismo servicio puede prestarse con varios recursos en paralelo, Mi Agenda
-              gestiona la disponibilidad de cada uno por separado — y ofrece un horario como
-              disponible mientras quede al menos uno libre.
+              Si un mismo servicio puede prestarse con varios recursos en paralelo, Nexo gestiona la
+              disponibilidad de cada uno por separado — y ofrece un horario como disponible mientras
+              quede al menos uno libre.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               {USE_CASES.map((useCase) => (
