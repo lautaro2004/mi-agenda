@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, User, type LucideIcon } from "lucide-react";
+import { CreditCard, HelpCircle, LogOut, Menu, User, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -15,18 +15,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { DASHBOARD_NAV } from "@/lib/dashboard-nav";
+import { useOnboarding } from "@/lib/onboarding-store";
 import { authClient } from "@/lib/auth/auth-client";
 
 export function DashboardTopbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = authClient.useSession();
+  const { state } = useOnboarding();
+  const { business } = state;
   const [open, setOpen] = React.useState(false);
 
+  // Mismo flujo de logout que ya existía (authClient.signOut() + redirect a
+  // "/" con refresh) — solo se reubica el trigger dentro del menú de perfil
+  // ampliado, la lógica no cambia.
   async function handleLogout() {
     await authClient.signOut();
     router.push("/");
@@ -43,10 +49,13 @@ export function DashboardTopbar() {
     .sort((a, b) => b.href.length - a.href.length)[0];
 
   const userName = session?.user?.name;
-  const initials = userName
-    ? userName
+  // Iniciales del NEGOCIO, no del usuario — el avatar representa la cuenta
+  // del negocio (logo cuando existe), consistente con el label de abajo.
+  const initials = business.name
+    ? business.name
         .split(" ")
         .map((part) => part[0])
+        .filter(Boolean)
         .slice(0, 2)
         .join("")
         .toUpperCase()
@@ -81,6 +90,7 @@ export function DashboardTopbar() {
           render={
             <Button variant="ghost" size="icon" className="rounded-full" aria-label="Menú de cuenta">
               <Avatar className="size-8">
+                {business.logoUrl && <AvatarImage src={business.logoUrl} alt={business.name || "Negocio"} />}
                 <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
                   {initials}
                 </AvatarFallback>
@@ -90,15 +100,21 @@ export function DashboardTopbar() {
         />
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">
-              {userName ?? "Tu cuenta"}
-            </span>
+            <span className="text-sm font-medium text-foreground">{business.name || userName || "Tu negocio"}</span>
             <span className="text-xs text-muted-foreground">{session?.user?.email}</span>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem render={<Link href="/dashboard/negocio" />}>
+          <DropdownMenuItem render={<Link href="/dashboard/cuenta" />}>
             <User className="size-4" data-icon="inline-start" />
-            Configuración del negocio
+            Mi cuenta
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/dashboard/suscripcion" />}>
+            <CreditCard className="size-4" data-icon="inline-start" />
+            Suscripción
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/dashboard/ayuda" />}>
+            <HelpCircle className="size-4" data-icon="inline-start" />
+            Ayuda / Soporte
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout} variant="destructive">

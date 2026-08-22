@@ -68,11 +68,29 @@ export function WhatsAppProvider({ children }: { children: React.ReactNode }) {
           fetch("/api/whatsapp/status"),
           fetch("/api/whatsapp/conversations"),
         ]);
-        const statusData = (await statusRes.json()) as { connection: WhatsAppConnection };
-        const conversationsData = (await conversationsRes.json()) as { conversations: Conversation[] };
+
+        // Causa real del error boundary en /dashboard: un 401 de estas rutas
+        // (ej. getCurrentBusinessId() sin membership todavía, o un hiccup
+        // transitorio del pool de conexiones — ver "Connection terminated"
+        // en instrumentation.ts) devuelve {error} sin "connection" ni
+        // "conversations". Desestructurar esa forma a ciegas dejaba
+        // state.connection en undefined para siempre, y
+        // app/dashboard/page.tsx lee whatsapp.connection.status en cada
+        // render — eso tronaba de forma síncrona apenas se pintaba la
+        // pantalla. Nunca confiar en la forma del body sin chequear .ok
+        // primero; ante una falla, mantener el estado inicial seguro en vez
+        // de corromperlo.
+        const connection = statusRes.ok
+          ? ((await statusRes.json()) as { connection: WhatsAppConnection }).connection
+          : initialConnection;
+        const conversations = conversationsRes.ok
+          ? ((await conversationsRes.json()) as { conversations: Conversation[] }).conversations
+          : [];
 
         if (cancelled) return;
-        setState({ connection: statusData.connection, conversations: conversationsData.conversations });
+        setState({ connection, conversations });
+      } catch (error) {
+        console.error("[whatsapp-store] No se pudo cargar el estado de WhatsApp:", error);
       } finally {
         if (!cancelled) setLoading(false);
       }

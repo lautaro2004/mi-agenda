@@ -1,18 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { CalendarCheck2, CalendarClock, ListChecks, MessageCircleQuestion, MessageSquare } from "lucide-react";
+import {
+  Bot,
+  CalendarCheck2,
+  CalendarClock,
+  CreditCard,
+  ExternalLink,
+  Globe,
+  GraduationCap,
+  ListChecks,
+  MessageCircleQuestion,
+  MessageSquare,
+  Store,
+} from "lucide-react";
 
 import { AccountStatusCard } from "@/components/dashboard/account-status-card";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCompletionPercentage } from "@/lib/completion";
 import { useOnboarding } from "@/lib/onboarding-store";
 import { useBusinessSubscription } from "@/lib/subscription-client";
 import { useWhatsApp } from "@/lib/whatsapp-store";
 import { authClient } from "@/lib/auth/auth-client";
-import type { WhatsAppConnectionStatus } from "@/lib/types";
+import type { BillingSubscriptionStatus, WhatsAppConnectionStatus } from "@/lib/types";
 
 const WHATSAPP_STATUS_LABEL: Record<WhatsAppConnectionStatus, string> = {
   disconnected: "No conectado",
@@ -20,6 +34,14 @@ const WHATSAPP_STATUS_LABEL: Record<WhatsAppConnectionStatus, string> = {
   reconnecting: "Reconectando…",
   connected: "Conectado",
   error: "Error",
+};
+
+const SUBSCRIPTION_STATUS_LABEL: Record<BillingSubscriptionStatus, string> = {
+  trialing: "Prueba gratuita",
+  active: "Activo",
+  past_due: "Pago pendiente",
+  canceled: "Cancelado",
+  expired: "Vencido",
 };
 
 function useTurnoStats() {
@@ -68,6 +90,12 @@ export default function DashboardPage() {
           </p>
         </div>
         <Skeleton className="h-[164px] rounded-2xl" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-[132px] rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-[92px] rounded-2xl" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[132px] rounded-2xl" />
@@ -101,6 +129,80 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.05 }}
+        className="grid gap-4 sm:grid-cols-3"
+      >
+        <StatCard
+          icon={CreditCard}
+          label="Plan"
+          value={subscriptionData?.subscription?.plan.name ?? "—"}
+          description={
+            subscriptionData?.subscription ? SUBSCRIPTION_STATUS_LABEL[subscriptionData.subscription.status] : undefined
+          }
+          href="/dashboard/suscripcion"
+        />
+        <StatCard
+          icon={Bot}
+          label="Uso de IA"
+          value={
+            subscriptionData?.subscription
+              ? `${subscriptionData.aiUsage.requests} / ${subscriptionData.subscription.plan.aiCredits}`
+              : "—"
+          }
+          description="Respuestas este período"
+          href="/dashboard/suscripcion"
+        />
+        <StatCard
+          icon={Globe}
+          label="Sitio"
+          value={business.slug ? "Publicado" : "No publicado"}
+          description={business.slug ? `/s/${business.slug}` : "Todavía sin generar"}
+          href="/dashboard/sitio"
+        />
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.08 }}
+        className="rounded-2xl border border-border bg-card p-5"
+      >
+        <h3 className="text-sm font-semibold text-foreground">Acciones rápidas</h3>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" render={<Link href="/dashboard/negocio" />} nativeButton={false}>
+            <Store className="size-4" data-icon="inline-start" />
+            Configurar negocio
+          </Button>
+          <Button size="sm" variant="outline" render={<Link href="/dashboard/ai-studio/training" />} nativeButton={false}>
+            <GraduationCap className="size-4" data-icon="inline-start" />
+            Entrenar asistente
+          </Button>
+          <Button size="sm" variant="outline" render={<Link href="/dashboard/sitio" />} nativeButton={false}>
+            <Globe className="size-4" data-icon="inline-start" />
+            Editar sitio
+          </Button>
+          {business.slug ? (
+            <Button
+              size="sm"
+              variant="outline"
+              render={<Link href={`/s/${business.slug}`} target="_blank" rel="noopener noreferrer" />}
+              nativeButton={false}
+            >
+              <ExternalLink className="size-4" data-icon="inline-start" />
+              Ver sitio
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" disabled>
+              <ExternalLink className="size-4" data-icon="inline-start" />
+              Ver sitio
+            </Button>
+          )}
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
       >
         <StatCard
@@ -131,8 +233,8 @@ export default function DashboardPage() {
         <StatCard
           icon={MessageSquare}
           label="WhatsApp"
-          value={whatsappLoading ? "…" : WHATSAPP_STATUS_LABEL[whatsapp.connection.status]}
-          description={whatsapp.connection.phoneNumber ?? undefined}
+          value={whatsappLoading || !whatsapp.connection ? "…" : WHATSAPP_STATUS_LABEL[whatsapp.connection.status]}
+          description={whatsapp.connection?.phoneNumber ?? undefined}
           href="/dashboard/whatsapp/conexion"
         />
       </motion.div>
