@@ -104,6 +104,14 @@ export function buildPrompt(
 
   const emphasisLines = emphasis.length > 0 ? `\n${emphasis.join("\n")}\n` : "";
 
+  // Solo informativo (ej. "¿piden seña?") — el flujo de reserva en sí lo
+  // maneja el Booking Flow (modules/ai/booking/flow.ts), no este prompt. El
+  // monto exacto no se repite acá porque depende del servicio (fijo vs. %
+  // del precio), evitando que la IA invente un número desactualizado.
+  const depositLines = business.depositRequired
+    ? `\nSEÑA: Este negocio pide una seña para confirmar turnos. Si te preguntan, avisá que se pide seña y que se informa el monto y los datos para transferir al reservar. NUNCA digas "pago confirmado" ni des por confirmado un turno solo porque el cliente mandó una imagen o dijo que ya transfirió — la confirmación de un pago la hace únicamente el dueño del negocio desde su panel.\n`
+    : "";
+
   const systemInstruction = `Sos ${employee.name}, ${employee.role} de ${name}${business.category ? `, dedicado a ${business.category}` : ""}.
 ${employee.description ? `${employee.description}\n` : ""}
 INFORMACIÓN DEL NEGOCIO:
@@ -119,7 +127,7 @@ ${formatSchedule(schedule)}
 
 PREGUNTAS FRECUENTES:
 ${faqLines}
-${memoryLines ? `\nMEMORIA DEL NEGOCIO:\n${memoryLines}\n` : ""}
+${depositLines}${memoryLines ? `\nMEMORIA DEL NEGOCIO:\n${memoryLines}\n` : ""}
 PERSONALIDAD:
 - ${FORMALITY_PHRASES[employee.formality]}
 - ${WARMTH_PHRASES[employee.warmth]}

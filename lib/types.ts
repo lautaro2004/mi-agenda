@@ -56,7 +56,21 @@ export interface Business {
   // modules/business/slug.ts) — se crea una sola vez y después no cambia
   // solo, aunque el nombre del negocio cambie.
   slug: string | null;
+  // ── Seña / depósito (ver modules/business/deposit.ts) ──────────────────
+  depositRequired: boolean;
+  depositType: DepositType | null;
+  depositFixedAmount: number | null;
+  depositPercentage: number | null;
+  depositAlias: string | null;
+  depositCbu: string | null;
+  depositBankName: string | null;
+  depositAccountHolder: string | null;
+  depositTaxId: string | null;
+  depositInstructions: string | null;
 }
+
+export const DEPOSIT_TYPES = ["fixed", "percentage"] as const;
+export type DepositType = (typeof DEPOSIT_TYPES)[number];
 
 export interface BusinessScheduleDay {
   day: WeekDay;
@@ -257,6 +271,7 @@ export type ConversationFlowState =
   | "WAITING_SLOT_SELECTION"
   | "WAITING_CONFIRMATION"
   | "BOOKED"
+  | "WAITING_PAYMENT_PROOF"
   | "HUMAN_HANDOFF";
 
 export const FLOW_STATE_META: Record<ConversationFlowState, { label: string; className: string }> = {
@@ -266,6 +281,7 @@ export const FLOW_STATE_META: Record<ConversationFlowState, { label: string; cla
   WAITING_SLOT_SELECTION: { label: "Esperando selección", className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" },
   WAITING_CONFIRMATION: { label: "Esperando confirmación", className: "bg-orange-500/10 text-orange-600 dark:text-orange-400" },
   BOOKED: { label: "Turno reservado", className: "bg-green-500/10 text-green-600 dark:text-green-400" },
+  WAITING_PAYMENT_PROOF: { label: "Esperando comprobante", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
   HUMAN_HANDOFF: { label: "Transferido a humano", className: "bg-red-500/10 text-red-600 dark:text-red-400" },
 };
 
@@ -322,11 +338,35 @@ export interface BookingSession {
   action?: "new" | "cancel" | "reschedule";
   existingAppointmentId?: string;
   serviceDurationMinutes?: number;
+  // Turno recién creado en pending_payment cuyo comprobante estamos
+  // esperando (ver handleNeedConfirmation en modules/ai/booking/flow.ts).
+  // Permite que el próximo mensaje de texto ("ya transferí", etc.) responda
+  // sobre ESTE turno puntual sin depender de una nueva consulta a Postgres.
+  awaitingProofForAppointmentId?: string;
+  // Comprobante ya subido (a un turno todavía sin decidir) mientras
+  // esperamos que el cliente aclare a cuál de varios turnos pendientes de
+  // pago corresponde — ver modules/whatsapp/payments/inbound.ts, sección 6
+  // de la tarea. Solo IDs acá, nunca el binario del archivo.
+  pendingProofSelection?: { proofId: string; appointmentIds: string[] };
 }
 
 // ---- Appointment (persisted in DB) ----
 
-export type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "completed" | "no_show";
+// pending_payment/payment_submitted/payment_rejected solo aparecen en
+// negocios con Business.depositRequired = true — ver
+// modules/appointments/service.ts (ACTIVE_STATUSES) y
+// modules/ai/booking/flow.ts. Un negocio sin seña nunca produce estos
+// valores, así que la UI existente (que solo conocía los 5 originales) sigue
+// funcionando igual para ese caso.
+export type AppointmentStatus =
+  | "pending"
+  | "confirmed"
+  | "cancelled"
+  | "completed"
+  | "no_show"
+  | "pending_payment"
+  | "payment_submitted"
+  | "payment_rejected";
 
 export interface Appointment {
   id: string;
@@ -344,8 +384,32 @@ export interface Appointment {
   durationMinutes: number;
   status: AppointmentStatus;
   notes: string | null;
+  // Snapshot de la seña/total al momento de crear el turno — ver comentario
+  // en schema.prisma. null = este turno no requiere seña.
+  depositAmount: number | null;
+  totalAmount: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---- Payment proof (comprobante de transferencia) ----
+
+export const PAYMENT_PROOF_STATUSES = ["pending", "approved", "rejected"] as const;
+export type PaymentProofStatus = (typeof PAYMENT_PROOF_STATUSES)[number];
+
+export interface PaymentProof {
+  id: string;
+  businessId: string;
+  appointmentId: string | null;
+  storagePath: string;
+  originalFileName: string | null;
+  mimeType: string;
+  fileSizeBytes: number;
+  status: PaymentProofStatus;
+  uploadedAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  rejectionReason: string | null;
 }
 
 // ---- Conversation ----

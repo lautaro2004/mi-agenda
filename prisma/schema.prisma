@@ -34,11 +34,36 @@ model Business {
   // compartida/indexada. Nullable porque los negocios creados antes de esta
   // feature no tienen uno hasta que se genera de forma perezosa.
   slug           String?       @unique
+
+  // ── Seña / depósito (ver modules/business/deposit.ts) ──────────────────
+  // Configuración global del negocio, no por servicio: cuando depositRequired
+  // es true, TODA reserva por turno pasa a pending_payment en vez de
+  // confirmarse directo (ver modules/ai/booking/flow.ts). Con
+  // depositRequired = false (default), el flujo de reservas sigue
+  // exactamente igual que antes de esta feature — ningún campo de acá se lee.
+  depositRequired      Boolean  @default(false)
+  // "fixed" | "percentage" — ver computeDepositAmount() en
+  // modules/business/deposit.ts, única fuente de verdad de esta semántica.
+  depositType          String?
+  depositFixedAmount   Float?
+  depositPercentage    Float?
+  // Datos bancarios/billetera mostrados al cliente junto con el monto de la
+  // seña. Todos opcionales y de texto libre a propósito: no todos los
+  // negocios usan los mismos campos (alias vs. CBU vs. wallet), y no tiene
+  // sentido forzar a completar uno que no aplica.
+  depositAlias         String?
+  depositCbu           String?
+  depositBankName      String?
+  depositAccountHolder String?
+  depositTaxId         String?
+  depositInstructions  String?
+
   appointments   Appointment[]
   employee       Employee?
   faqs           FAQ[]
   memberships    Membership[]
   memoryEntries  MemoryEntry[]
+  paymentProofs  PaymentProof[]
   resources      Resource[]
   schedules      Schedule[]
   services       Service[]
@@ -273,19 +298,80 @@ model Appointment {
   startTime       String
   endTime         String
   durationMinutes Int
+  // pending | confirmed | cancelled | completed | no_show | pending_payment |
+  // payment_submitted | payment_rejected — los últimos tres solo existen en
+  // negocios con Business.depositRequired = true (ver
+  // modules/appointments/service.ts, ACTIVE_STATUSES). Reutiliza esta misma
+  // columna en vez de un "paymentStatus" separado porque para una reserva con
+  // seña el estado del pago ES el estado de la reserva: no queda confirmada
+  // hasta que el dueño valida el comprobante.
   status          String    @default("confirmed")
   notes           String?
+  // Snapshot al momento de crear el turno (no una referencia viva al precio
+  // actual del servicio): si el precio cambia después, un turno pendiente de
+  // pago no debe mostrar un monto de seña distinto del que ya se le informó
+  // al cliente por WhatsApp. null = este turno no requiere seña.
+  depositAmount   Float?
+  totalAmount     Float?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   service         Service?  @relation(fields: [serviceId], references: [id])
   resource        Resource? @relation(fields: [resourceId], references: [id])
+  paymentProofs   PaymentProof[]
 
   @@index([businessId])
   @@index([businessId, date])
   @@index([customerPhone])
   @@index([status])
   @@index([resourceId])
+}
+
+// Comprobante de transferencia/pago adjuntado por el cliente vía WhatsApp
+// (ver modules/payments/service.ts). Modelo separado (no columnas sueltas en
+// Appointment) porque un turno puede tener MÁS DE UNO — si el dueño rechaza
+// el primero, el cliente puede reenviar otro, y conservamos el historial
+// completo en vez de sobrescribir.
+//
+// appointmentId es nullable a propósito: cuando llega una imagen y hay más
+// de un turno pendiente de pago para el mismo teléfono, no adivinamos a
+// cuál corresponde — se sube el archivo (para no perderlo) con
+// appointmentId = null y se le pregunta al cliente cuál es; recién ahí se
+// completa el vínculo. businessId vive acá aparte (no derivado del
+// appointment) para poder scopear y autorizar el acceso incluso en ese
+// estado "todavía sin asignar".
+model PaymentProof {
+  id               String    @id @default(cuid())
+  businessId       String
+  appointmentId    String?
+  // Path dentro del bucket privado "payment-proofs" (ver
+  // lib/payment-proofs.ts) — nunca una URL pública ni el binario. El dueño
+  // lo ve desde el dashboard vía signed URL de corta duración generada bajo
+  // demanda.
+  storagePath      String
+  originalFileName String?
+  mimeType         String
+  fileSizeBytes    Int
+  // pending | approved | rejected
+  status           String    @default("pending")
+  uploadedAt       DateTime  @default(now())
+  reviewedAt       DateTime?
+  // userId de quien validó/rechazó (sesión de Better Auth) — sin relación FK
+  // a User a propósito, mismo criterio que AiUsageEvent: esto es un dato de
+  // auditoría, no debe poder bloquear ni verse bloqueado por el ciclo de
+  // vida de la cuenta.
+  reviewedBy       String?
+  rejectionReason  String?
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  // SetNull (no Cascade): si el turno se borra definitivamente, el
+  // comprobante se conserva como evidencia de pago (ver sección 12 de la
+  // tarea) — solo pierde el vínculo, no se borra el archivo ni la fila.
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@index([appointmentId])
 }
 
 model User {

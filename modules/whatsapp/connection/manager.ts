@@ -289,6 +289,23 @@ class WhatsAppConnectionManager {
     const conversation = conversationRepository.get(jid);
     if (!conversation || conversation.manualMode) return;
 
+    // Comprobantes de pago se interceptan ANTES del pipeline normal de IA:
+    // processMessage() nunca vio el binario de una imagen (ver
+    // modules/whatsapp/messages/media.ts). Devuelve null cuando no aplica
+    // (no es imagen/documento, o no hay ningún turno pendiente de pago para
+    // este número) y seguimos con el flujo de siempre — así que para
+    // negocios sin seña activada esto es un no-op total.
+    try {
+      const { handleIncomingPaymentMessage } = await import("@/modules/whatsapp/payments/inbound");
+      const paymentReply = await handleIncomingPaymentMessage({ businessId, jid, rawMessage, conversation });
+      if (paymentReply) {
+        await this.sendMessage(businessId, jid, paymentReply.text, "ai");
+        return;
+      }
+    } catch (error) {
+      console.error("[Payments] Error procesando comprobante entrante:", error);
+    }
+
     const text = extractMessageText(rawMessage);
     if (!text) return;
 

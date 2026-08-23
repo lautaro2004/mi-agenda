@@ -36,6 +36,14 @@ export function formatPhoneFromJid(jid: string): string {
   return `+${number}`;
 }
 
+// Inversa de formatPhoneFromJid: reconstruye el JID a partir del teléfono
+// guardado en Appointment.customerPhone para poder mandarle un mensaje
+// (confirmación/rechazo de pago, ver modules/payments/service.ts) sin
+// depender de que la conversación siga viva en el Map en memoria.
+export function phoneToJid(phone: string): string {
+  return `${phone.replace(/^\+/, "")}@s.whatsapp.net`;
+}
+
 export function syncIncomingMessage(businessId: string, waMessage: WAMessage): void {
   if (!waMessage.message) return;
 

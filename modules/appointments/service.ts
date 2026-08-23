@@ -10,7 +10,20 @@ import { getActiveServiceResources } from "@/modules/business/resource";
 // diálogos de "Agendar turno" y "Reprogramar" del dashboard. Nunca duplicar
 // esta lógica en otro lado: si hace falta un caso nuevo, se agrega acá.
 
-const ACTIVE_STATUSES = ["pending", "confirmed"] as const;
+// pending_payment/payment_submitted/payment_rejected cuentan como "activos"
+// (bloquean el slot) igual que pending/confirmed: el sentido de pedir seña
+// es justamente reservar el horario mientras se espera/revisa el pago, así
+// que liberar el slot antes de que el dueño confirme o cancele explícitamente
+// dejaría entrar a un segundo cliente a la misma hora. Un negocio sin seña
+// nunca genera estos tres estados (ver modules/ai/booking/flow.ts), así que
+// esto no cambia nada para ese caso.
+const ACTIVE_STATUSES = [
+  "pending",
+  "confirmed",
+  "pending_payment",
+  "payment_submitted",
+  "payment_rejected",
+] as const;
 
 function computeEndTime(startTime: string, durationMinutes: number): string {
   const [h, m] = startTime.split(":").map(Number);
@@ -126,6 +139,13 @@ export interface CreateAppointmentParams {
   // servicio usa recursos). Ausente/null = asignar automáticamente el
   // primer recurso activo que esté libre.
   resourceId?: string | null;
+  // Ausente = "confirmed" (comportamiento actual, sin cambios). El Booking
+  // Flow pasa "pending_payment" cuando el negocio pide seña (ver
+  // computeDepositAmount en modules/business/deposit.ts) junto con el
+  // snapshot de montos correspondiente.
+  status?: "confirmed" | "pending_payment";
+  depositAmount?: number | null;
+  totalAmount?: number | null;
 }
 
 export async function createAppointment(params: CreateAppointmentParams) {
@@ -157,8 +177,10 @@ export async function createAppointment(params: CreateAppointmentParams) {
           startTime: params.startTime,
           endTime: computeEndTime(params.startTime, params.durationMinutes),
           durationMinutes: params.durationMinutes,
-          status: "confirmed",
+          status: params.status ?? "confirmed",
           notes: params.notes,
+          depositAmount: params.depositAmount ?? null,
+          totalAmount: params.totalAmount ?? null,
         },
       });
     });
@@ -345,10 +367,29 @@ export async function findByCustomerPhone(businessId: string, phone: string) {
   });
 }
 
+// Detecta a qué turno(s) puede corresponder un comprobante que acaba de
+// llegar por WhatsApp (ver sección 6 de la tarea y
+// modules/whatsapp/payments/inbound.ts). Solo turnos que TODAVÍA necesitan
+// un comprobante nuevo: pending_payment (nunca mandó uno) o payment_rejected
+// (el dueño rechazó el anterior y puede reenviar). payment_submitted queda
+// afuera a propósito — ese turno ya tiene un comprobante bajo revisión, no
+// corresponde asociarle uno nuevo en silencio mientras se resuelve el
+// primero.
+export async function findPendingPaymentAppointments(businessId: string, phone: string) {
+  return prisma.appointment.findMany({
+    where: {
+      businessId,
+      customerPhone: phone,
+      status: { in: ["pending_payment", "payment_rejected"] },
+    },
+    orderBy: [{ date: "asc" }, { startTime: "asc" }],
+  });
+}
+
 export async function getAppointmentStats(businessId: string) {
   const today = new Date().toISOString().split("T")[0];
 
-  const [todayCount, upcoming] = await Promise.all([
+  const [todayCount, upcoming, pendingPaymentReview] = await Promise.all([
     prisma.appointment.count({
       where: { businessId, date: today, status: { in: [...ACTIVE_STATUSES] } },
     }),
@@ -363,7 +404,11 @@ export async function getAppointmentStats(businessId: string) {
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
+    // Turnos con un comprobante ya recibido, esperando que el dueño lo
+    // apruebe o rechace (ver sección 14 de la tarea, widget "Pagos
+    // pendientes de validar: N"). Siempre 0 para negocios sin seña.
+    prisma.appointment.count({ where: { businessId, status: "payment_submitted" } }),
   ]);
 
-  return { todayCount, upcoming };
+  return { todayCount, upcoming, pendingPaymentReview };
 }

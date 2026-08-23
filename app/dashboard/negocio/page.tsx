@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/field";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { BusinessPreviewCard } from "@/components/dashboard/business-preview-card";
+import { DepositSettingsCard } from "@/components/dashboard/deposit-settings-card";
 import { LogoUploader } from "@/components/onboarding/logo-uploader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { businessInfoSchema, type BusinessInfoValues } from "@/lib/schemas";
@@ -102,6 +103,7 @@ export default function BusinessSettingsPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
+        <div className="space-y-6">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="rounded-2xl border border-border bg-card p-6">
             <h3 className="text-base font-semibold text-foreground">Identidad</h3>
@@ -250,6 +252,9 @@ export default function BusinessSettingsPage() {
             </Button>
           </Field>
         </form>
+
+        <DepositSettingsCard business={state.business} onSaved={() => void refresh()} />
+        </div>
 
         <div className="lg:sticky lg:top-8">
           <BusinessPreviewCard

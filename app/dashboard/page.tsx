@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
+  AlertCircle,
   Bot,
   CalendarCheck2,
   CalendarClock,
@@ -47,20 +48,22 @@ const SUBSCRIPTION_STATUS_LABEL: Record<BillingSubscriptionStatus, string> = {
 function useTurnoStats() {
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const [nextTime, setNextTime] = useState<string | null>(null);
+  const [pendingPaymentReview, setPendingPaymentReview] = useState<number>(0);
 
   useEffect(() => {
     fetch("/api/appointments?stats=1")
       .then((r) => r.json())
-      .then((data: { todayCount?: number; upcoming?: { startTime?: string } | null }) => {
+      .then((data: { todayCount?: number; upcoming?: { startTime?: string } | null; pendingPaymentReview?: number }) => {
         setTodayCount(data.todayCount ?? 0);
         setNextTime(data.upcoming?.startTime ?? null);
+        setPendingPaymentReview(data.pendingPaymentReview ?? 0);
       })
       .catch(() => {
         setTodayCount(0);
       });
   }, []);
 
-  return { todayCount, nextTime };
+  return { todayCount, nextTime, pendingPaymentReview };
 }
 
 export default function DashboardPage() {
@@ -68,7 +71,7 @@ export default function DashboardPage() {
   const { state: whatsapp, loading: whatsappLoading } = useWhatsApp();
   const { data: session } = authClient.useSession();
   const { business, services, faqs, schedule } = state;
-  const { todayCount, nextTime } = useTurnoStats();
+  const { todayCount, nextTime, pendingPaymentReview } = useTurnoStats();
   const { data: subscriptionData } = useBusinessSubscription();
 
   const configIncomplete = !business.name || !business.category || services.length === 0;
@@ -198,6 +201,29 @@ export default function DashboardPage() {
           )}
         </div>
       </motion.div>
+
+      {business.depositRequired && pendingPaymentReview > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.09 }}
+          className="flex items-center justify-between gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5"
+        >
+          <div className="flex items-center gap-3">
+            <AlertCircle className="size-5 text-amber-600 dark:text-amber-400" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                🔴 Hay {pendingPaymentReview} {pendingPaymentReview === 1 ? "comprobante" : "comprobantes"} para
+                revisar
+              </p>
+              <p className="text-xs text-muted-foreground">Pagos pendientes de validar: {pendingPaymentReview}</p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" render={<Link href="/dashboard/turnos" />} nativeButton={false}>
+            Revisar ahora
+          </Button>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 12 }}

@@ -10,6 +10,7 @@ import {
   EMPLOYEE_RESPONSE_LENGTH_LEVELS,
   EMPLOYEE_WARMTH_LEVELS,
   BILLING_SUBSCRIPTION_STATUSES,
+  DEPOSIT_TYPES,
   MEMORY_CATEGORIES,
   MEMORY_IMPORTANCE_LEVELS,
   SERVICE_CATEGORIES,
@@ -73,6 +74,41 @@ export const businessInfoSchema = z.object({
 });
 
 export type BusinessInfoValues = z.infer<typeof businessInfoSchema>;
+
+// Sección aparte (no dentro de businessInfoSchema): "Pagos y señas" tiene su
+// propio PATCH (ver app/api/business/payment-settings/route.ts) y sus
+// campos son condicionales entre sí (monto fijo vs. porcentaje) de una forma
+// que no tiene sentido mezclar con el formulario de identidad/contacto.
+// Cuando depositRequired es false, ningún otro campo se valida — un negocio
+// puede desactivar la seña sin tener que primero "arreglar" datos bancarios
+// a medio cargar.
+export const paymentSettingsSchema = z
+  .object({
+    depositRequired: z.boolean(),
+    depositType: z.enum(DEPOSIT_TYPES).nullable(),
+    depositFixedAmount: z.number().min(0).nullable(),
+    depositPercentage: z.number().min(0).max(100).nullable(),
+    depositAlias: z.string().max(120).nullable(),
+    depositCbu: z.string().max(60).nullable(),
+    depositBankName: z.string().max(120).nullable(),
+    depositAccountHolder: z.string().max(120).nullable(),
+    depositTaxId: z.string().max(40).nullable(),
+    depositInstructions: z.string().max(500).nullable(),
+  })
+  .refine((data) => !data.depositRequired || data.depositType != null, {
+    message: "Elegí si la seña es un monto fijo o un porcentaje",
+    path: ["depositType"],
+  })
+  .refine(
+    (data) => !data.depositRequired || data.depositType !== "fixed" || (data.depositFixedAmount ?? 0) > 0,
+    { message: "Ingresá el monto fijo de la seña", path: ["depositFixedAmount"] },
+  )
+  .refine(
+    (data) => !data.depositRequired || data.depositType !== "percentage" || (data.depositPercentage ?? 0) > 0,
+    { message: "Ingresá el porcentaje de la seña", path: ["depositPercentage"] },
+  );
+
+export type PaymentSettingsValues = z.infer<typeof paymentSettingsSchema>;
 
 // Variante usada únicamente por el flujo de entrenamiento conversacional:
 // mismos campos que businessInfoSchema, pero "category" es texto libre en

@@ -21,6 +21,16 @@ export const emptyBusiness: Business = {
   instagramUrl: "",
   facebookUrl: "",
   slug: null,
+  depositRequired: false,
+  depositType: null,
+  depositFixedAmount: null,
+  depositPercentage: null,
+  depositAlias: null,
+  depositCbu: null,
+  depositBankName: null,
+  depositAccountHolder: null,
+  depositTaxId: null,
+  depositInstructions: null,
 };
 
 export const defaultSchedule: BusinessSchedule = WEEK_DAYS.map((day) => ({

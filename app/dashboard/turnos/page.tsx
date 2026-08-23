@@ -7,16 +7,24 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NewAppointmentDialog } from "@/components/dashboard/new-appointment-dialog";
 import { RescheduleAppointmentDialog } from "@/components/dashboard/reschedule-appointment-dialog";
+import { PaymentReviewDialog } from "@/components/dashboard/payment-review-dialog";
 import { useOnboarding } from "@/lib/onboarding-store";
 import type { Appointment, AppointmentStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+// pending_payment/payment_submitted/payment_rejected solo aparecen en
+// negocios con la seña activada (ver sección 7 de la tarea, tabla con
+// 🟡/🟢/🔴). Un negocio sin seña nunca produce estos tres, así que el resto
+// de esta pantalla queda exactamente igual para ese caso.
 const STATUS_META: Record<AppointmentStatus, { label: string; className: string }> = {
   pending: { label: "Pendiente", className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" },
   confirmed: { label: "Confirmado", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   cancelled: { label: "Cancelado", className: "bg-muted text-muted-foreground" },
   completed: { label: "Completado", className: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
   no_show: { label: "No asistió", className: "bg-destructive/10 text-destructive" },
+  pending_payment: { label: "🟡 Seña pendiente", className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" },
+  payment_submitted: { label: "🟡 Comprobante recibido", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  payment_rejected: { label: "🔴 Comprobante rechazado", className: "bg-destructive/10 text-destructive" },
 };
 
 function formatDate(dateStr: string): string {
@@ -47,7 +55,9 @@ export default function TurnosPage() {
       const data = (await res.json()) as { appointments: Appointment[] };
       let list = data.appointments;
       if (statusFilter === "active") {
-        list = list.filter((a) => a.status === "confirmed" || a.status === "pending");
+        list = list.filter((a) =>
+          ["confirmed", "pending", "pending_payment", "payment_submitted", "payment_rejected"].includes(a.status),
+        );
       }
       setAppointments(list);
     } catch {
@@ -130,6 +140,9 @@ export default function TurnosPage() {
           <option value="active">Activos</option>
           <option value="confirmed">Confirmados</option>
           <option value="pending">Pendientes</option>
+          <option value="pending_payment">Pago pendiente</option>
+          <option value="payment_submitted">Comprobante recibido</option>
+          <option value="payment_rejected">Rechazados</option>
           <option value="cancelled">Cancelados</option>
           <option value="completed">Completados</option>
           <option value="">Todos</option>
@@ -186,7 +199,22 @@ export default function TurnosPage() {
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{appt.customerPhone}</p>
                 </div>
-                {(appt.status === "confirmed" || appt.status === "pending") && (
+                {appt.depositAmount != null && (
+                  <PaymentReviewDialog
+                    appointmentId={appt.id}
+                    onUpdated={(updated) =>
+                      setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+                    }
+                    trigger={
+                      <button className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted">
+                        Ver pago
+                      </button>
+                    }
+                  />
+                )}
+                {["confirmed", "pending", "pending_payment", "payment_submitted", "payment_rejected"].includes(
+                  appt.status,
+                ) && (
                   <div className="flex shrink-0 items-center gap-2">
                     <RescheduleAppointmentDialog
                       appointment={appt}

@@ -31,6 +31,16 @@ function toClientBusiness(
     instagramUrl: row?.instagramUrl ?? "",
     facebookUrl: row?.facebookUrl ?? "",
     slug: row?.slug ?? null,
+    depositRequired: row?.depositRequired ?? false,
+    depositType: (row?.depositType as Business["depositType"]) ?? null,
+    depositFixedAmount: row?.depositFixedAmount ?? null,
+    depositPercentage: row?.depositPercentage ?? null,
+    depositAlias: row?.depositAlias ?? null,
+    depositCbu: row?.depositCbu ?? null,
+    depositBankName: row?.depositBankName ?? null,
+    depositAccountHolder: row?.depositAccountHolder ?? null,
+    depositTaxId: row?.depositTaxId ?? null,
+    depositInstructions: row?.depositInstructions ?? null,
   };
 }
 
@@ -114,6 +124,16 @@ export interface BusinessUpdateInput {
   address?: string;
   instagramUrl?: string;
   facebookUrl?: string;
+  depositRequired?: boolean;
+  depositType?: string | null;
+  depositFixedAmount?: number | null;
+  depositPercentage?: number | null;
+  depositAlias?: string | null;
+  depositCbu?: string | null;
+  depositBankName?: string | null;
+  depositAccountHolder?: string | null;
+  depositTaxId?: string | null;
+  depositInstructions?: string | null;
 }
 
 export async function updateBusinessInfo(businessId: string, data: BusinessUpdateInput, db: Db = prisma) {

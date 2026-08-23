@@ -222,6 +222,38 @@ function clearFlow(id: string) {
   conversationRepository.clearBookingSession(id);
 }
 
+// ── DEPOSIT / SEÑA ─────────────────────────────────────────────────────────────
+// Mensaje con el monto de la seña y los datos para transferir (ver sección
+// 1/5 de la tarea) — solo muestra los campos bancarios que el negocio
+// realmente cargó, nunca una lista fija con huecos vacíos.
+function buildDepositMessage(
+  business: BusinessContext["business"],
+  quote: { depositAmount: number; totalAmount: number },
+  serviceName: string,
+  dateLabel: string,
+  slot: string,
+): string {
+  const bankLines = [
+    business.depositAlias ? `Alias: ${business.depositAlias}` : null,
+    business.depositCbu ? `CBU/CVU: ${business.depositCbu}` : null,
+    business.depositBankName ? `Banco/billetera: ${business.depositBankName}` : null,
+    business.depositAccountHolder ? `Titular: ${business.depositAccountHolder}` : null,
+    business.depositTaxId ? `CUIT/DNI: ${business.depositTaxId}` : null,
+  ].filter((line): line is string => line != null);
+
+  const amount = quote.depositAmount.toLocaleString("es-AR");
+
+  return [
+    `¡Genial! Tu turno para *${serviceName}* ${dateLabel} a las *${slot}* queda pre-reservado.`,
+    `Para confirmarlo necesitamos una seña de $${amount}.`,
+    bankLines.length ? `\nDatos para transferencia:\n${bankLines.join("\n")}` : null,
+    business.depositInstructions ? `\n${business.depositInstructions}` : null,
+    `\nCuando tengas el comprobante, enviámelo por acá y en cuanto lo revisemos te confirmamos el turno.`,
+  ]
+    .filter((line): line is string => line != null)
+    .join("\n");
+}
+
 // ── NEW BOOKING STEP HANDLERS ─────────────────────────────────────────────────
 
 async function handleNeedService(
@@ -335,6 +367,18 @@ async function handleNeedConfirmation(
   const text = message.trim();
 
   if (CONFIRM_RE.test(text)) {
+    const dateLabel = session.preferredDateLabel ?? "el día seleccionado";
+    const serviceName = session.service ?? "el servicio";
+    const slot = session.selectedSlot ?? "";
+
+    // Servicio con precio real (para calcular la seña) — puede ser null si
+    // el turno no está atado a un Service configurado (agenda general sin
+    // servicios cargados); en ese caso nunca se pide seña, no hay precio
+    // sobre el que calcularla.
+    const service = context.services.find((s) => s.id === session.serviceId) ?? null;
+    const { computeDepositAmount } = await import("@/modules/business/deposit");
+    const depositQuote = service ? computeDepositAmount(context.business, service) : null;
+
     // Persist appointment
     try {
       const { createAppointment } = await import("@/modules/appointments/service");
@@ -348,6 +392,9 @@ async function handleNeedConfirmation(
         date: session.preferredDate!,
         startTime: session.selectedSlot!,
         durationMinutes: session.serviceDurationMinutes ?? 60,
+        status: depositQuote ? "pending_payment" : "confirmed",
+        depositAmount: depositQuote?.depositAmount,
+        totalAmount: depositQuote?.totalAmount,
       });
 
       if ("error" in result) {
@@ -356,15 +403,28 @@ async function handleNeedConfirmation(
           `Lo siento, ese horario ya fue tomado mientras coordinábamos. ¿Querés elegir otro? Escribí "quiero turno" para volver a empezar.`,
         );
       }
+
+      // Seña requerida: el turno queda pending_payment, NUNCA confirmado
+      // acá — la confirmación real solo la da el dueño desde el dashboard
+      // después de validar el comprobante (ver sección 5 de la tarea:
+      // recibir una imagen no es lo mismo que un pago validado).
+      if (depositQuote) {
+        const next: BookingSession = {
+          ...session,
+          step: "confirmed",
+          awaitingProofForAppointmentId: result.appointment.id,
+        };
+        updateState(conversationId, "WAITING_PAYMENT_PROOF", next);
+        return bookingResponse(buildDepositMessage(context.business, depositQuote, serviceName, dateLabel, slot));
+      }
     } catch {
-      // DB not available — still confirm to user (simulated booking)
+      // DB not available — still confirm to user (simulated booking). Sin
+      // turno persistido no hay forma de calcular/pedir una seña real, así
+      // que este fallback siempre se comporta como el flujo sin depósito.
     }
 
     const next: BookingSession = { ...session, step: "confirmed" };
     updateState(conversationId, "BOOKED", next);
-    const dateLabel = session.preferredDateLabel ?? "el día seleccionado";
-    const serviceName = session.service ?? "el servicio";
-    const slot = session.selectedSlot ?? "";
     return bookingResponse(
       `¡Excelente 🎉 Tu turno quedó reservado para *${serviceName}* ${dateLabel} a las *${slot}*. ¡Te esperamos!`,
     );
@@ -645,6 +705,19 @@ export async function handleBookingFlow(
   }
 
   let session = conversation.bookingSession;
+
+  // Turno con seña ya creado (pending_payment), esperando el comprobante.
+  // La imagen en sí nunca llega hasta acá — se intercepta antes, en
+  // modules/whatsapp/payments/inbound.ts — esto solo cubre un mensaje de
+  // TEXTO mientras tanto ("ya transferí", etc.). No usar el step "confirmed"
+  // normal acá: ese case reinicia una reserva nueva, que sería incorrecto
+  // mientras seguimos esperando el pago de ESTA.
+  if (session && conversation.flowState === "WAITING_PAYMENT_PROOF") {
+    updateState(id, "WAITING_PAYMENT_PROOF", session);
+    return bookingResponse(
+      "Todavía estamos esperando el comprobante de tu transferencia. Podés enviarlo como imagen o PDF por acá cuando lo tengas 📎",
+    );
+  }
 
   if (!session || conversation.flowState === "IDLE" || conversation.flowState === "BOOKED") {
     const { step, service } = determineInitialStep(message, context.services);

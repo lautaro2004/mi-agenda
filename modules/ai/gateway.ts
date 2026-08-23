@@ -18,6 +18,7 @@ const ESCALATION_RESPONSE =
 const STICKY_BOOKING_STATES = new Set<ConversationFlowState>([
   "WAITING_SLOT_SELECTION",
   "WAITING_CONFIRMATION",
+  "WAITING_PAYMENT_PROOF",
 ]);
 
 // In these states the booking flow is active but can be interrupted by explicit business questions
