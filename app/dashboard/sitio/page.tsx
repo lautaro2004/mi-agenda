@@ -10,10 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { AssetUploader } from "@/components/dashboard/asset-uploader";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { requestJson } from "@/lib/api-client";
 import { ASSET_LIMITS } from "@/lib/asset-limits";
 import { HEX_COLOR_RE } from "@/lib/brand-color";
-import type { Business, SeoConfig } from "@/lib/types";
+import { getBookingIntent } from "@/lib/booking-intent";
+import { useOnboarding } from "@/lib/onboarding-store";
+import type { Business, SeoConfig, SiteTemplate } from "@/lib/types";
 
 interface SeoState {
   seo: SeoConfig | null;
@@ -73,8 +76,7 @@ function AppearanceSection() {
     <div className="rounded-2xl border border-border bg-card p-6">
       <h3 className="text-sm font-semibold text-foreground">Apariencia</h3>
       <p className="mt-1 text-xs text-muted-foreground">
-        Una personalización mínima para que el sitio se sienta tuyo — la plantilla y el resto del diseño los define
-        Mi Agenda.
+        Una personalización mínima para que el sitio se sienta tuyo — el resto del diseño lo define Nexo.
       </p>
 
       <div className="mt-6 space-y-6 border-t border-border pt-6">
@@ -154,6 +156,80 @@ function AppearanceSection() {
   );
 }
 
+const TEMPLATE_OPTION_LABEL: Record<"auto" | SiteTemplate, string> = {
+  auto: "Automática",
+  institutional: "Institucional",
+  booking: "Reservas",
+};
+
+// Sección 13 de la tarea: punto de selección manual, con la auto-detección
+// (getBookingIntent, la misma que usa /s/[slug] para no duplicar lógica)
+// como opción por defecto — nunca se fuerza a elegir.
+function TemplateSection() {
+  const { state: onboardingState, hydrated } = useOnboarding();
+  const [business, setBusiness] = React.useState<Business | null>(null);
+  const [loadError, setLoadError] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    requestJson<{ business: Business }>("/api/business")
+      .then(({ business }) => setBusiness(business))
+      .catch(() => setLoadError(true));
+  }, []);
+
+  async function save(next: "auto" | SiteTemplate) {
+    setSaving(true);
+    try {
+      const { business: updated } = await requestJson<{ business: Business }>("/api/business/site-template", {
+        method: "PATCH",
+        body: JSON.stringify({ siteTemplate: next === "auto" ? null : next }),
+      });
+      setBusiness(updated);
+      toast.success("Plantilla actualizada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No pudimos actualizar la plantilla.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loadError) return null;
+  if (!business) return <Skeleton className="h-40 rounded-2xl" />;
+
+  const autoDetected = hydrated ? getBookingIntent(onboardingState.services) === "booking" : false;
+  const value: "auto" | SiteTemplate = business.siteTemplate ?? "auto";
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6">
+      <h3 className="text-sm font-semibold text-foreground">Plantilla del sitio</h3>
+      <p className="mt-1 text-xs text-muted-foreground">
+        &ldquo;Automática&rdquo; elige sola según tus servicios: si todos son reservables por turno, usa la plantilla
+        de Reservas (orientada a que el cliente reserve directo desde la web); si no, la Institucional.
+        {hydrated && (
+          <>
+            {" "}
+            Con tu configuración actual, eso sería:{" "}
+            <span className="font-medium text-foreground">{autoDetected ? "Reservas" : "Institucional"}</span>.
+          </>
+        )}
+      </p>
+
+      <div className="mt-4 max-w-xs">
+        <Select value={value} onValueChange={(next) => void save(next as "auto" | SiteTemplate)} disabled={saving}>
+          <SelectTrigger className="w-full">
+            <SelectValue>{TEMPLATE_OPTION_LABEL[value]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">{TEMPLATE_OPTION_LABEL.auto}</SelectItem>
+            <SelectItem value="institutional">{TEMPLATE_OPTION_LABEL.institutional}</SelectItem>
+            <SelectItem value="booking">{TEMPLATE_OPTION_LABEL.booking}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
 export default function SitioPage() {
   const [state, setState] = React.useState<SeoState | null>(null);
   const [loadError, setLoadError] = React.useState(false);
@@ -213,6 +289,8 @@ export default function SitioPage() {
               <ExternalLink className="ml-1.5 size-3.5" data-icon="inline-end" />
             </Button>
           </div>
+
+          <TemplateSection />
 
           <AppearanceSection />
 

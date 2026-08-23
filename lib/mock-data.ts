@@ -21,6 +21,7 @@ export const emptyBusiness: Business = {
   instagramUrl: "",
   facebookUrl: "",
   slug: null,
+  siteTemplate: null,
   depositRequired: false,
   depositType: null,
   depositFixedAmount: null,
@@ -61,6 +62,7 @@ export const exampleServices: Service[] = [
     category: "Cortes",
     durationMinutes: 30,
     price: 4500,
+    imageUrl: null,
   },
   {
     id: "service-2",
@@ -70,6 +72,7 @@ export const exampleServices: Service[] = [
     category: "Coloración",
     durationMinutes: 90,
     price: 12000,
+    imageUrl: null,
   },
   {
     id: "service-3",
@@ -79,6 +82,7 @@ export const exampleServices: Service[] = [
     category: "Barba",
     durationMinutes: 20,
     price: 3000,
+    imageUrl: null,
   },
 ];
 

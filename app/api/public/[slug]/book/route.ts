@@ -3,13 +3,18 @@ import { NextResponse } from "next/server";
 import { getBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { createAppointment } from "@/modules/appointments/service";
+import { computeDepositAmount } from "@/modules/business/deposit";
 import { manualAppointmentSchema } from "@/lib/schemas";
 import { isBookableService } from "@/lib/types";
 
 // Reserva desde el sitio público. Mismo contrato (manualAppointmentSchema) y
 // misma función (createAppointment) que usa el turno manual del dashboard —
 // termina en el mismo tipo de Appointment que una reserva por WhatsApp o por
-// dashboard, no en una entidad paralela.
+// dashboard, no en una entidad paralela. Igual que el Booking Flow de
+// WhatsApp (ver modules/ai/booking/flow.ts): si el negocio pide seña, el
+// turno nace en pending_payment en vez de confirmado — antes de esta
+// función, esta ruta ignoraba por completo la configuración de seña y
+// siempre confirmaba directo, algo que WhatsApp ya no hacía.
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const businessId = await getBusinessIdBySlug(slug);
@@ -29,6 +34,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: "Ese servicio no está disponible para reservar." }, { status: 400 });
   }
 
+  const depositQuote = computeDepositAmount(business, service);
+
   const result = await createAppointment({
     businessId,
     businessName: business.name,
@@ -41,6 +48,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     durationMinutes: service.durationMinutes,
     notes: parsed.data.notes,
     resourceId: parsed.data.resourceId,
+    status: depositQuote ? "pending_payment" : "confirmed",
+    depositAmount: depositQuote?.depositAmount,
+    totalAmount: depositQuote?.totalAmount,
   });
 
   if ("error" in result) {

@@ -13,11 +13,17 @@ interface AssetUploaderProps {
   value: string | null;
   onChange: (url: string | null) => void;
   shape?: "square" | "wide";
+  // Override opcional del endpoint — kind="service" no es 1:1 con un campo
+  // fijo de Business (ver app/api/business/services/[id]/image/route.ts),
+  // así que necesita apuntar a una ruta con el id del servicio en vez de
+  // /api/business/assets/service.
+  endpoint?: string;
 }
 
 const LABEL: Record<SiteAssetKind, { change: string; upload: string }> = {
   logo: { change: "Cambiar logo", upload: "Subir logo" },
   hero: { change: "Cambiar imagen", upload: "Subir imagen" },
+  service: { change: "Cambiar foto", upload: "Subir foto" },
 };
 
 // Persiste apenas se elige un archivo (sube, actualiza la referencia y
@@ -26,7 +32,8 @@ const LABEL: Record<SiteAssetKind, { change: string; upload: string }> = {
 // /dashboard/sitio como en el paso de logo del onboarding, sin duplicarla.
 // Nunca confía solo en la validación de acá — el servidor revalida mime y
 // tamaño con los mismos límites (lib/asset-limits.ts).
-export function AssetUploader({ kind, value, onChange, shape = "square" }: AssetUploaderProps) {
+export function AssetUploader({ kind, value, onChange, shape = "square", endpoint }: AssetUploaderProps) {
+  const url = endpoint ?? `/api/business/assets/${kind}`;
   const inputRef = React.useRef<HTMLInputElement>(null);
   const objectUrlRef = React.useRef<string | null>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
@@ -65,7 +72,7 @@ export function AssetUploader({ kind, value, onChange, shape = "square" }: Asset
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch(`/api/business/assets/${kind}`, { method: "POST", body: formData });
+      const response = await fetch(url, { method: "POST", body: formData });
       const data = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
       if (!response.ok || !data?.url) throw new Error(data?.error ?? "No pudimos subir el archivo.");
 
@@ -90,7 +97,7 @@ export function AssetUploader({ kind, value, onChange, shape = "square" }: Asset
     setError(null);
     setUploading(true);
     try {
-      const response = await fetch(`/api/business/assets/${kind}`, { method: "DELETE" });
+      const response = await fetch(url, { method: "DELETE" });
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(data?.error ?? "No pudimos quitar el archivo.");
       onChange(null);

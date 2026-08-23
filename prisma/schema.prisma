@@ -35,6 +35,14 @@ model Business {
   // feature no tienen uno hasta que se genera de forma perezosa.
   slug           String?       @unique
 
+  // Plantilla del sitio público: "institutional" | "booking" | null. Null
+  // (default) = auto-detectar vía getBookingIntent() (ver
+  // lib/booking-intent.ts) en vez de guardar un valor fijo que quede
+  // desactualizado si el negocio después agrega/saca servicios reservables.
+  // Un valor explícito acá es una anulación manual desde Configuración >
+  // Sitio (ver sección 13 de la tarea) — nunca se escribe solo.
+  siteTemplate   String?
+
   // ── Seña / depósito (ver modules/business/deposit.ts) ──────────────────
   // Configuración global del negocio, no por servicio: cuando depositRequired
   // es true, TODA reserva por turno pasa a pending_payment en vez de
@@ -105,6 +113,11 @@ model Service {
   durationMinutes Int           @default(60)
   price           Float         @default(0)
   active          Boolean       @default(true)
+  // URL pública de Supabase Storage (bucket "site-assets", mismo bucket que
+  // logo/hero — ver lib/site-assets.ts). Opcional: las cards de servicio del
+  // sitio público muestran un fallback visual cuando no hay foto, nunca una
+  // imagen inventada.
+  imageUrl        String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   appointments    Appointment[]

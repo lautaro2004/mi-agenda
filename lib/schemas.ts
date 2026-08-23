@@ -11,6 +11,7 @@ import {
   EMPLOYEE_WARMTH_LEVELS,
   BILLING_SUBSCRIPTION_STATUSES,
   DEPOSIT_TYPES,
+  SITE_TEMPLATES,
   MEMORY_CATEGORIES,
   MEMORY_IMPORTANCE_LEVELS,
   SERVICE_CATEGORIES,
@@ -109,6 +110,15 @@ export const paymentSettingsSchema = z
   );
 
 export type PaymentSettingsValues = z.infer<typeof paymentSettingsSchema>;
+
+// null = auto-detectar la plantilla del sitio público vía getBookingIntent()
+// (ver lib/booking-intent.ts) — un valor explícito es la anulación manual
+// desde Configuración > Sitio.
+export const siteTemplateSchema = z.object({
+  siteTemplate: z.enum(SITE_TEMPLATES).nullable(),
+});
+
+export type SiteTemplateValues = z.infer<typeof siteTemplateSchema>;
 
 // Variante usada únicamente por el flujo de entrenamiento conversacional:
 // mismos campos que businessInfoSchema, pero "category" es texto libre en

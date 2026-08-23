@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentBusinessId } from "@/modules/business/current";
-import { AssetValidationError, removeSiteAsset, replaceSiteAsset } from "@/modules/business/assets";
-import type { SiteAssetKind } from "@/lib/site-assets";
+import { AssetValidationError, removeSiteAsset, replaceSiteAsset, type BusinessAssetKind } from "@/modules/business/assets";
 
 interface RouteParams {
   params: Promise<{ kind: string }>;
 }
 
-function parseKind(value: string): SiteAssetKind | null {
+function parseKind(value: string): BusinessAssetKind | null {
   return value === "logo" || value === "hero" ? value : null;
 }
 

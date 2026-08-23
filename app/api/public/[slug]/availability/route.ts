@@ -7,7 +7,7 @@ import { getAvailableSlots } from "@/modules/appointments/service";
 // Contraparte pública de /api/appointments/availability: mismo motor
 // (getAvailableSlots), resolviendo el negocio por slug en vez de por sesión
 // — no hay usuario logueado en el sitio público. Ver el widget de reserva en
-// app/s/[slug]/booking-widget.tsx.
+// components/public-site/booking-widget.tsx.
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const businessId = await getBusinessIdBySlug(slug);

@@ -1,8 +1,17 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import type { FAQ } from "@/lib/types";
 
-export function FaqSection({ faqs }: { faqs: FAQ[] }) {
+interface FaqSectionProps {
+  faqs: FAQ[];
+  // Sin límite por defecto (comportamiento institucional de siempre). La
+  // plantilla booking pasa 5 — sección 11 de la tarea: FAQ recortada, no la
+  // lista completa de preguntas frecuentes configuradas.
+  limit?: number;
+}
+
+export function FaqSection({ faqs, limit }: FaqSectionProps) {
   if (faqs.length === 0) return null;
+  const visible = limit ? faqs.slice(0, limit) : faqs;
 
   return (
     <section id="faq" className="mx-auto max-w-2xl px-4 py-14 sm:px-6 sm:py-16">
@@ -12,7 +21,7 @@ export function FaqSection({ faqs }: { faqs: FAQ[] }) {
 
       <div className="mt-7 rounded-2xl border border-border bg-card px-5 sm:px-6">
         <Accordion>
-          {faqs.map((faq) => (
+          {visible.map((faq) => (
             <AccordionItem key={faq.id} value={faq.id}>
               <AccordionTrigger className="cursor-pointer py-3.5 text-sm font-semibold text-foreground hover:no-underline">
                 {faq.question}

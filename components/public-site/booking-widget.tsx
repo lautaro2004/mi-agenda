@@ -4,29 +4,52 @@ import * as React from "react";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, Loader2, MessageCircle, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ResourcePicker, type ResourceOption } from "@/components/dashboard/resource-picker";
+import { PAYMENT_PROOF_LIMITS } from "@/lib/payment-proof-limits";
 import { manualAppointmentSchema, type ManualAppointmentValues } from "@/lib/schemas";
-import { isBookableService, type Service } from "@/lib/types";
+import { isBookableService, type Business, type Service } from "@/lib/types";
 
 interface BookingWidgetProps {
   slug: string;
   services: Service[];
+  // Solo los campos de seña — no hace falta el Business completo acá.
+  business: Pick<
+    Business,
+    | "depositRequired"
+    | "depositType"
+    | "depositFixedAmount"
+    | "depositPercentage"
+    | "depositAlias"
+    | "depositCbu"
+    | "depositBankName"
+    | "depositAccountHolder"
+    | "depositTaxId"
+    | "depositInstructions"
+  >;
+  whatsappHref?: string | null;
   // Preselección opcional (ej. venís de "Reservar" en una card de servicio
   // puntual en la página principal) — ver /s/[slug]/reservar?servicio=...
   initialServiceId?: string;
 }
 
 interface ConfirmedBooking {
+  appointmentId: string;
   service: string;
   date: string;
   time: string;
   resource: string | null;
+  // null = el negocio no pide seña para este turno (comportamiento de
+  // siempre). Con seña, el turno nace en pending_payment y hay que mostrar
+  // los datos bancarios + pedir el comprobante ANTES de poder decir
+  // "reserva confirmada" (ver sección 6/7 de la tarea — nunca confirmar
+  // solo porque llegó un archivo).
+  depositAmount: number | null;
 }
 
 function todayIso(): string {
@@ -40,6 +63,10 @@ function formatDate(dateStr: string): string {
   );
 }
 
+function formatMoney(amount: number): string {
+  return `$${amount.toLocaleString("es-AR")}`;
+}
+
 // Reserva pública — reutiliza exactamente el mismo motor que el turno
 // manual del dashboard y el Booking Flow de WhatsApp: mismo schema
 // (manualAppointmentSchema), mismo ResourcePicker, y del otro lado la misma
@@ -47,7 +74,7 @@ function formatDate(dateStr: string): string {
 // solo cambia CÓMO se resuelve el negocio — por slug, no por sesión). Se usa
 // tal cual tanto en la sección de reserva de /s/[slug] como en la página
 // dedicada /s/[slug]/reservar — nunca un segundo componente.
-export function BookingWidget({ slug, services, initialServiceId }: BookingWidgetProps) {
+export function BookingWidget({ slug, services, business, whatsappHref, initialServiceId }: BookingWidgetProps) {
   // Solo servicios reservables de verdad — defensivo: aunque hoy siempre
   // llega ya filtrado desde el caller, nunca hay que asumirlo silenciosamente
   // (ver isBookableService, durationMinutes = 0 = no es un turno).
@@ -163,14 +190,24 @@ export function BookingWidget({ slug, services, initialServiceId }: BookingWidge
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "No pudimos confirmar la reserva.");
+      const data = (await res.json()) as {
+        error?: string;
+        appointment?: { id: string; depositAmount: number | null };
+      };
+      if (!res.ok || !data.appointment) throw new Error(data.error ?? "No pudimos confirmar la reserva.");
 
       const service = services.find((s) => s.id === values.serviceId);
       const resource = values.resourceId
         ? (resourceOptions?.find((r) => r.id === values.resourceId)?.name ?? null)
         : null;
-      setConfirmed({ service: service?.name ?? "Turno", date: values.date, time: values.startTime, resource });
+      setConfirmed({
+        appointmentId: data.appointment.id,
+        service: service?.name ?? "Turno",
+        date: values.date,
+        time: values.startTime,
+        resource,
+        depositAmount: data.appointment.depositAmount,
+      });
     } catch (error) {
       // Revalidado en el servidor: si el horario/recurso se ocupó mientras
       // completaba el formulario, refrescamos para mostrar el estado real
@@ -184,6 +221,21 @@ export function BookingWidget({ slug, services, initialServiceId }: BookingWidge
   }
 
   if (bookableServices.length === 0) return null;
+
+  if (confirmed && confirmed.depositAmount != null) {
+    return (
+      <DepositPendingCard
+        slug={slug}
+        confirmed={confirmed}
+        business={business}
+        whatsappHref={whatsappHref}
+        onReset={() => {
+          setConfirmed(null);
+          resetForm();
+        }}
+      />
+    );
+  }
 
   if (confirmed) {
     return (
@@ -350,5 +402,164 @@ export function BookingWidget({ slug, services, initialServiceId }: BookingWidge
         )}
       </Button>
     </form>
+  );
+}
+
+interface DepositPendingCardProps {
+  slug: string;
+  confirmed: ConfirmedBooking;
+  business: BookingWidgetProps["business"];
+  whatsappHref?: string | null;
+  onReset: () => void;
+}
+
+// Turno recién creado en pending_payment (ver /api/public/[slug]/book):
+// nunca dice "reserva confirmada" acá — solo el dueño confirma el pago
+// desde el dashboard, después de validar el comprobante (sección 6/7 de la
+// tarea). Antes de subir el comprobante muestra el monto de la seña y los
+// datos para transferir (solo los campos que el negocio cargó realmente);
+// después, el mensaje de "pendiente de validación".
+function DepositPendingCard({ slug, confirmed, business, whatsappHref, onReset }: DepositPendingCardProps) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
+  const [submitted, setSubmitted] = React.useState(false);
+
+  const bankLines = [
+    business.depositAlias ? { label: "Alias", value: business.depositAlias } : null,
+    business.depositCbu ? { label: "CBU/CVU", value: business.depositCbu } : null,
+    business.depositBankName ? { label: "Banco/billetera", value: business.depositBankName } : null,
+    business.depositAccountHolder ? { label: "Titular", value: business.depositAccountHolder } : null,
+    business.depositTaxId ? { label: "CUIT/DNI", value: business.depositTaxId } : null,
+  ].filter((line): line is { label: string; value: string } => line != null);
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setUploadError(null);
+
+    if (!PAYMENT_PROOF_LIMITS.mimeTypes.includes(file.type)) {
+      setUploadError("Ese formato de archivo no está soportado.");
+      return;
+    }
+    if (file.size > PAYMENT_PROOF_LIMITS.maxBytes) {
+      setUploadError(`El archivo supera el máximo de ${Math.round(PAYMENT_PROOF_LIMITS.maxBytes / (1024 * 1024))} MB.`);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("appointmentId", confirmed.appointmentId);
+      const res = await fetch(`/api/public/${slug}/payment-proof`, { method: "POST", body: formData });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(data?.error ?? "No pudimos subir el comprobante.");
+      setSubmitted(true);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "No pudimos subir el comprobante.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  if (submitted) {
+    return (
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 text-center sm:p-8">
+        <Clock3 className="mx-auto size-10 text-amber-600 dark:text-amber-400" />
+        <p className="mt-4 text-lg font-semibold text-foreground">Reserva pendiente de validación</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Recibimos tu comprobante. Tu reserva quedó pendiente de validación. Te avisaremos cuando el pago sea
+          confirmado.
+        </p>
+        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+          <p>{confirmed.service}</p>
+          <p className="capitalize">
+            {formatDate(confirmed.date)} a las {confirmed.time}
+          </p>
+        </div>
+        <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
+          {whatsappHref && (
+            <Button type="button" variant="outline" render={<a href={whatsappHref} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>
+              <MessageCircle className="size-4" data-icon="inline-start" />
+              Hablar por WhatsApp
+            </Button>
+          )}
+          <Button type="button" render={<Link href={`/s/${slug}`} />} nativeButton={false}>
+            Volver al inicio
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 sm:p-8">
+      <h3 className="text-lg font-semibold text-foreground">Confirmá tu reserva</h3>
+      <div className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+        <p>{confirmed.service}</p>
+        <p className="capitalize">
+          {formatDate(confirmed.date)} a las {confirmed.time}
+        </p>
+      </div>
+
+      <div className="mt-4 rounded-xl bg-card p-4">
+        <p className="text-sm font-medium text-foreground">
+          Seña requerida: <span className="font-semibold">{formatMoney(confirmed.depositAmount!)}</span>
+        </p>
+        {bankLines.length > 0 && (
+          <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+            {bankLines.map((line) => (
+              <p key={line.label} className="flex flex-wrap justify-between gap-2">
+                <span className="text-muted-foreground">{line.label}</span>
+                <span className="font-medium text-foreground">{line.value}</span>
+              </p>
+            ))}
+          </div>
+        )}
+        {business.depositInstructions && (
+          <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+            {business.depositInstructions}
+          </p>
+        )}
+      </div>
+
+      <p className="mt-4 text-sm text-muted-foreground">
+        Una vez realizada la transferencia, subí el comprobante para enviar tu reserva.
+      </p>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={PAYMENT_PROOF_LIMITS.mimeTypes.join(",")}
+        capture="environment"
+        className="hidden"
+        disabled={uploading}
+        onChange={(e) => void handleFile(e.target.files?.[0])}
+      />
+      <Button type="button" className="mt-3 w-full" disabled={uploading} onClick={() => inputRef.current?.click()}>
+        {uploading ? (
+          <>
+            <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+            Subiendo…
+          </>
+        ) : (
+          <>
+            <Upload className="size-4" data-icon="inline-start" />
+            Subir comprobante
+          </>
+        )}
+      </Button>
+      {uploadError && (
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-destructive">
+          <AlertCircle className="size-4 shrink-0" />
+          {uploadError}
+        </p>
+      )}
+
+      <Button type="button" variant="ghost" className="mt-2 w-full text-muted-foreground" onClick={onReset}>
+        Cancelar
+      </Button>
+    </div>
   );
 }

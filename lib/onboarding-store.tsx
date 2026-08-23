@@ -26,8 +26,11 @@ interface OnboardingContextValue {
   refresh: () => Promise<void>;
   updateBusiness: (business: Partial<Business>) => Promise<void>;
   setSchedule: (schedule: BusinessSchedule) => Promise<void>;
-  addService: (service: Omit<Service, "id" | "businessId">) => Promise<void>;
-  updateService: (id: string, service: Omit<Service, "id" | "businessId">) => Promise<void>;
+  // imageUrl nunca viaja por acá: se sube/borra por su propio endpoint (ver
+  // modules/business/service-images.ts), no forma parte del alta/edición de
+  // los demás campos.
+  addService: (service: Omit<Service, "id" | "businessId" | "imageUrl">) => Promise<void>;
+  updateService: (id: string, service: Omit<Service, "id" | "businessId" | "imageUrl">) => Promise<void>;
   removeService: (id: string) => Promise<void>;
   addFaq: (faq: Omit<FAQ, "id" | "businessId">) => Promise<void>;
   updateFaq: (id: string, faq: Omit<FAQ, "id" | "businessId">) => Promise<void>;

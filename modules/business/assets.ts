@@ -14,7 +14,13 @@ import {
 
 export class AssetValidationError extends Error {}
 
-function validate(kind: SiteAssetKind, mimeType: string, size: number): void {
+// Este módulo solo maneja logo/hero (1:1 con un campo fijo de Business) —
+// "service" tiene su propio módulo (modules/business/service-images.ts,
+// escala por serviceId en vez de por Business) y nunca llega hasta acá (ver
+// parseKind() en app/api/business/assets/[kind]/route.ts).
+export type BusinessAssetKind = Extract<SiteAssetKind, "logo" | "hero">;
+
+function validate(kind: BusinessAssetKind, mimeType: string, size: number): void {
   const limits = ASSET_LIMITS[kind];
   if (!limits.mimeTypes.includes(mimeType)) {
     const formats = limits.mimeTypes.map((m) => m.split("/")[1].toUpperCase()).join(", ");
@@ -28,7 +34,7 @@ function validate(kind: SiteAssetKind, mimeType: string, size: number): void {
 const FIELD_BY_KIND = {
   logo: "logoUrl",
   hero: "heroImageUrl",
-} as const satisfies Record<SiteAssetKind, "logoUrl" | "heroImageUrl">;
+} as const satisfies Record<BusinessAssetKind, "logoUrl" | "heroImageUrl">;
 
 // Reemplaza logo o hero de forma segura: sube el archivo nuevo, recién
 // DESPUÉS actualiza la referencia en Postgres, y recién DESPUÉS borra el
@@ -38,7 +44,7 @@ const FIELD_BY_KIND = {
 // recoge cleanupOrphanSiteAssets() más tarde (ver sección 5/6 de la tarea).
 export async function replaceSiteAsset(
   businessId: string,
-  kind: SiteAssetKind,
+  kind: BusinessAssetKind,
   file: { bytes: Buffer; mimeType: string; size: number }
 ): Promise<string> {
   validate(kind, file.mimeType, file.size);
@@ -71,7 +77,7 @@ export async function replaceSiteAsset(
 
 // "Quitar" desde el dashboard: misma precaución de orden (referencia primero,
 // borrado del archivo después, nunca al revés).
-export async function removeSiteAsset(businessId: string, kind: SiteAssetKind): Promise<void> {
+export async function removeSiteAsset(businessId: string, kind: BusinessAssetKind): Promise<void> {
   const field = FIELD_BY_KIND[kind];
   const current = await prisma.business.findUnique({ where: { id: businessId } });
   const previousUrl = (current?.[field] as string | null | undefined) ?? null;

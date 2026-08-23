@@ -8,7 +8,14 @@ import { getBusinessState } from "@/modules/business/service";
 import { getActiveServiceResources } from "@/modules/business/resource";
 import { buildFallbackSeoConfig, buildLocalBusinessJsonLd, getSeoConfig } from "@/modules/business/seo";
 import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
-import { getBookingHref, getBookingIntent, getFeaturedBookableService, getVisibleServices } from "@/lib/booking-intent";
+import { cn } from "@/lib/utils";
+import {
+  getBookingHref,
+  getBookingIntent,
+  getFeaturedBookableService,
+  getVisibleServices,
+  resolveSiteTemplate,
+} from "@/lib/booking-intent";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import { isBookableService } from "@/lib/types";
 
@@ -23,6 +30,10 @@ import { FaqSection } from "@/components/public-site/faq-section";
 import { FinalCtaSection } from "@/components/public-site/final-cta-section";
 import { PublicFooter } from "@/components/public-site/footer";
 import { FloatingWhatsapp } from "@/components/public-site/floating-whatsapp";
+import { BookingHero } from "@/components/public-site/booking/booking-hero";
+import { BookingPageClient } from "@/components/public-site/booking/booking-page-client";
+import { BookingImportantInfo } from "@/components/public-site/booking/booking-important-info";
+import { BookingStickyCta } from "@/components/public-site/booking/booking-sticky-cta";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -85,6 +96,10 @@ export default async function PublicSitePage({ params }: PageProps) {
   // (el turno ES el producto) o de "agendar una reunión" (el turno es el
   // medio para coordinar servicios que no son turnos, ej. proyectos).
   const intent = getBookingIntent(services);
+  // Sección 13 de la tarea: auto-detecta vía intent (no frágil, ver
+  // lib/booking-intent.ts) salvo que el dueño haya elegido una plantilla a
+  // mano desde Configuración > Sitio.
+  const template = resolveSiteTemplate(business.siteTemplate, intent);
   // En intent "meeting" el servicio reservable (ej. "Reunión inicial") no se
   // muestra como card comercial — se ofrece como CTA de conversión en su
   // lugar (ver getBookingHref), preseleccionado en el link de reserva.
@@ -115,7 +130,7 @@ export default async function PublicSitePage({ params }: PageProps) {
 
   return (
     <div
-      className="min-h-screen bg-background"
+      className={cn("min-h-screen bg-background", template === "booking" && "pb-16 sm:pb-0")}
       style={brandColor ? ({ "--brand-primary": brandColor } as CSSProperties) : undefined}
     >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
@@ -130,29 +145,50 @@ export default async function PublicSitePage({ params }: PageProps) {
         bookingHref={bookingHref}
       />
 
-      <main>
-        <PublicHero
-          business={business}
-          seo={seo}
-          intent={intent}
-          bookingHref={bookingHref}
-          whatsappHref={whatsappHref}
-          heroImageUrl={business.heroImageUrl}
-          featuredService={featuredService}
-          featuredServiceUsesResources={featuredServiceResources.length > 0}
-          featuredServiceHref={featuredServiceHref}
-        />
-        <AboutSection description={business.description} />
-        <ServicesSection services={visibleServices} slug={slug} whatsappNumber={business.whatsappNumber} />
-        <ProcessSection intent={intent} />
-        <BookingSection services={bookableServices} intent={intent} bookingHref={bookingHref} whatsappHref={whatsappHref} />
-        <ScheduleSection schedule={schedule} />
-        <FaqSection faqs={faqs} />
-        <FinalCtaSection intent={intent} bookingHref={bookingHref} whatsappHref={whatsappHref} />
-      </main>
+      {template === "booking" ? (
+        <main>
+          <BookingHero
+            business={business}
+            whatsappHref={whatsappHref}
+            heroImageUrl={business.heroImageUrl}
+            usesResources={featuredServiceResources.length > 0}
+          />
+          <BookingPageClient
+            slug={slug}
+            services={bookableServices}
+            business={business}
+            whatsappHref={whatsappHref}
+          />
+          <BookingImportantInfo business={business} whatsappHref={whatsappHref} />
+          <ScheduleSection schedule={schedule} />
+          <FaqSection faqs={faqs} limit={5} />
+        </main>
+      ) : (
+        <main>
+          <PublicHero
+            business={business}
+            seo={seo}
+            intent={intent}
+            bookingHref={bookingHref}
+            whatsappHref={whatsappHref}
+            heroImageUrl={business.heroImageUrl}
+            featuredService={featuredService}
+            featuredServiceUsesResources={featuredServiceResources.length > 0}
+            featuredServiceHref={featuredServiceHref}
+          />
+          <AboutSection description={business.description} />
+          <ServicesSection services={visibleServices} slug={slug} whatsappNumber={business.whatsappNumber} />
+          <ProcessSection intent={intent} />
+          <BookingSection services={bookableServices} intent={intent} bookingHref={bookingHref} whatsappHref={whatsappHref} />
+          <ScheduleSection schedule={schedule} />
+          <FaqSection faqs={faqs} />
+          <FinalCtaSection intent={intent} bookingHref={bookingHref} whatsappHref={whatsappHref} />
+        </main>
+      )}
 
       <PublicFooter business={business} slug={slug} />
-      <FloatingWhatsapp href={floatingWhatsappHref} />
+      <FloatingWhatsapp href={floatingWhatsappHref} liftedOnMobile={template === "booking"} />
+      {template === "booking" && <BookingStickyCta />}
     </div>
   );
 }

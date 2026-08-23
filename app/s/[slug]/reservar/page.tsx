@@ -13,7 +13,7 @@ import { isBookableService } from "@/lib/types";
 import { PublicHeader } from "@/components/public-site/header";
 import { PublicFooter } from "@/components/public-site/footer";
 import { FloatingWhatsapp } from "@/components/public-site/floating-whatsapp";
-import { BookingWidget } from "../booking-widget";
+import { BookingWidget } from "@/components/public-site/booking-widget";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -93,7 +93,13 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
         </div>
 
         <div className="mt-8">
-          <BookingWidget slug={slug} services={bookableServices} initialServiceId={servicio} />
+          <BookingWidget
+            slug={slug}
+            services={bookableServices}
+            business={business}
+            whatsappHref={whatsappHref}
+            initialServiceId={servicio}
+          />
         </div>
       </main>
 

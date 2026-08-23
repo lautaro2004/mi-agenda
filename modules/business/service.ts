@@ -31,6 +31,7 @@ function toClientBusiness(
     instagramUrl: row?.instagramUrl ?? "",
     facebookUrl: row?.facebookUrl ?? "",
     slug: row?.slug ?? null,
+    siteTemplate: (row?.siteTemplate as Business["siteTemplate"]) ?? null,
     depositRequired: row?.depositRequired ?? false,
     depositType: (row?.depositType as Business["depositType"]) ?? null,
     depositFixedAmount: row?.depositFixedAmount ?? null,
@@ -74,6 +75,7 @@ function toClientService(row: {
   category: string | null;
   durationMinutes: number;
   price: number;
+  imageUrl?: string | null;
 }): Service {
   return {
     id: row.id,
@@ -83,6 +85,7 @@ function toClientService(row: {
     category: (row.category as Service["category"]) ?? "",
     durationMinutes: row.durationMinutes,
     price: row.price,
+    imageUrl: row.imageUrl ?? null,
   };
 }
 
@@ -124,6 +127,7 @@ export interface BusinessUpdateInput {
   address?: string;
   instagramUrl?: string;
   facebookUrl?: string;
+  siteTemplate?: string | null;
   depositRequired?: boolean;
   depositType?: string | null;
   depositFixedAmount?: number | null;

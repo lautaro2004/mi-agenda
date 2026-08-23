@@ -56,6 +56,10 @@ export interface Business {
   // modules/business/slug.ts) — se crea una sola vez y después no cambia
   // solo, aunque el nombre del negocio cambie.
   slug: string | null;
+  // "institutional" | "booking" | null — null significa auto-detectar (ver
+  // resolveSiteTemplate() en lib/booking-intent.ts). Un valor explícito es
+  // una anulación manual desde Configuración > Sitio.
+  siteTemplate: SiteTemplate | null;
   // ── Seña / depósito (ver modules/business/deposit.ts) ──────────────────
   depositRequired: boolean;
   depositType: DepositType | null;
@@ -71,6 +75,9 @@ export interface Business {
 
 export const DEPOSIT_TYPES = ["fixed", "percentage"] as const;
 export type DepositType = (typeof DEPOSIT_TYPES)[number];
+
+export const SITE_TEMPLATES = ["institutional", "booking"] as const;
+export type SiteTemplate = (typeof SITE_TEMPLATES)[number];
 
 export interface BusinessScheduleDay {
   day: WeekDay;
@@ -111,6 +118,10 @@ export interface Service {
   category: string;
   durationMinutes: number;
   price: number;
+  // URL pública de Storage (bucket "site-assets") — null cuando el negocio
+  // no cargó una foto para este servicio. Ver lib/asset-limits.ts (kind
+  // "service") y modules/business/service-images.ts.
+  imageUrl: string | null;
 }
 
 // "0" (o ausente al crear) es el sentinel para "no es un servicio reservable

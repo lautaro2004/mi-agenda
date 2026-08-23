@@ -1,4 +1,4 @@
-import { isBookableService, type Service } from "@/lib/types";
+import { isBookableService, type Service, type SiteTemplate } from "@/lib/types";
 
 export type BookingIntent = "booking" | "meeting" | "contact";
 
@@ -47,4 +47,17 @@ export function getBookingHref(slug: string, services: Service[], intent: Bookin
 export function getVisibleServices(services: Service[], intent: BookingIntent): Service[] {
   if (intent !== "meeting") return services;
   return services.filter((s) => !isBookableService(s));
+}
+
+// Punto único de resolución de plantilla del sitio público (sección 13 de la
+// tarea: "no crear una detección frágil basada en nombres de servicios").
+// Un Business.siteTemplate explícito (elegido a mano en Configuración >
+// Sitio) siempre gana; sin eso, se infiere del intent ya calculado — un
+// negocio donde TODOS los servicios son reservables (intent "booking") usa
+// la plantilla de reservas; "meeting" y "contact" siguen usando la
+// institucional (un turno-medio-de-coordinación, o ningún turno, no es un
+// negocio "reservable" en el sentido de esta plantilla).
+export function resolveSiteTemplate(siteTemplate: SiteTemplate | null, intent: BookingIntent): SiteTemplate {
+  if (siteTemplate) return siteTemplate;
+  return intent === "booking" ? "booking" : "institutional";
 }

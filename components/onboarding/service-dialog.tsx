@@ -27,6 +27,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { AssetUploader } from "@/components/dashboard/asset-uploader";
 import { requestJson } from "@/lib/api-client";
 import { serviceSchema, type ServiceFormInput, type ServiceFormValues } from "@/lib/schemas";
 import { SERVICE_CATEGORIES, type Resource, type Service } from "@/lib/types";
@@ -47,6 +48,9 @@ export function ServiceDialog({ trigger, service, onSubmit }: ServiceDialogProps
   const [allResources, setAllResources] = React.useState<Resource[] | null>(null);
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
   const [savingResources, setSavingResources] = React.useState(false);
+  // Igual que logo/hero: se sube y persiste al toque (ver AssetUploader),
+  // no forma parte de serviceSchema/onSubmit.
+  const [imageUrl, setImageUrl] = React.useState<string | null>(service?.imageUrl ?? null);
 
   const {
     register,
@@ -75,6 +79,8 @@ export function ServiceDialog({ trigger, service, onSubmit }: ServiceDialogProps
         durationMinutes: service?.durationMinutes ?? 30,
         price: service?.price ?? 0,
       });
+
+      setImageUrl(service?.imageUrl ?? null);
 
       if (service) {
         setAllResources(null);
@@ -198,6 +204,22 @@ export function ServiceDialog({ trigger, service, onSubmit }: ServiceDialogProps
                 <FieldError errors={[errors.price]} />
               </Field>
             </div>
+
+            {service && (
+              <Field>
+                <FieldLabel>Foto del servicio</FieldLabel>
+                <AssetUploader
+                  kind="service"
+                  shape="wide"
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  endpoint={`/api/business/services/${service.id}/image`}
+                />
+                <FieldDescription>
+                  Se muestra en la card del servicio en tu sitio público. Opcional.
+                </FieldDescription>
+              </Field>
+            )}
 
             {service && (
               <Field>
