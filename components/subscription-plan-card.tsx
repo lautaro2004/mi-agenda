@@ -1,12 +1,16 @@
+import { Check } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPriceInCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
-import type { PublicPlan } from "@/lib/subscription-client";
+import { PLAN_SUBTITLE_BY_SLUG, buildPlanFeatureLines, type PublicPlan } from "@/lib/subscription-client";
 
 // Compartida por /dashboard/suscripcion y /onboarding/suscripcion — ambas
 // muestran los mismos planes reales (GET /api/plans), nunca datos inventados.
 export function PlanCard({ plan, isCurrent }: { plan: PublicPlan; isCurrent: boolean }) {
+  const subtitle = PLAN_SUBTITLE_BY_SLUG[plan.slug];
+
   return (
     <div
       className={cn(
@@ -15,7 +19,10 @@ export function PlanCard({ plan, isCurrent }: { plan: PublicPlan; isCurrent: boo
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-semibold text-foreground">{plan.name}</h3>
+        <h3 className="font-semibold text-foreground">
+          {plan.name}
+          {subtitle && <span className="ml-1.5 font-medium text-primary">— {subtitle}</span>}
+        </h3>
         {isCurrent && <Badge>Tu plan actual</Badge>}
       </div>
 
@@ -28,9 +35,14 @@ export function PlanCard({ plan, isCurrent }: { plan: PublicPlan; isCurrent: boo
 
       {plan.description && <p className="mt-2 text-sm text-muted-foreground">{plan.description}</p>}
 
-      <p className="mt-4 text-sm font-medium text-foreground">
-        {new Intl.NumberFormat("es-AR").format(plan.aiCredits)} respuestas de IA
-      </p>
+      <ul className="mt-4 space-y-2 text-sm text-foreground">
+        {buildPlanFeatureLines(plan).map((line) => (
+          <li key={line} className="flex items-start gap-2">
+            <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
+            {line}
+          </li>
+        ))}
+      </ul>
 
       <div className="mt-auto pt-4">
         {isCurrent ? (

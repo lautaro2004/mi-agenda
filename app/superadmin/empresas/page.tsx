@@ -69,16 +69,21 @@ const VALID_FILTERS: Filter[] = ["all", "onboarding_incomplete", "near_limit", "
 export default function SuperadminEmpresasPage() {
   const [q, setQ] = React.useState("");
   const [filter, setFilter] = React.useState<Filter>("all");
+  const [planSlug, setPlanSlug] = React.useState<string | null>(null);
   const [businesses, setBusinesses] = React.useState<AdminBusinessListItem[] | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   // Se lee de window.location en vez de useSearchParams() para no forzar un
   // boundary de Suspense en esta página — mismo criterio que
   // app/onboarding/horarios/page.tsx. Permite linkear acá con
-  // ?filter=... desde el Resumen (ver app/superadmin/page.tsx).
+  // ?filter=... desde el Resumen (ver app/superadmin/page.tsx) o
+  // ?plan=slug desde la columna "Empresas" de /superadmin/planes.
   React.useEffect(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get("filter") as Filter | null;
+    const search = new URLSearchParams(window.location.search);
+    const fromUrl = search.get("filter") as Filter | null;
     if (fromUrl && VALID_FILTERS.includes(fromUrl)) setFilter(fromUrl);
+    const plan = search.get("plan");
+    if (plan) setPlanSlug(plan);
   }, []);
 
   React.useEffect(() => {
@@ -86,6 +91,7 @@ export default function SuperadminEmpresasPage() {
     const params = new URLSearchParams();
     if (q.trim()) params.set("q", q.trim());
     if (filter !== "all") params.set("filter", filter);
+    if (planSlug) params.set("plan", planSlug);
 
     const timeout = setTimeout(() => {
       requestJson<{ businesses: AdminBusinessListItem[] }>(`/api/superadmin/empresas?${params.toString()}`)
@@ -95,11 +101,20 @@ export default function SuperadminEmpresasPage() {
     }, 250); // debounce simple para la búsqueda por texto
 
     return () => clearTimeout(timeout);
-  }, [q, filter]);
+  }, [q, filter, planSlug]);
 
   return (
     <div className="space-y-6">
       <PageHeader title="Empresas" description="Todos los negocios registrados en la plataforma." />
+
+      {planSlug && (
+        <div className="flex items-center gap-2 text-sm">
+          <Badge variant="secondary">Plan: {planSlug}</Badge>
+          <button type="button" onClick={() => setPlanSlug(null)} className="text-muted-foreground hover:text-foreground hover:underline">
+            Quitar filtro
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">

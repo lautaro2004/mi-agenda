@@ -66,9 +66,19 @@ model Business {
   depositTaxId         String?
   depositInstructions  String?
 
+  // ── Carta digital (ver modules/business/menu.ts) ────────────────────────
+  // Un solo PDF activo por negocio — mismo criterio que logoUrl/heroImageUrl
+  // (campo suelto, no un modelo aparte): no hay historial ni versiones, cada
+  // subida reemplaza a la anterior. menuEnabled es independiente de tener un
+  // PDF cargado (el dueño puede subir uno y dejarlo apagado hasta estar
+  // conforme), pero la página pública y el QR solo se activan con AMBOS.
+  menuEnabled Boolean @default(false)
+  menuPdfUrl  String?
+
   appointments   Appointment[]
   employee       Employee?
   faqs           FAQ[]
+  galleryBlocks  GalleryBlock[]
   memberships    Membership[]
   memoryEntries  MemoryEntry[]
   paymentProofs  PaymentProof[]
@@ -79,6 +89,49 @@ model Business {
   trainingConversations TrainingConversation[]
   seoConfig      SeoConfig?
   subscription   Subscription?
+}
+
+// Bloque visual reutilizable del sitio público (sección "Contenido visual")
+// — genérico a propósito, nunca atado a un rubro puntual: un restaurante lo
+// usa para "Nuestros platos", una peluquería para "Nuestro espacio". Con
+// active = false el bloque se conserva pero desaparece del sitio público sin
+// borrar nada (mismo criterio que Resource.active). "order" es un entero
+// simple con gaps aceptados (swap entre bloques adyacentes al reordenar, ver
+// modules/business/gallery.ts) — no hace falta más que eso para una lista
+// que un dueño reordena a mano, nunca miles de filas.
+model GalleryBlock {
+  id          String   @id @default(cuid())
+  businessId  String
+  title       String?
+  description String?
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  images   GalleryImage[]
+
+  @@index([businessId])
+  @@index([businessId, active])
+}
+
+// N imágenes por bloque (sección 1 de la tarea: "una o varias imágenes").
+// Igual que GalleryBlock, "order" es el orden dentro del bloque, reordenado
+// por swap entre adyacentes.
+model GalleryImage {
+  id        String   @id @default(cuid())
+  blockId   String
+  // URL pública de Storage (bucket "site-assets", kind "gallery" — ver
+  // lib/site-assets.ts). Nunca el binario, mismo criterio que el resto de
+  // las imágenes del sitio.
+  imageUrl  String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  block GalleryBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@index([blockId])
 }
 
 // Configuración SEO generada por IA a partir de datos reales del negocio —
@@ -551,6 +604,22 @@ model Plan {
   // aparte en Superadmin, nunca convertida a créditos ni viceversa. Ver
   // modules/billing/subscription.ts para cómo se aplica este número.
   aiCredits    Int      @default(40)
+
+  // ── Diferenciación comercial más allá de aiCredits ──────────────────────
+  // Cada campo está atado a un punto de enforcement real en el código (ver
+  // modules/billing/subscription.ts, resolvePlanFeatures()) — nunca se
+  // agregó uno "por las dudas". No hay una tabla de features genérica a
+  // propósito: con este puñado de columnas alcanza para todo lo que hoy
+  // tiene un gate real, y agregar una nueva más adelante es una migración
+  // chica, no una reestructuración.
+  //
+  // null = sin límite (Profesional). No confundir con 0.
+  maxServices           Int?
+  whatsappEnabled       Boolean  @default(true)
+  depositsEnabled       Boolean  @default(true)
+  customTrainingEnabled Boolean  @default(true)
+  statsEnabled          Boolean  @default(true)
+
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

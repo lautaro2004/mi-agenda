@@ -15,6 +15,7 @@ interface PublicHeaderProps {
   intent: BookingIntent;
   hasFaqs: boolean;
   hasSchedule: boolean;
+  hasMenu?: boolean;
   whatsappHref: string | null;
   bookingHref: string;
 }
@@ -29,13 +30,14 @@ const CTA_LABEL: Record<BookingIntent, string> = {
 // sección apuntan siempre a /s/[slug]#ancla (ruta completa, no solo #ancla),
 // así funcionan igual estés parado en la página principal o en la de
 // reserva.
-export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, whatsappHref, bookingHref }: PublicHeaderProps) {
+export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, hasMenu, whatsappHref, bookingHref }: PublicHeaderProps) {
   const [open, setOpen] = React.useState(false);
   const base = `/s/${slug}`;
   const hasBookable = intent !== "contact";
 
   const links = [
     { href: `${base}#servicios`, label: "Servicios" },
+    ...(hasMenu ? [{ href: `${base}/carta`, label: "Carta" }] : []),
     ...(hasSchedule ? [{ href: `${base}#horarios`, label: "Horarios" }] : []),
     ...(hasFaqs ? [{ href: `${base}#faq`, label: "Preguntas frecuentes" }] : []),
   ];

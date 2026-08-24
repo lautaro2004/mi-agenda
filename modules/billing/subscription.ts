@@ -38,6 +38,11 @@ export interface PlanSummary {
   monthlyPrice: number;
   currency: string;
   aiCredits: number;
+  maxServices: number | null;
+  whatsappEnabled: boolean;
+  depositsEnabled: boolean;
+  customTrainingEnabled: boolean;
+  statsEnabled: boolean;
   active: boolean;
 }
 
@@ -65,15 +70,7 @@ function toBusinessSubscription(row: SubscriptionWithPlan): BusinessSubscription
     currentPeriodEnd: row.currentPeriodEnd,
     provider: row.provider,
     providerSubscriptionId: row.providerSubscriptionId,
-    plan: {
-      id: row.plan.id,
-      name: row.plan.name,
-      slug: row.plan.slug,
-      monthlyPrice: row.plan.monthlyPrice,
-      currency: row.plan.currency,
-      aiCredits: row.plan.aiCredits,
-      active: row.plan.active,
-    },
+    plan: planToSummary(row.plan),
   };
 }
 
@@ -177,6 +174,49 @@ export async function resolveAiResponseLimit(businessId: string, mode: TrainingM
   return limitFromAccess(resolveAiAccess(sub), businessId, mode);
 }
 
+// ── Features por plan (más allá de aiCredits) ────────────────────────────
+// Separado a propósito de resolveAiAccess(): esto depende SOLO de qué
+// incluye el Plan, no del estado de la Subscription — un negocio con la
+// suscripción en past_due sigue viendo su configuración de WhatsApp/señas
+// (no se le apaga de golpe, solo se corta la IA, ver PlanBlock en
+// /dashboard/suscripcion). "Sin Subscription todavía" (dato legacy) deja
+// todo habilitado, mismo criterio que el fallback de resolveAiAccess: no
+// bloquear negocios preexistentes por una migración que no les asignó plan.
+export interface PlanFeatures {
+  maxServices: number | null;
+  whatsappEnabled: boolean;
+  depositsEnabled: boolean;
+  customTrainingEnabled: boolean;
+  statsEnabled: boolean;
+}
+
+const UNGATED_FEATURES: PlanFeatures = {
+  maxServices: null,
+  whatsappEnabled: true,
+  depositsEnabled: true,
+  customTrainingEnabled: true,
+  statsEnabled: true,
+};
+
+export function resolvePlanFeatures(sub: BusinessSubscription | null): PlanFeatures {
+  if (!sub) return UNGATED_FEATURES;
+  return {
+    maxServices: sub.plan.maxServices,
+    whatsappEnabled: sub.plan.whatsappEnabled,
+    depositsEnabled: sub.plan.depositsEnabled,
+    customTrainingEnabled: sub.plan.customTrainingEnabled,
+    statsEnabled: sub.plan.statsEnabled,
+  };
+}
+
+// Punto único que usan las rutas de API que gatean por feature — un solo
+// query (igual que resolveAiResponseLimit), nunca reimplementado inline en
+// cada route handler.
+export async function resolveBusinessPlanFeatures(businessId: string): Promise<PlanFeatures> {
+  const sub = await getSubscriptionWithPlan(businessId);
+  return resolvePlanFeatures(sub);
+}
+
 // Versión batch — usada por lib/superadmin/queries.ts para listas/overview.
 // Una sola query para todos los negocios pedidos (no una por negocio), y
 // limitFromAccess() es pura, así que el resto del cálculo no toca la base.
@@ -256,14 +296,8 @@ export async function listPlansForAdmin(): Promise<PlanWithUsage[]> {
   const countByPlan = new Map(counts.map((c) => [c.planId, c._count._all]));
 
   return plans.map((p) => ({
-    id: p.id,
-    name: p.name,
-    slug: p.slug,
+    ...planToSummary(p),
     description: p.description,
-    monthlyPrice: p.monthlyPrice,
-    currency: p.currency,
-    aiCredits: p.aiCredits,
-    active: p.active,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
     businessCount: countByPlan.get(p.id) ?? 0,
@@ -277,6 +311,12 @@ export interface PlanInput {
   monthlyPrice: number;
   currency: string;
   aiCredits: number;
+  // null/ausente = sin límite. Ver comentario en schema.prisma.
+  maxServices?: number | null;
+  whatsappEnabled?: boolean;
+  depositsEnabled?: boolean;
+  customTrainingEnabled?: boolean;
+  statsEnabled?: boolean;
   active?: boolean;
 }
 
@@ -289,6 +329,11 @@ export async function createPlan(data: PlanInput): Promise<PlanWithUsage> {
       monthlyPrice: data.monthlyPrice,
       currency: data.currency,
       aiCredits: data.aiCredits,
+      maxServices: data.maxServices ?? null,
+      whatsappEnabled: data.whatsappEnabled ?? true,
+      depositsEnabled: data.depositsEnabled ?? true,
+      customTrainingEnabled: data.customTrainingEnabled ?? true,
+      statsEnabled: data.statsEnabled ?? true,
       active: data.active ?? true,
     },
   });
@@ -308,6 +353,11 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
       ...(data.monthlyPrice !== undefined ? { monthlyPrice: data.monthlyPrice } : {}),
       ...(data.currency !== undefined ? { currency: data.currency } : {}),
       ...(data.aiCredits !== undefined ? { aiCredits: data.aiCredits } : {}),
+      ...(data.maxServices !== undefined ? { maxServices: data.maxServices } : {}),
+      ...(data.whatsappEnabled !== undefined ? { whatsappEnabled: data.whatsappEnabled } : {}),
+      ...(data.depositsEnabled !== undefined ? { depositsEnabled: data.depositsEnabled } : {}),
+      ...(data.customTrainingEnabled !== undefined ? { customTrainingEnabled: data.customTrainingEnabled } : {}),
+      ...(data.statsEnabled !== undefined ? { statsEnabled: data.statsEnabled } : {}),
       ...(data.active !== undefined ? { active: data.active } : {}),
     },
   });
@@ -316,7 +366,20 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
   return { ...planToSummary(plan), description: plan.description, createdAt: plan.createdAt.toISOString(), updatedAt: plan.updatedAt.toISOString(), businessCount: count };
 }
 
-function planToSummary(plan: { id: string; name: string; slug: string; monthlyPrice: number; currency: string; aiCredits: number; active: boolean }): PlanSummary {
+function planToSummary(plan: {
+  id: string;
+  name: string;
+  slug: string;
+  monthlyPrice: number;
+  currency: string;
+  aiCredits: number;
+  maxServices: number | null;
+  whatsappEnabled: boolean;
+  depositsEnabled: boolean;
+  customTrainingEnabled: boolean;
+  statsEnabled: boolean;
+  active: boolean;
+}): PlanSummary {
   return {
     id: plan.id,
     name: plan.name,
@@ -324,6 +387,11 @@ function planToSummary(plan: { id: string; name: string; slug: string; monthlyPr
     monthlyPrice: plan.monthlyPrice,
     currency: plan.currency,
     aiCredits: plan.aiCredits,
+    maxServices: plan.maxServices,
+    whatsappEnabled: plan.whatsappEnabled,
+    depositsEnabled: plan.depositsEnabled,
+    customTrainingEnabled: plan.customTrainingEnabled,
+    statsEnabled: plan.statsEnabled,
     active: plan.active,
   };
 }

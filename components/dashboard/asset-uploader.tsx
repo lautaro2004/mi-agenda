@@ -24,6 +24,11 @@ const LABEL: Record<SiteAssetKind, { change: string; upload: string }> = {
   logo: { change: "Cambiar logo", upload: "Subir logo" },
   hero: { change: "Cambiar imagen", upload: "Subir imagen" },
   service: { change: "Cambiar foto", upload: "Subir foto" },
+  // gallery/menu no usan este componente hoy (ver gallery-block-card.tsx y
+  // app/dashboard/sitio/carta/page.tsx, controles propios) — están acá solo
+  // para que el Record siga siendo exhaustivo sobre SiteAssetKind.
+  gallery: { change: "Cambiar foto", upload: "Subir foto" },
+  menu: { change: "Cambiar PDF", upload: "Subir PDF" },
 };
 
 // Persiste apenas se elige un archivo (sube, actualiza la referencia y

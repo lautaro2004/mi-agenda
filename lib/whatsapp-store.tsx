@@ -125,8 +125,12 @@ export function WhatsAppProvider({ children }: { children: React.ReactNode }) {
       loading,
       connect: async () => {
         const res = await fetch("/api/whatsapp/connect", { method: "POST" });
-        const data = (await res.json()) as { connection: WhatsAppConnection };
-        setState((prev) => ({ ...prev, connection: data.connection }));
+        const data = (await res.json()) as { connection?: WhatsAppConnection; error?: string };
+        // 403 por plan (ver app/api/whatsapp/connect/route.ts) u otro error:
+        // nunca se pisa el estado de conexión con un valor vacío/roto — se
+        // relanza para que la página lo muestre (ver WhatsAppConnectionPage).
+        if (!res.ok || !data.connection) throw new Error(data.error ?? "No pudimos conectar WhatsApp.");
+        setState((prev) => ({ ...prev, connection: data.connection! }));
       },
       disconnect: async () => {
         const res = await fetch("/api/whatsapp/disconnect", { method: "POST" });

@@ -17,8 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import Link from "next/link";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { requestJson } from "@/lib/api-client";
+import { useBusinessSubscription } from "@/lib/subscription-client";
 import { paymentSettingsSchema, type PaymentSettingsValues } from "@/lib/schemas";
 import type { Business } from "@/lib/types";
 
@@ -35,6 +37,8 @@ interface DepositSettingsCardProps {
 // sección 1/13 de la tarea).
 export function DepositSettingsCard({ business, onSaved }: DepositSettingsCardProps) {
   const [justSaved, setJustSaved] = React.useState(false);
+  const { data: subscriptionData } = useBusinessSubscription();
+  const depositsEnabled = subscriptionData?.subscription?.plan.depositsEnabled ?? true;
 
   const {
     register,
@@ -89,10 +93,29 @@ export function DepositSettingsCard({ business, onSaved }: DepositSettingsCardPr
           control={control}
           name="depositRequired"
           render={({ field }) => (
-            <Switch checked={field.value} onCheckedChange={field.onChange} aria-label="Pedir seña" />
+            <Switch
+              checked={field.value}
+              // Solo se bloquea intentar ACTIVARLA — si ya estaba activa (ej.
+              // el negocio bajó de plan con señas ya configuradas), se puede
+              // seguir apagando sin trabas.
+              onCheckedChange={(checked) => {
+                if (checked && !depositsEnabled) return;
+                field.onChange(checked);
+              }}
+              aria-label="Pedir seña"
+            />
           )}
         />
       </div>
+
+      {!depositsEnabled && !depositRequired && (
+        <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+          <p className="text-foreground">La gestión de señas y comprobantes está disponible desde el plan Esencial.</p>
+          <Link href="/dashboard/suscripcion" className="mt-1 inline-block font-medium text-[var(--brand-primary,var(--primary))] hover:underline">
+            Ver planes →
+          </Link>
+        </div>
+      )}
 
       {depositRequired && (
         <FieldGroup className="mt-5">

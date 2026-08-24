@@ -71,6 +71,9 @@ export interface Business {
   depositAccountHolder: string | null;
   depositTaxId: string | null;
   depositInstructions: string | null;
+  // ── Carta digital (ver modules/business/menu.ts) ────────────────────────
+  menuEnabled: boolean;
+  menuPdfUrl: string | null;
 }
 
 export const DEPOSIT_TYPES = ["fixed", "percentage"] as const;
@@ -145,6 +148,27 @@ export interface Resource {
   name: string;
   description: string | null;
   active: boolean;
+}
+
+// ---- Gallery block (contenido visual del sitio público) ----
+// Genérico a propósito, nunca atado a un rubro — ver comentario en
+// schema.prisma (modelo GalleryBlock).
+
+export interface GalleryImage {
+  id: string;
+  blockId: string;
+  imageUrl: string;
+  order: number;
+}
+
+export interface GalleryBlock {
+  id: string;
+  businessId: string;
+  title: string | null;
+  description: string | null;
+  order: number;
+  active: boolean;
+  images: GalleryImage[];
 }
 
 export interface FAQ {

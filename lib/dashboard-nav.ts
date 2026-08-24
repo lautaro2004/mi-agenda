@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Bot,
   Boxes,
   Brain,
@@ -8,11 +9,13 @@ import {
   FlaskConical,
   Globe,
   GraduationCap,
+  Images,
   LayoutDashboard,
   ListChecks,
   MessageCircleQuestion,
   MessageSquare,
   Plug,
+  ScrollText,
   Store,
   UserCog,
 } from "lucide-react";
@@ -25,6 +28,7 @@ export const DASHBOARD_NAV = [
   { href: "/dashboard/recursos", label: "Recursos", icon: Boxes },
   { href: "/dashboard/preguntas-frecuentes", label: "Preguntas frecuentes", icon: MessageCircleQuestion },
   { href: "/dashboard/turnos", label: "Turnos", icon: CalendarCheck2 },
+  { href: "/dashboard/estadisticas", label: "Estadísticas", icon: BarChart3 },
   {
     href: "/dashboard/whatsapp",
     label: "WhatsApp",
@@ -45,6 +49,15 @@ export const DASHBOARD_NAV = [
       { href: "/dashboard/ai-studio/simulator", label: "Simulador", icon: FlaskConical },
     ],
   },
-  { href: "/dashboard/sitio", label: "Sitio web", icon: Globe },
+  {
+    href: "/dashboard/sitio",
+    label: "Sitio web",
+    icon: Globe,
+    children: [
+      { href: "/dashboard/sitio", label: "Apariencia y SEO", icon: Globe },
+      { href: "/dashboard/sitio/galeria", label: "Contenido visual", icon: Images },
+      { href: "/dashboard/sitio/carta", label: "Carta digital", icon: ScrollText },
+    ],
+  },
   { href: "/dashboard/suscripcion", label: "Suscripción", icon: CreditCard },
 ] as const;

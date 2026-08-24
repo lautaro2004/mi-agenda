@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { planSchema, type PlanFormInput, type PlanFormValues } from "@/lib/schemas";
 
 interface PlanLike {
@@ -27,6 +27,11 @@ interface PlanLike {
   monthlyPrice: number;
   currency: string;
   aiCredits: number;
+  maxServices: number | null;
+  whatsappEnabled: boolean;
+  depositsEnabled: boolean;
+  customTrainingEnabled: boolean;
+  statsEnabled: boolean;
   active: boolean;
 }
 
@@ -48,6 +53,11 @@ export function PlanDialog({ trigger, plan, onSubmit }: PlanDialogProps) {
     monthlyPrice: plan?.monthlyPrice ?? 0,
     currency: plan?.currency ?? "ARS",
     aiCredits: plan?.aiCredits ?? 40,
+    maxServices: plan?.maxServices ?? null,
+    whatsappEnabled: plan?.whatsappEnabled ?? true,
+    depositsEnabled: plan?.depositsEnabled ?? true,
+    customTrainingEnabled: plan?.customTrainingEnabled ?? true,
+    statsEnabled: plan?.statsEnabled ?? true,
     active: plan?.active ?? true,
   };
 
@@ -136,6 +146,64 @@ export function PlanDialog({ trigger, plan, onSubmit }: PlanDialogProps) {
                 />
                 <FieldError errors={[errors.aiCredits]} />
               </Field>
+            </div>
+
+            <Field data-invalid={!!errors.maxServices}>
+              <FieldLabel htmlFor="plan-max-services">Máximo de servicios</FieldLabel>
+              <Controller
+                control={control}
+                name="maxServices"
+                render={({ field }) => (
+                  <Input
+                    id="plan-max-services"
+                    type="number"
+                    min="1"
+                    placeholder="Sin límite"
+                    value={typeof field.value === "number" ? field.value : ""}
+                    onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                  />
+                )}
+              />
+              <FieldDescription>Vacío = sin límite.</FieldDescription>
+              <FieldError errors={[errors.maxServices]} />
+            </Field>
+
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs font-medium text-muted-foreground">Funcionalidades incluidas</p>
+              <div className="mt-2 space-y-2.5">
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-whatsapp">WhatsApp</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="whatsappEnabled"
+                    render={({ field }) => <Switch id="plan-whatsapp" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-deposits">Señas y comprobantes</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="depositsEnabled"
+                    render={({ field }) => <Switch id="plan-deposits" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-training">Entrenamiento continuo de IA</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="customTrainingEnabled"
+                    render={({ field }) => <Switch id="plan-training" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-stats">Estadísticas</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="statsEnabled"
+                    render={({ field }) => <Switch id="plan-stats" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
+              </div>
             </div>
 
             <Field orientation="horizontal">

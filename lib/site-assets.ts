@@ -9,6 +9,7 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
+  "application/pdf": "pdf",
 };
 
 function extensionFor(mimeType: string): string {
@@ -77,14 +78,22 @@ let bucketReady = false;
 // contenedor, mismo espíritu que el singleton de lib/prisma.ts) — se llama
 // antes de cada upload en vez de depender de que alguien haya corrido un
 // setup manual antes.
+//
+// Si el bucket YA existe, igual hace falta un updateBucket(): la política
+// de mime types permitidos queda fija en Supabase desde que se creó, así
+// que agregar un SiteAssetKind nuevo (ej. "menu" con PDF) en el código
+// nunca alcanza solo — Supabase seguiría rechazando ese mime type con un
+// bucket viejo si no se sincroniza acá. Bug real encontrado al agregar
+// "menu": el bucket ya existía sin "application/pdf" en su allowlist.
 export async function ensureBucketExists(): Promise<void> {
   if (bucketReady) return;
 
   const admin = getSupabaseAdmin();
+  const allMimeTypes = Array.from(new Set(Object.values(ASSET_LIMITS).flatMap((l) => l.mimeTypes)));
+  const maxBytes = Math.max(...Object.values(ASSET_LIMITS).map((l) => l.maxBytes));
+
   const { data } = await admin.storage.getBucket(SITE_ASSETS_BUCKET);
   if (!data) {
-    const allMimeTypes = Array.from(new Set(Object.values(ASSET_LIMITS).flatMap((l) => l.mimeTypes)));
-    const maxBytes = Math.max(...Object.values(ASSET_LIMITS).map((l) => l.maxBytes));
     const { error: createError } = await admin.storage.createBucket(SITE_ASSETS_BUCKET, {
       public: true,
       fileSizeLimit: maxBytes,
@@ -92,6 +101,20 @@ export async function ensureBucketExists(): Promise<void> {
     });
     if (createError && !/already exists/i.test(createError.message)) {
       throw new Error(`No pudimos preparar el almacenamiento de imágenes: ${createError.message}`);
+    }
+  } else {
+    // getBucket() devuelve snake_case (allowed_mime_types/file_size_limit) —
+    // distinto de las opciones camelCase que aceptan create/updateBucket.
+    const missingMimeTypes = allMimeTypes.some((mime) => !data.allowed_mime_types?.includes(mime));
+    if (missingMimeTypes || (data.file_size_limit ?? 0) < maxBytes) {
+      const { error: updateError } = await admin.storage.updateBucket(SITE_ASSETS_BUCKET, {
+        public: true,
+        fileSizeLimit: maxBytes,
+        allowedMimeTypes: allMimeTypes,
+      });
+      if (updateError) {
+        throw new Error(`No pudimos actualizar el almacenamiento de imágenes: ${updateError.message}`);
+      }
     }
   }
 

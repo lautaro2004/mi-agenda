@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { getBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { getActiveServiceResources } from "@/modules/business/resource";
+import { listActiveGalleryBlocks } from "@/modules/business/gallery";
 import { buildFallbackSeoConfig, buildLocalBusinessJsonLd, getSeoConfig } from "@/modules/business/seo";
 import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,8 @@ import { BookingHero } from "@/components/public-site/booking/booking-hero";
 import { BookingPageClient } from "@/components/public-site/booking/booking-page-client";
 import { BookingImportantInfo } from "@/components/public-site/booking/booking-important-info";
 import { BookingStickyCta } from "@/components/public-site/booking/booking-sticky-cta";
+import { GallerySection } from "@/components/public-site/gallery-section";
+import { MenuCallout } from "@/components/public-site/menu-callout";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -49,9 +52,13 @@ async function loadSite(slug: string) {
   const businessId = await getBusinessIdBySlug(slug);
   if (!businessId) return null;
 
-  const [state, seo] = await Promise.all([getBusinessState(businessId), getSeoConfig(businessId)]);
+  const [state, seo, galleryBlocks] = await Promise.all([
+    getBusinessState(businessId),
+    getSeoConfig(businessId),
+    listActiveGalleryBlocks(businessId),
+  ]);
 
-  return { ...state, seo };
+  return { ...state, seo, galleryBlocks };
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -88,8 +95,13 @@ export default async function PublicSitePage({ params }: PageProps) {
   const site = await loadSite(slug);
   if (!site) notFound();
 
-  const { business, services, faqs, schedule } = site;
+  const { business, services, faqs, schedule, galleryBlocks } = site;
   const seo = site.seo ?? buildFallbackSeoConfig(business);
+  // Misma regla en las tres piezas (header, callout, QR): la carta solo
+  // "existe" para un visitante cuando está activa Y tiene un PDF real — ver
+  // sección 6 de la tarea, nunca mostrar el CTA de una carta a medio
+  // configurar.
+  const hasMenu = business.menuEnabled && !!business.menuPdfUrl;
   const bookableServices = services.filter(isBookableService);
   // Genérico, no depende del rubro ni del negocio puntual — ver
   // lib/booking-intent.ts. Decide si la web habla de "reservar un turno"
@@ -141,6 +153,7 @@ export default async function PublicSitePage({ params }: PageProps) {
         intent={intent}
         hasFaqs={faqs.length > 0}
         hasSchedule={schedule.some((d) => d.enabled)}
+        hasMenu={hasMenu}
         whatsappHref={whatsappHref}
         bookingHref={bookingHref}
       />
@@ -160,6 +173,8 @@ export default async function PublicSitePage({ params }: PageProps) {
             whatsappHref={whatsappHref}
           />
           <BookingImportantInfo business={business} whatsappHref={whatsappHref} />
+          {hasMenu && <MenuCallout slug={slug} />}
+          <GallerySection blocks={galleryBlocks} />
           <ScheduleSection schedule={schedule} />
           <FaqSection faqs={faqs} limit={5} />
         </main>
@@ -178,6 +193,8 @@ export default async function PublicSitePage({ params }: PageProps) {
           />
           <AboutSection description={business.description} />
           <ServicesSection services={visibleServices} slug={slug} whatsappNumber={business.whatsappNumber} />
+          {hasMenu && <MenuCallout slug={slug} />}
+          <GallerySection blocks={galleryBlocks} />
           <ProcessSection intent={intent} />
           <BookingSection services={bookableServices} intent={intent} bookingHref={bookingHref} whatsappHref={whatsappHref} />
           <ScheduleSection schedule={schedule} />

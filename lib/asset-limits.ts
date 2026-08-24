@@ -7,8 +7,12 @@
 // "service" = foto de un Service puntual (ver modules/business/service-images.ts)
 // — mismo bucket que logo/hero, pero con su propio endpoint porque no es 1:1
 // con un campo fijo de Business, sino con un service.id (ver
-// app/api/business/services/[id]/image/route.ts).
-export type SiteAssetKind = "logo" | "hero" | "service";
+// app/api/business/services/[id]/image/route.ts). "gallery" = imágenes de
+// GalleryBlock (mismo criterio, escala por blockId). "menu" = PDF de la
+// carta digital (ver modules/business/menu.ts) — único kind que no es
+// imagen, mismo bucket público igual: una carta de restaurante no es
+// información sensible.
+export type SiteAssetKind = "logo" | "hero" | "service" | "gallery" | "menu";
 
 export const ASSET_LIMITS: Record<SiteAssetKind, { maxBytes: number; mimeTypes: string[] }> = {
   logo: {
@@ -22,5 +26,16 @@ export const ASSET_LIMITS: Record<SiteAssetKind, { maxBytes: number; mimeTypes: 
   service: {
     maxBytes: 2 * 1024 * 1024,
     mimeTypes: ["image/png", "image/jpeg", "image/webp"],
+  },
+  gallery: {
+    maxBytes: 3 * 1024 * 1024,
+    mimeTypes: ["image/png", "image/jpeg", "image/webp"],
+  },
+  // Mismo límite que ya usa lib/document-limits.ts para PDF (knowledge
+  // documents) — un tamaño "razonable" ya validado en este mismo proyecto,
+  // no un número inventado de nuevo.
+  menu: {
+    maxBytes: 10 * 1024 * 1024,
+    mimeTypes: ["application/pdf"],
   },
 };

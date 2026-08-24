@@ -32,6 +32,8 @@ export const emptyBusiness: Business = {
   depositAccountHolder: null,
   depositTaxId: null,
   depositInstructions: null,
+  menuEnabled: false,
+  menuPdfUrl: null,
 };
 
 export const defaultSchedule: BusinessSchedule = WEEK_DAYS.map((day) => ({

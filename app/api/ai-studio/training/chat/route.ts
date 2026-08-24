@@ -4,8 +4,12 @@ import { getCurrentBusinessId } from "@/modules/business/current";
 import { runTrainingTurn } from "@/modules/employee/training/engine";
 import { getClientMessages } from "@/modules/employee/training/conversation";
 import { getTrainingPlan } from "@/modules/employee/training-plan";
+import { resolveBusinessPlanFeatures } from "@/modules/billing/subscription";
 import { MAX_MESSAGE_LENGTH } from "@/lib/ai-limits";
 import type { TrainingMode } from "@/modules/ai/prompt/training";
+
+const CUSTOM_TRAINING_BLOCKED_REPLY =
+  "El re-entrenamiento libre del asistente está disponible desde el plan Esencial. La configuración inicial (onboarding) siempre queda disponible — para entrenarlo con más detalle después, mejorá tu plan desde /dashboard/suscripcion.";
 
 interface ChatRequestBody {
   mode?: string;
@@ -55,6 +59,20 @@ export async function POST(request: Request) {
   }
 
   const mode = parseMode(body.mode ?? null);
+
+  // Onboarding SIEMPRE queda disponible (toda cuenta nueva, sin importar el
+  // plan, tiene que poder terminar de configurar su negocio) — el gate es
+  // solo sobre "continuous" (re-entrenamiento libre post-onboarding, ver
+  // /dashboard/ai-studio/training). Reusa el mismo contrato que el corte por
+  // límite de mensajes (limitReached) para que el chat existente lo
+  // muestre sin lógica nueva — upgradeRequired solo cambia el copy/CTA.
+  if (mode === "continuous") {
+    const features = await resolveBusinessPlanFeatures(businessId);
+    if (!features.customTrainingEnabled) {
+      const plan = await getTrainingPlan(businessId);
+      return NextResponse.json({ reply: CUSTOM_TRAINING_BLOCKED_REPLY, proposal: null, limitReached: true, upgradeRequired: true, plan });
+    }
+  }
 
   try {
     const result = await runTrainingTurn({ businessId, mode, message });

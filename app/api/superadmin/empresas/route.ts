@@ -18,7 +18,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q")?.trim() || undefined;
   const filter = parseFilter(searchParams.get("filter"));
+  const planSlug = searchParams.get("plan")?.trim() || undefined;
 
-  const businesses = await listBusinessesForAdmin({ q, filter });
+  const businesses = await listBusinessesForAdmin({ q, filter, planSlug });
   return NextResponse.json({ businesses });
 }

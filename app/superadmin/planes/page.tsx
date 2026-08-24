@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil, Plus } from "lucide-react";
 
@@ -20,9 +21,21 @@ interface PlanWithUsage {
   monthlyPrice: number;
   currency: string;
   aiCredits: number;
+  maxServices: number | null;
+  whatsappEnabled: boolean;
+  depositsEnabled: boolean;
+  customTrainingEnabled: boolean;
+  statsEnabled: boolean;
   active: boolean;
   businessCount: number;
 }
+
+const FEATURE_LABEL: Record<"whatsappEnabled" | "depositsEnabled" | "customTrainingEnabled" | "statsEnabled", string> = {
+  whatsappEnabled: "WhatsApp",
+  depositsEnabled: "Señas",
+  customTrainingEnabled: "Entrenamiento",
+  statsEnabled: "Estadísticas",
+};
 
 const numberFormatter = new Intl.NumberFormat("es-AR");
 
@@ -98,6 +111,7 @@ export default function SuperadminPlanesPage() {
               <th className="px-4 py-3 font-medium">Plan</th>
               <th className="px-4 py-3 font-medium">Precio</th>
               <th className="px-4 py-3 font-medium">Créditos IA</th>
+              <th className="px-4 py-3 font-medium">Funcionalidades</th>
               <th className="px-4 py-3 font-medium">Empresas</th>
               <th className="px-4 py-3 font-medium">Estado</th>
               <th className="px-4 py-3 font-medium" />
@@ -107,14 +121,14 @@ export default function SuperadminPlanesPage() {
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3" colSpan={6}>
+                  <td className="px-4 py-3" colSpan={7}>
                     <Skeleton className="h-5 w-full" />
                   </td>
                 </tr>
               ))
             ) : !plans || plans.length === 0 ? (
               <tr>
-                <td className="px-4 py-8 text-center text-muted-foreground" colSpan={6}>
+                <td className="px-4 py-8 text-center text-muted-foreground" colSpan={7}>
                   Todavía no hay planes creados.
                 </td>
               </tr>
@@ -129,7 +143,27 @@ export default function SuperadminPlanesPage() {
                     {plan.monthlyPrice > 0 ? `${formatPrice(plan.monthlyPrice, plan.currency)} / mes` : "Gratis"}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{numberFormatter.format(plan.aiCredits)}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{numberFormatter.format(plan.businessCount)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(Object.keys(FEATURE_LABEL) as (keyof typeof FEATURE_LABEL)[])
+                        .filter((key) => plan[key])
+                        .map((key) => (
+                          <Badge key={key} variant="outline" className="text-[11px]">
+                            {FEATURE_LABEL[key]}
+                          </Badge>
+                        ))}
+                      {plan.maxServices !== null && (
+                        <Badge variant="outline" className="text-[11px]">
+                          Hasta {plan.maxServices} servicios
+                        </Badge>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    <Link href={`/superadmin/empresas?plan=${plan.slug}`} className="underline-offset-2 hover:text-foreground hover:underline">
+                      {numberFormatter.format(plan.businessCount)}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3">
                     <Badge variant={plan.active ? "secondary" : "outline"}>{plan.active ? "Activo" : "Inactivo"}</Badge>
                   </td>

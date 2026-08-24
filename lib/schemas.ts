@@ -373,6 +373,22 @@ export const resourceSchema = z.object({
 
 export type ResourceFormValues = z.infer<typeof resourceSchema>;
 
+// Título y descripción opcionales a propósito (sección 1 de la tarea): un
+// bloque puede ser solo fotos, sin texto. Sin campo "active" acá — eso se
+// togglea aparte (ver galleryBlockUpdateSchema), nunca al crear.
+export const galleryBlockSchema = z.object({
+  title: z.string().max(80, "El título es demasiado largo").optional(),
+  description: z.string().max(240, "La descripción es demasiado larga").optional(),
+});
+
+export type GalleryBlockFormValues = z.infer<typeof galleryBlockSchema>;
+
+export const galleryBlockUpdateSchema = galleryBlockSchema.extend({
+  active: z.boolean().optional(),
+});
+
+export type GalleryBlockUpdateValues = z.infer<typeof galleryBlockUpdateSchema>;
+
 // Reemplaza el conjunto completo de recursos vinculados a un servicio (mismo
 // patrón que replaceSchedule): más simple y menos propenso a errores que
 // exponer add/remove individuales para una lista chica.
@@ -414,6 +430,12 @@ export const planSchema = z.object({
   // Cantidad de respuestas de IA, no tokens — ver comentario en el modelo
   // Plan (prisma/schema.prisma) y modules/billing/subscription.ts.
   aiCredits: z.coerce.number().int().min(1, "Necesita al menos 1 crédito"),
+  // vacío/null = sin límite — ver comentario en el modelo Plan.
+  maxServices: z.coerce.number().int().min(1).nullable(),
+  whatsappEnabled: z.boolean().default(true),
+  depositsEnabled: z.boolean().default(true),
+  customTrainingEnabled: z.boolean().default(true),
+  statsEnabled: z.boolean().default(true),
   active: z.boolean().default(true),
 });
 

@@ -44,7 +44,17 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
               {children && isActive && (
                 <div className="mt-1 ml-4 flex flex-col gap-1 border-l border-border pl-3">
                   {children.map((child) => {
-                    const isChildActive = pathname.startsWith(child.href);
+                    // El grupo "Sitio web" reutiliza el href del padre como
+                    // uno de sus propios hijos ("Apariencia y SEO" vive en
+                    // /dashboard/sitio, la misma página que representa el
+                    // grupo) — con solo startsWith(), /dashboard/sitio/galeria
+                    // también matchea contra ESE hijo (es un prefijo real de
+                    // su propio path), marcando dos entradas activas a la
+                    // vez. Ese hijo en particular solo puede matchear exacto;
+                    // el resto sigue aceptando sub-rutas propias si algún día
+                    // las tuvieran.
+                    const isChildActive =
+                      pathname === child.href || (child.href !== item.href && pathname.startsWith(child.href));
 
                     return (
                       <Link

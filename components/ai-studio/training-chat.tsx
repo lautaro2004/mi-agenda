@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api-client";
 import { useOnboarding } from "@/lib/onboarding-store";
+import { useBusinessSubscription } from "@/lib/subscription-client";
 import type { TrainingPlan } from "@/lib/types";
 import type { TrainingMode } from "@/modules/employee/training/engine";
 import type { TrainingProposal } from "@/modules/employee/training/proposal";
@@ -44,6 +45,7 @@ export function TrainingChat({
   onProposalApplied?: (plan: TrainingPlan | null) => void;
 }) {
   const { refresh: refreshBusinessState } = useOnboarding();
+  const { data: subscriptionData } = useBusinessSubscription();
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = React.useState(true);
   const [proposal, setProposal] = React.useState<TrainingProposal | null>(null);
@@ -55,6 +57,10 @@ export function TrainingChat({
   // mostrando el input ni los botones de la sección — el dueño sigue desde
   // el dashboard.
   const [limitReached, setLimitReached] = React.useState(false);
+  // Mismo corte que limitReached (deshabilita input, mismo layout) pero por
+  // plan en vez de por cantidad de mensajes — ver
+  // app/api/ai-studio/training/chat/route.ts. Solo cambia el copy/CTA.
+  const [upgradeRequired, setUpgradeRequired] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
@@ -101,6 +107,16 @@ export function TrainingChat({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, proposal, chatError]);
 
+  // Bloqueo proactivo: si el plan no incluye re-entrenamiento libre, no hace
+  // falta que el dueño escriba un mensaje para enterarse — se corta apenas
+  // se conoce el plan, con el mismo layout que el corte por mensajes.
+  React.useEffect(() => {
+    if (mode === "continuous" && subscriptionData?.subscription && !subscriptionData.subscription.plan.customTrainingEnabled) {
+      setLimitReached(true);
+      setUpgradeRequired(true);
+    }
+  }, [mode, subscriptionData]);
+
   async function sendTurn(text: string) {
     setSending(true);
     setChatError(null);
@@ -110,11 +126,13 @@ export function TrainingChat({
         reply: string;
         proposal: TrainingProposal | null;
         limitReached: boolean;
+        upgradeRequired?: boolean;
         plan: TrainingPlan | null;
       }>("/api/ai-studio/training/chat", { method: "POST", body: JSON.stringify({ mode, message: text }) });
       setMessages((prev) => [...prev, { role: "ai", text: result.reply }]);
       setProposal(result.proposal);
       setLimitReached(result.limitReached);
+      setUpgradeRequired(!!result.upgradeRequired);
       onProposalApplied?.(result.plan);
     } catch (error) {
       setChatError({
@@ -298,9 +316,15 @@ export function TrainingChat({
             {limitReached && (
               <div className="ml-1 max-w-[80%] rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
                 <p className="text-sm text-foreground">
-                  Llegamos al máximo de mensajes para esta charla. Guardamos todo lo que ya contaste — lo que quedó
-                  pendiente lo podés completar cuando quieras desde el panel.
+                  {upgradeRequired
+                    ? "El re-entrenamiento libre está disponible desde el plan Esencial."
+                    : "Llegamos al máximo de mensajes para esta charla. Guardamos todo lo que ya contaste — lo que quedó pendiente lo podés completar cuando quieras desde el panel."}
                 </p>
+                {upgradeRequired && (
+                  <Button size="sm" className="mt-3" render={<a href="/dashboard/suscripcion" />} nativeButton={false}>
+                    Ver planes
+                  </Button>
+                )}
               </div>
             )}
 

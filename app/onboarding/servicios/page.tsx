@@ -87,7 +87,11 @@ export default function ServicesStepPage() {
         </div>
 
         <ServiceDialog
-          onSubmit={(values) => addService(values).catch(() => toast.error("No pudimos agregar el servicio."))}
+          onSubmit={(values) =>
+            addService(values).catch((error) =>
+              toast.error(error instanceof Error ? error.message : "No pudimos agregar el servicio.")
+            )
+          }
           trigger={
             <Button>
               <Plus className="size-4" data-icon="inline-start" />

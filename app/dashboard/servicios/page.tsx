@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Plus, PackageOpen } from "lucide-react";
@@ -11,9 +12,13 @@ import { ServiceCard } from "@/components/onboarding/service-card";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOnboarding } from "@/lib/onboarding-store";
+import { useBusinessSubscription } from "@/lib/subscription-client";
 
 export default function ServicesSettingsPage() {
   const { state, hydrated, refresh, addService, updateService, removeService } = useOnboarding();
+  const { data: subscriptionData } = useBusinessSubscription();
+  const maxServices = subscriptionData?.subscription?.plan.maxServices ?? null;
+  const atLimit = maxServices !== null && state.services.length >= maxServices;
 
   // El estado de OnboardingProvider es una foto tomada al loguearse (vive en
   // la raíz de la app, no se remonta al navegar) — si el negocio se entrenó
@@ -28,24 +33,34 @@ export default function ServicesSettingsPage() {
     <div>
       <PageHeader
         title="Servicios"
-        description="Estos son los servicios que tus clientes podrán reservar por WhatsApp."
+        description={
+          maxServices !== null
+            ? `Estos son los servicios que tus clientes podrán reservar por WhatsApp. ${state.services.length}/${maxServices} usados en tu plan.`
+            : "Estos son los servicios que tus clientes podrán reservar por WhatsApp."
+        }
         action={
-          <ServiceDialog
-            onSubmit={async (values) => {
-              try {
-                await addService(values);
-                toast.success("Servicio agregado");
-              } catch {
-                toast.error("No pudimos agregar el servicio. Intentá de nuevo.");
+          atLimit ? (
+            <Button render={<Link href="/dashboard/suscripcion" />} nativeButton={false}>
+              Mejorar plan para agregar más
+            </Button>
+          ) : (
+            <ServiceDialog
+              onSubmit={async (values) => {
+                try {
+                  await addService(values);
+                  toast.success("Servicio agregado");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "No pudimos agregar el servicio. Intentá de nuevo.");
+                }
+              }}
+              trigger={
+                <Button>
+                  <Plus className="size-4" data-icon="inline-start" />
+                  Agregar
+                </Button>
               }
-            }}
-            trigger={
-              <Button>
-                <Plus className="size-4" data-icon="inline-start" />
-                Agregar
-              </Button>
-            }
-          />
+            />
+          )
         }
       />
 

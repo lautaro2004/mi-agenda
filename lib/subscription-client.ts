@@ -19,6 +19,14 @@ export interface SubscriptionPlanInfo {
   // Cantidad de respuestas de IA permitidas — no tokens (ver AiUsageEvent
   // para el consumo real en tokens, que se muestra aparte).
   aiCredits: number;
+  // Diferenciación comercial más allá de aiCredits — ver
+  // modules/billing/subscription.ts (resolvePlanFeatures). null en
+  // maxServices = sin límite.
+  maxServices: number | null;
+  whatsappEnabled: boolean;
+  depositsEnabled: boolean;
+  customTrainingEnabled: boolean;
+  statsEnabled: boolean;
   active: boolean;
 }
 
@@ -65,6 +73,32 @@ export function useBusinessSubscription() {
 
 export interface PublicPlan extends SubscriptionPlanInfo {
   description: string | null;
+}
+
+// Copy comercial compartido entre components/landing/pricing-cards.tsx
+// (landing pública) y components/subscription-plan-card.tsx
+// (/dashboard/suscripcion y /onboarding/suscripcion) — una sola fuente para
+// que el subtítulo y los bullets de cada plan nunca queden desincronizados
+// entre esas dos vistas. Mapeado por slug porque es puro copy, no una regla
+// de negocio: un plan nuevo sin entrada acá simplemente no tiene subtítulo.
+export const PLAN_SUBTITLE_BY_SLUG: Record<string, string> = {
+  gratis: "Probalo",
+  esencial: "Atendé",
+  profesional: "Automatizá",
+};
+
+// Bullets generados a partir de datos REALES del Plan — nunca el mismo
+// texto fijo para los 4 planes (ver resolvePlanFeatures en
+// modules/billing/subscription.ts, mismo criterio que usan los gates).
+export function buildPlanFeatureLines(plan: SubscriptionPlanInfo): string[] {
+  const lines = ["Sitio web y reservas online"];
+  lines.push(plan.whatsappEnabled ? "WhatsApp con IA" : "Asistente IA básico (sin WhatsApp)");
+  if (plan.depositsEnabled) lines.push("Señas y comprobantes de pago");
+  if (plan.customTrainingEnabled) lines.push("Entrenamiento personalizado del asistente");
+  if (plan.statsEnabled) lines.push("Estadísticas de tu negocio");
+  lines.push(plan.maxServices !== null ? `Hasta ${plan.maxServices} servicios` : "Servicios ilimitados");
+  lines.push(`${new Intl.NumberFormat("es-AR").format(plan.aiCredits)} respuestas de IA / mes`);
+  return lines;
 }
 
 export function useActivePlans() {

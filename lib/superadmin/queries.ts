@@ -523,11 +523,18 @@ export type AdminBusinessFilter = "all" | "onboarding_incomplete" | "near_limit"
 export async function listBusinessesForAdmin(params: {
   q?: string;
   filter?: AdminBusinessFilter;
+  // Slug de Plan — ver el link "Empresas" en /superadmin/planes. Filtra por
+  // la Subscription actual del negocio (relación 1:1 ya existente), no
+  // necesita un query aparte.
+  planSlug?: string;
 }): Promise<AdminBusinessListItem[]> {
-  const { q, filter = "all" } = params;
+  const { q, filter = "all", planSlug } = params;
 
   const businesses = await prisma.business.findMany({
-    where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
+    where: {
+      ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+      ...(planSlug ? { subscription: { plan: { slug: planSlug } } } : {}),
+    },
     orderBy: { createdAt: "desc" },
     take: 300,
     select: { id: true, name: true, slug: true, category: true, createdAt: true },

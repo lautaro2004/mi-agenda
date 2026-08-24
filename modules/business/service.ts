@@ -42,6 +42,8 @@ function toClientBusiness(
     depositAccountHolder: row?.depositAccountHolder ?? null,
     depositTaxId: row?.depositTaxId ?? null,
     depositInstructions: row?.depositInstructions ?? null,
+    menuEnabled: row?.menuEnabled ?? false,
+    menuPdfUrl: row?.menuPdfUrl ?? null,
   };
 }
 

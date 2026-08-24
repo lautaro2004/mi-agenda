@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { toast } from "sonner";
 import { CheckCircle2, Loader2, MessageSquare, Smartphone, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +11,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConnectionStatusBadge } from "@/components/whatsapp/connection-status-badge";
 import { useWhatsApp } from "@/lib/whatsapp-store";
+import { useBusinessSubscription } from "@/lib/subscription-client";
 
 const LINK_STEPS = [
   "Abrí WhatsApp en tu teléfono",
@@ -20,6 +23,18 @@ const LINK_STEPS = [
 export default function WhatsAppConnectionPage() {
   const { state, loading, connect, disconnect, setAiEnabled } = useWhatsApp();
   const { connection } = state;
+  const { data: subscriptionData } = useBusinessSubscription();
+  // undefined mientras carga: no bloqueamos el botón antes de saber el plan
+  // real (evita un parpadeo "no podés" → "sí podés" apenas llega la data).
+  const whatsappEnabled = subscriptionData?.subscription?.plan.whatsappEnabled ?? true;
+
+  async function handleConnect() {
+    try {
+      await connect();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No pudimos conectar WhatsApp.");
+    }
+  }
 
   if (loading) {
     return (
@@ -63,9 +78,18 @@ export default function WhatsAppConnectionPage() {
                 Conectá el WhatsApp de tu negocio para que Mi Agenda pueda recibir y responder mensajes
                 automáticamente.
               </p>
-              <Button className="mt-6" onClick={connect}>
-                Conectar WhatsApp
-              </Button>
+              {whatsappEnabled ? (
+                <Button className="mt-6" onClick={() => void handleConnect()}>
+                  Conectar WhatsApp
+                </Button>
+              ) : (
+                <div className="mt-6 max-w-sm rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+                  <p className="text-foreground">Conectar WhatsApp está disponible desde el plan Esencial.</p>
+                  <Button size="sm" className="mt-3" render={<Link href="/dashboard/suscripcion" />} nativeButton={false}>
+                    Ver planes
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -151,7 +175,7 @@ export default function WhatsAppConnectionPage() {
               </div>
               <h4 className="mt-4 text-base font-semibold text-foreground">No pudimos conectar tu WhatsApp</h4>
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">{connection.lastError}</p>
-              <Button className="mt-6" onClick={connect}>
+              <Button className="mt-6" onClick={() => void handleConnect()}>
                 Reintentar
               </Button>
             </div>
