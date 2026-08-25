@@ -71,7 +71,7 @@ export function BookingModal({
             "fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-border bg-popover shadow-xl outline-none",
             "data-open:animate-in data-open:slide-in-from-bottom data-open:duration-200",
             "data-closed:animate-out data-closed:slide-out-to-bottom data-closed:duration-150",
-            "sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border",
+            "sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-[560px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border",
             "sm:data-open:slide-in-from-bottom-0 sm:data-open:zoom-in-95 sm:data-open:fade-in-0",
             "sm:data-closed:slide-out-to-bottom-0 sm:data-closed:zoom-out-95 sm:data-closed:fade-out-0"
           )}

@@ -19,6 +19,15 @@ function superadminEmails(): Set<string> {
   );
 }
 
+// Chequeo puro (sin sesión/DB) — separado de getSuperadminSession() para que
+// código que YA tiene una sesión en mano (ej. app/dashboard/layout.tsx)
+// pueda preguntar "¿este email es superadmin?" sin pagar un segundo
+// auth.api.getSession() redundante.
+export function isSuperadminEmail(email: string): boolean {
+  const allowlist = superadminEmails();
+  return allowlist.size > 0 && allowlist.has(email.toLowerCase());
+}
+
 export interface SuperadminSession {
   userId: string;
   email: string;
@@ -32,10 +41,7 @@ export interface SuperadminSession {
 export async function getSuperadminSession(): Promise<SuperadminSession | null> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
-
-  const allowlist = superadminEmails();
-  if (allowlist.size === 0) return null;
-  if (!allowlist.has(session.user.email.toLowerCase())) return null;
+  if (!isSuperadminEmail(session.user.email)) return null;
 
   return { userId: session.user.id, email: session.user.email, name: session.user.name };
 }

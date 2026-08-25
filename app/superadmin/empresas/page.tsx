@@ -2,13 +2,16 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { toast } from "sonner";
+import { Search, Sparkles } from "lucide-react";
 
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { GrantBenefitDialog } from "@/components/superadmin/grant-benefit-dialog";
 import { requestJson } from "@/lib/api-client";
 
 interface PlanUsageInfo {
@@ -19,6 +22,7 @@ interface PlanUsageInfo {
   aiCreditsLimit: number | null;
   aiUsedThisPeriod: number;
   aiUsagePercent: number | null;
+  benefitExpiresAt: string | null;
 }
 
 interface AdminBusinessListItem {
@@ -86,21 +90,29 @@ export default function SuperadminEmpresasPage() {
     if (plan) setPlanSlug(plan);
   }, []);
 
-  React.useEffect(() => {
-    setLoading(true);
+  const currentParams = React.useCallback(() => {
     const params = new URLSearchParams();
     if (q.trim()) params.set("q", q.trim());
     if (filter !== "all") params.set("filter", filter);
     if (planSlug) params.set("plan", planSlug);
+    return params;
+  }, [q, filter, planSlug]);
 
-    const timeout = setTimeout(() => {
-      requestJson<{ businesses: AdminBusinessListItem[] }>(`/api/superadmin/empresas?${params.toString()}`)
-        .then(({ businesses }) => setBusinesses(businesses))
-        .catch(() => setBusinesses([]))
-        .finally(() => setLoading(false));
-    }, 250); // debounce simple para la búsqueda por texto
+  // Recarga inmediata (sin debounce) — usada después de otorgar un
+  // beneficio, para que la tabla refleje el plan/badge nuevo sin esperar el
+  // debounce de búsqueda.
+  const reload = React.useCallback(() => {
+    setLoading(true);
+    requestJson<{ businesses: AdminBusinessListItem[] }>(`/api/superadmin/empresas?${currentParams().toString()}`)
+      .then(({ businesses }) => setBusinesses(businesses))
+      .catch(() => setBusinesses([]))
+      .finally(() => setLoading(false));
+  }, [currentParams]);
 
+  React.useEffect(() => {
+    const timeout = setTimeout(reload, 250); // debounce simple para la búsqueda por texto
     return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, filter, planSlug]);
 
   return (
@@ -151,20 +163,21 @@ export default function SuperadminEmpresasPage() {
               <th className="px-4 py-3 font-medium">Creada</th>
               <th className="px-4 py-3 font-medium">Uso de IA (mes)</th>
               <th className="px-4 py-3 font-medium">Última actividad</th>
+              <th className="px-4 py-3 font-medium" />
             </tr>
           </thead>
           <tbody>
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3" colSpan={6}>
+                  <td className="px-4 py-3" colSpan={7}>
                     <Skeleton className="h-5 w-full" />
                   </td>
                 </tr>
               ))
             ) : !businesses || businesses.length === 0 ? (
               <tr>
-                <td className="px-4 py-8 text-center text-muted-foreground" colSpan={6}>
+                <td className="px-4 py-8 text-center text-muted-foreground" colSpan={7}>
                   No hay empresas que coincidan con la búsqueda.
                 </td>
               </tr>
@@ -179,9 +192,17 @@ export default function SuperadminEmpresasPage() {
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-foreground">{b.planUsage.plan?.name ?? "Sin plan"}</p>
-                    <Badge variant={subscriptionBadgeVariant(b.planUsage.subscriptionStatus)} className="mt-1">
-                      {SUBSCRIPTION_STATUS_LABEL[b.planUsage.subscriptionStatus]}
-                    </Badge>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Badge variant={subscriptionBadgeVariant(b.planUsage.subscriptionStatus)}>
+                        {SUBSCRIPTION_STATUS_LABEL[b.planUsage.subscriptionStatus]}
+                      </Badge>
+                      {b.planUsage.benefitExpiresAt && (
+                        <Badge variant="outline" className="gap-1 text-[11px]">
+                          <Sparkles className="size-3" />
+                          Hasta {dateFormatter.format(new Date(b.planUsage.benefitExpiresAt))}
+                        </Badge>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
@@ -208,6 +229,22 @@ export default function SuperadminEmpresasPage() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {b.lastActivityAt ? dateFormatter.format(new Date(b.lastActivityAt)) : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <GrantBenefitDialog
+                      businessId={b.id}
+                      businessName={b.name}
+                      trigger={
+                        <Button size="sm" variant="outline">
+                          <Sparkles className="size-3.5" data-icon="inline-start" />
+                          Otorgar plan
+                        </Button>
+                      }
+                      onGranted={() => {
+                        toast.success(`Plan otorgado a ${b.name}`);
+                        reload();
+                      }}
+                    />
                   </td>
                 </tr>
               ))

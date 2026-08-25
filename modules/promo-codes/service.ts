@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { assignSubscription } from "@/modules/billing/subscription";
+import { assignSubscription, resolveCurrentPlanId } from "@/modules/billing/subscription";
 import {
   computeBonusExpiresAt,
   evaluatePromoCode,
@@ -63,6 +63,11 @@ export async function redeemPromoCode(params: {
   }
 
   const bonusExpiresAt = computeBonusExpiresAt(found.durationDays, now);
+  // Mismo mecanismo de reversión automática que un beneficio otorgado a
+  // mano desde Superadmin (ver grantTemporaryPlan/revertExpiredBenefits en
+  // modules/billing/subscription.ts) — un código canjeado también debe
+  // volver solo al plan anterior cuando se cumple bonusExpiresAt.
+  const previousPlanId = await resolveCurrentPlanId(params.businessId);
 
   const assignResult = await assignSubscription(params.businessId, {
     planId: found.planId,
@@ -70,6 +75,8 @@ export async function redeemPromoCode(params: {
     currentPeriodStart: now,
     currentPeriodEnd: bonusExpiresAt,
     provider: "promo_code",
+    benefitExpiresAt: bonusExpiresAt,
+    previousPlanId,
   });
 
   if (!assignResult.ok) {

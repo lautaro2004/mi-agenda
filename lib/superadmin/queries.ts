@@ -417,6 +417,10 @@ export interface PlanUsageInfo {
   aiCreditsLimit: number | null;
   aiUsedThisPeriod: number;
   aiUsagePercent: number | null;
+  // no null = bonificación temporal en curso (otorgada a mano o vía
+  // PromoCode) — vuelve sola al plan anterior a esta fecha, ver
+  // revertExpiredBenefits() en modules/billing/subscription.ts.
+  benefitExpiresAt: string | null;
 }
 
 function buildPlanUsageInfo(sub: BusinessSubscription | null, requestsThisMonth: number): PlanUsageInfo {
@@ -430,6 +434,7 @@ function buildPlanUsageInfo(sub: BusinessSubscription | null, requestsThisMonth:
     aiCreditsLimit,
     aiUsedThisPeriod: requestsThisMonth,
     aiUsagePercent: aiCreditsLimit && aiCreditsLimit > 0 ? Math.round((requestsThisMonth / aiCreditsLimit) * 100) : null,
+    benefitExpiresAt: sub?.benefitExpiresAt?.toISOString() ?? null,
   };
 }
 

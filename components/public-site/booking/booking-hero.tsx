@@ -1,6 +1,7 @@
 import { MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { BookingTrigger } from "@/components/public-site/booking/booking-trigger";
 import type { Business } from "@/lib/types";
 
 interface BookingHeroProps {
@@ -72,14 +73,12 @@ export function BookingHero({ business, whatsappHref, heroImageUrl, usesResource
           </p>
 
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button
+            <BookingTrigger
               size="lg"
               className="h-11 px-7 text-base bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-              render={<a href="#reservar" />}
-              nativeButton={false}
             >
               Reservar ahora →
-            </Button>
+            </BookingTrigger>
             {whatsappHref && (
               <Button
                 size="lg"

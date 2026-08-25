@@ -19,8 +19,10 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 const assignSubscription = vi.fn();
+const resolveCurrentPlanId = vi.fn();
 vi.mock("@/modules/billing/subscription", () => ({
   assignSubscription: (...args: unknown[]) => assignSubscription(...args),
+  resolveCurrentPlanId: (...args: unknown[]) => resolveCurrentPlanId(...args),
 }));
 
 const { redeemPromoCode } = await import("./service");
@@ -48,6 +50,8 @@ beforeEach(() => {
   update.mockReset();
   redemptionCreate.mockReset();
   assignSubscription.mockReset();
+  resolveCurrentPlanId.mockReset();
+  resolveCurrentPlanId.mockResolvedValue("plan_gratis");
 });
 
 describe("redeemPromoCode", () => {

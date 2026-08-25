@@ -18,10 +18,11 @@ import { BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus } from "@
 // comodidad de import para el resto de los módulos server-side.
 export { BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus };
 
-// "manual" es todo lo que existe hoy (asignado desde Superadmin). Se deja
-// listo el valor "mercadopago" para cuando exista esa integración — no se
-// implementa checkout/webhooks en esta etapa.
-export const SUBSCRIPTION_PROVIDERS = ["manual", "mercadopago", "promo_code"] as const;
+// "manual" es la asignación directa desde Superadmin. "mercadopago" queda
+// listo para cuando exista esa integración — no se implementa
+// checkout/webhooks en esta etapa. "promo_code"/"benefit" son bonificaciones
+// temporales (ver benefitExpiresAt/previousPlanId más abajo).
+export const SUBSCRIPTION_PROVIDERS = ["manual", "mercadopago", "promo_code", "benefit"] as const;
 
 // Plan que se asigna a negocios nuevos (ver ensureTrialSubscription) y al
 // que se backfillean los negocios que existían antes de este sistema (ver
@@ -57,6 +58,10 @@ export interface BusinessSubscription {
   currentPeriodEnd: Date | null;
   provider: string | null;
   providerSubscriptionId: string | null;
+  // no null = bonificación temporal en curso — ver comentario en el modelo
+  // Subscription (prisma/schema.prisma) y revertExpiredBenefits() más abajo.
+  benefitExpiresAt: Date | null;
+  previousPlanId: string | null;
   plan: PlanSummary;
 }
 
@@ -72,6 +77,8 @@ function toBusinessSubscription(row: SubscriptionWithPlan): BusinessSubscription
     currentPeriodEnd: row.currentPeriodEnd,
     provider: row.provider,
     providerSubscriptionId: row.providerSubscriptionId,
+    benefitExpiresAt: row.benefitExpiresAt,
+    previousPlanId: row.previousPlanId,
     plan: planToSummary(row.plan),
   };
 }
@@ -426,6 +433,14 @@ export interface AssignSubscriptionInput {
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
   provider?: string;
+  // Ausentes/undefined = sin bonificación en curso (el caso normal: la
+  // asignación manual de siempre desde /superadmin/empresas/[id] cancela
+  // cualquier reversión automática pendiente, a propósito — un admin
+  // tocando el plan a mano ahora es dueño de esa asignación). Ver
+  // grantTemporaryPlan() y modules/promo-codes/service.ts para quienes SÍ
+  // los pasan.
+  benefitExpiresAt?: Date | null;
+  previousPlanId?: string | null;
 }
 
 export type AssignSubscriptionError = "plan_not_found" | "plan_inactive";
@@ -447,6 +462,8 @@ export async function assignSubscription(
       currentPeriodStart: input.currentPeriodStart,
       currentPeriodEnd: input.currentPeriodEnd,
       provider: input.provider ?? "manual",
+      benefitExpiresAt: input.benefitExpiresAt ?? null,
+      previousPlanId: input.previousPlanId ?? null,
     },
     update: {
       planId: input.planId,
@@ -454,9 +471,86 @@ export async function assignSubscription(
       currentPeriodStart: input.currentPeriodStart,
       currentPeriodEnd: input.currentPeriodEnd,
       provider: input.provider ?? "manual",
+      benefitExpiresAt: input.benefitExpiresAt ?? null,
+      previousPlanId: input.previousPlanId ?? null,
     },
     include: { plan: true },
   });
 
   return { ok: true, subscription: toBusinessSubscription(row) };
+}
+
+// Snapshot de "a qué plan volver" al otorgar una bonificación — el plan
+// ACTUAL del negocio en este momento, o el plan por defecto (Gratis) si
+// todavía no tiene Subscription (no debería pasar, ver ensureTrialSubscription,
+// pero cubre el caso defensivamente en vez de fallar).
+export async function resolveCurrentPlanId(businessId: string): Promise<string | null> {
+  const sub = await prisma.subscription.findUnique({ where: { businessId }, select: { planId: true } });
+  if (sub) return sub.planId;
+  const defaultPlan = await prisma.plan.findUnique({ where: { slug: DEFAULT_PLAN_SLUG }, select: { id: true } });
+  return defaultPlan?.id ?? null;
+}
+
+// Único punto que otorga una bonificación temporal desde Superadmin (sección
+// 1 del pedido: "para cada empresa... otorgarle temporalmente un plan
+// superior"). Reutiliza assignSubscription() tal cual — nunca una segunda
+// lógica de suscripciones — solo agrega el snapshot de a qué plan volver.
+export async function grantTemporaryPlan(params: {
+  businessId: string;
+  planId: string;
+  expiresAt: Date;
+}): Promise<{ ok: true; subscription: BusinessSubscription } | { ok: false; error: AssignSubscriptionError }> {
+  const previousPlanId = await resolveCurrentPlanId(params.businessId);
+  const now = new Date();
+
+  return assignSubscription(params.businessId, {
+    planId: params.planId,
+    status: "active",
+    currentPeriodStart: now,
+    currentPeriodEnd: params.expiresAt,
+    provider: "benefit",
+    benefitExpiresAt: params.expiresAt,
+    previousPlanId,
+  });
+}
+
+// Corrida periódica (ver app/api/cron/revert-expired-benefits) — nunca se
+// dispara al leer una Subscription (resolveAiAccess sigue siendo una función
+// pura, sin I/O de escritura): mismo criterio que el resto de los cron jobs
+// del proyecto (cleanupOrphanPaymentProofs, etc.), un barrido periódico en
+// vez de mutar datos como efecto secundario de una lectura.
+export async function revertExpiredBenefits(now: Date = new Date()): Promise<{ reverted: number; skipped: number }> {
+  const expired = await prisma.subscription.findMany({ where: { benefitExpiresAt: { lte: now } } });
+  const defaultPlan = await prisma.plan.findUnique({ where: { slug: DEFAULT_PLAN_SLUG }, select: { id: true } });
+
+  let reverted = 0;
+  let skipped = 0;
+
+  for (const sub of expired) {
+    const previousPlan = sub.previousPlanId ? await prisma.plan.findUnique({ where: { id: sub.previousPlanId } }) : null;
+    // Si el plan al que había que volver ya no existe o fue desactivado
+    // después de otorgar la bonificación, cae al plan Gratis por defecto —
+    // nunca deja un negocio sin ningún plan asignable.
+    const targetPlanId = previousPlan?.active ? previousPlan.id : defaultPlan?.id;
+
+    if (!targetPlanId) {
+      skipped++;
+      continue;
+    }
+
+    const result = await assignSubscription(sub.businessId, {
+      planId: targetPlanId,
+      status: "active",
+      currentPeriodStart: now,
+      currentPeriodEnd: null,
+      provider: "manual",
+      benefitExpiresAt: null,
+      previousPlanId: null,
+    });
+
+    if (result.ok) reverted++;
+    else skipped++;
+  }
+
+  return { reverted, skipped };
 }

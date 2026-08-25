@@ -32,7 +32,7 @@ import { FinalCtaSection } from "@/components/public-site/final-cta-section";
 import { PublicFooter } from "@/components/public-site/footer";
 import { FloatingWhatsapp } from "@/components/public-site/floating-whatsapp";
 import { BookingHero } from "@/components/public-site/booking/booking-hero";
-import { BookingPageClient } from "@/components/public-site/booking/booking-page-client";
+import { BookingServicesSection } from "@/components/public-site/booking/booking-services-section";
 import { BookingImportantInfo } from "@/components/public-site/booking/booking-important-info";
 import { BookingStickyCta } from "@/components/public-site/booking/booking-sticky-cta";
 import { GallerySection } from "@/components/public-site/gallery-section";
@@ -171,12 +171,7 @@ export default async function PublicSitePage({ params }: PageProps) {
               heroImageUrl={business.heroImageUrl}
               usesResources={featuredServiceResources.length > 0}
             />
-            <BookingPageClient
-              slug={slug}
-              services={bookableServices}
-              business={business}
-              whatsappHref={whatsappHref}
-            />
+            <BookingServicesSection services={bookableServices} whatsappHref={whatsappHref} />
             <BookingImportantInfo business={business} whatsappHref={whatsappHref} />
             {hasMenu && <MenuCallout slug={slug} />}
             <GallerySection blocks={galleryBlocks} />

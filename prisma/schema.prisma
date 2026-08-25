@@ -686,10 +686,25 @@ model Subscription {
   currentPeriodEnd       DateTime?
   // "manual" (asignado desde Superadmin) | "mercadopago" (cuando exista esa
   // integración — no implementada acá) | "promo_code" (canje de un
-  // PromoCode — ver modules/promo-codes/service.ts, reutiliza
-  // assignSubscription() tal cual, nunca una segunda lógica de suscripciones).
+  // PromoCode) | "benefit" (bonificación temporal otorgada a mano desde
+  // /superadmin/empresas — ver grantTemporaryPlan() más abajo). Todos pasan
+  // por assignSubscription() tal cual, nunca una segunda lógica de
+  // suscripciones.
   provider               String?
   providerSubscriptionId String?
+  // Bonificación temporal en curso (otorgada a mano o vía PromoCode): no
+  // null = esta Subscription debe revertirse a previousPlanId cuando
+  // benefitExpiresAt pase — ver revertExpiredBenefits() en
+  // modules/billing/subscription.ts, corrida por
+  // app/api/cron/revert-expired-benefits. Ambos vuelven a null en cuanto se
+  // revierte, o si alguien vuelve a asignar el plan a mano (assignSubscription
+  // sin pasar estos campos los limpia — una asignación manual directa
+  // cancela cualquier reversión automática pendiente). previousPlanId es un
+  // id suelto (sin FK, mismo criterio que PaymentProof.reviewedBy): es un
+  // snapshot de a qué volver, no debe poder bloquear ni verse bloqueado por
+  // el ciclo de vida de ese Plan.
+  benefitExpiresAt DateTime?
+  previousPlanId   String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -702,6 +717,7 @@ model Subscription {
 
   @@index([planId])
   @@index([status])
+  @@index([benefitExpiresAt])
 }
 
 // ── Códigos promocionales ────────────────────────────────────────────────

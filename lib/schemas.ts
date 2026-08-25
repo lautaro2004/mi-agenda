@@ -492,6 +492,17 @@ export const assignSubscriptionSchema = z.object({
 
 export type AssignSubscriptionValues = z.infer<typeof assignSubscriptionSchema>;
 
+// Bonificación temporal otorgada a mano desde /superadmin/empresas (sección
+// 1 del pedido) — a diferencia de assignSubscriptionSchema, siempre exige
+// una fecha de vencimiento (una bonificación sin fin no es una bonificación,
+// es simplemente asignar el plan a mano, que ya cubre el dialog existente).
+export const grantBenefitSchema = z.object({
+  planId: z.string().min(1, "Elegí un plan"),
+  expiresAt: z.string().min(1, "Falta la fecha de vencimiento"),
+});
+
+export type GrantBenefitValues = z.infer<typeof grantBenefitSchema>;
+
 // ── Superadmin: Códigos promocionales ────────────────────────────────────
 // Formato NEXO-XXXX-XXX-XXXX de ejemplo (ver generatePromoCode en
 // modules/promo-codes/service.ts) pero el campo acepta cualquier string
