@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check } from "lucide-react";
+import { AlertTriangle, Check, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -32,9 +33,16 @@ import { businessInfoSchema, type BusinessInfoValues } from "@/lib/schemas";
 import { BUSINESS_CATEGORIES } from "@/lib/types";
 import { useOnboarding } from "@/lib/onboarding-store";
 
+// Estado del botón de guardado como feedback principal (sección 2 del
+// pedido) — el toast de sonner se mantiene, pero deja de ser la única señal
+// de que algo pasó. "saved" vuelve solo a "idle" después de un rato para
+// que "✓ Guardado" sea evidente antes de desaparecer.
+type SaveState = "idle" | "saving" | "saved" | "error";
+const SAVED_LABEL_MS = 2500;
+
 export default function BusinessSettingsPage() {
   const { state, hydrated, refresh, updateBusiness } = useOnboarding();
-  const [justSaved, setJustSaved] = React.useState(false);
+  const [saveState, setSaveState] = React.useState<SaveState>("idle");
 
   // Ver comentario en OnboardingContextValue.refresh: el negocio pudo
   // haberse entrenado por chat después de la foto inicial de este Provider.
@@ -47,7 +55,7 @@ export default function BusinessSettingsPage() {
     register,
     handleSubmit,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isDirty },
   } = useForm<BusinessInfoValues>({
     resolver: zodResolver(businessInfoSchema),
     values: {
@@ -65,14 +73,32 @@ export default function BusinessSettingsPage() {
 
   const preview = useWatch({ control });
 
+  // Advertencia nativa del navegador si hay cambios sin guardar (sección 2
+  // del pedido) — beforeunload es el único mecanismo realmente compatible
+  // con Next.js App Router acá: no hay un hook soportado para interceptar
+  // navegación interna (Link) entre rutas del dashboard, así que esto cubre
+  // cerrar la pestaña/recargar, el caso más común de perder cambios sin
+  // querer.
+  React.useEffect(() => {
+    if (!isDirty || saveState === "saving") return;
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty, saveState]);
+
   async function onSubmit(values: BusinessInfoValues) {
+    setSaveState("saving");
     try {
       await updateBusiness(values);
       toast.success("Cambios guardados");
-      setJustSaved(true);
-      setTimeout(() => setJustSaved(false), 2000);
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), SAVED_LABEL_MS);
     } catch {
       toast.error("No pudimos guardar los cambios. Intentá de nuevo.");
+      setSaveState("error");
+      setTimeout(() => setSaveState("idle"), SAVED_LABEL_MS);
     }
   }
 
@@ -240,11 +266,26 @@ export default function BusinessSettingsPage() {
           </div>
 
           <Field>
-            <Button type="submit" disabled={isSubmitting} className="w-fit">
-              {justSaved ? (
+            <Button
+              type="submit"
+              disabled={saveState === "saving"}
+              variant={saveState === "error" ? "destructive" : "default"}
+              className="w-fit"
+            >
+              {saveState === "saving" ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+                  Guardando...
+                </>
+              ) : saveState === "saved" ? (
                 <>
                   <Check className="size-4" data-icon="inline-start" />
                   Guardado
+                </>
+              ) : saveState === "error" ? (
+                <>
+                  <AlertTriangle className="size-4" data-icon="inline-start" />
+                  No se pudo guardar
                 </>
               ) : (
                 "Guardar cambios"
@@ -254,6 +295,36 @@ export default function BusinessSettingsPage() {
         </form>
 
         <DepositSettingsCard business={state.business} onSaved={() => void refresh()} />
+
+        <div className="rounded-2xl border border-border bg-card p-6">
+          <h3 className="text-base font-semibold text-foreground">Presencia pública</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Así se accede a tu sitio desde afuera.</p>
+
+          <div className="mt-5">
+            {state.business.slug ? (
+              <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Tu sitio público</p>
+                  <p className="mt-1 font-mono text-sm text-foreground">/s/{state.business.slug}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<Link href={`/s/${state.business.slug}`} target="_blank" rel="noopener noreferrer" />}
+                  nativeButton={false}
+                >
+                  Ver sitio
+                  <ExternalLink className="ml-1.5 size-3.5" data-icon="inline-end" />
+                </Button>
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                Tu sitio público todavía no tiene una URL generada. Se genera automáticamente a partir del nombre de
+                tu negocio.
+              </p>
+            )}
+          </div>
+        </div>
         </div>
 
         <div className="lg:sticky lg:top-8">

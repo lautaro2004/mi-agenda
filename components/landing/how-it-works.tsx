@@ -6,18 +6,18 @@ import { MessageCircle, Settings2, Sparkles } from "lucide-react";
 const steps = [
   {
     icon: MessageCircle,
-    title: "Contale",
-    description: "Contale a Nexo cómo funciona tu negocio.",
+    title: "Configurás tu negocio",
+    description: "Contale a Nexo tus servicios, horarios y cómo trabajás — conversando, no llenando formularios.",
   },
   {
     icon: Settings2,
-    title: "Configurá",
-    description: "Revisá servicios, horarios, información y canales.",
+    title: "Nexo aprende cómo funciona",
+    description: "Guarda precios, disponibilidad, preguntas frecuentes y políticas para usarlos en cada respuesta.",
   },
   {
     icon: Sparkles,
-    title: "Dejalo trabajar",
-    description: "Nexo empieza a ayudarte con las consultas y tareas de tu negocio.",
+    title: "Tus clientes interactúan y reservan",
+    description: "Desde tu sitio o WhatsApp, consultan y reservan solos — Nexo se encarga del resto.",
   },
 ];
 

@@ -1,12 +1,11 @@
-import Link from "next/link";
-import { ArrowRight, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { BookingTrigger } from "@/components/public-site/booking/booking-trigger";
 import type { BookingIntent } from "@/lib/booking-intent";
 
 interface FinalCtaSectionProps {
   intent: BookingIntent;
-  bookingHref: string;
   whatsappHref: string | null;
 }
 
@@ -27,7 +26,7 @@ const TITLE: Record<BookingIntent, string> = {
 // El punto de conversión más fuerte de la página: banda a todo el ancho con
 // un fondo sutil basado en el color de marca, no una card flotando en medio
 // de blanco.
-export function FinalCtaSection({ intent, bookingHref, whatsappHref }: FinalCtaSectionProps) {
+export function FinalCtaSection({ intent, whatsappHref }: FinalCtaSectionProps) {
   const hasBookable = intent !== "contact";
   if (!hasBookable && !whatsappHref) return null;
 
@@ -51,15 +50,12 @@ export function FinalCtaSection({ intent, bookingHref, whatsappHref }: FinalCtaS
         <p className="mx-auto mt-3.5 max-w-md text-base text-muted-foreground">{subtitle}</p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           {hasBookable && (
-            <Button
+            <BookingTrigger
               size="lg"
               className="h-12 px-7 text-base bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-              render={<Link href={bookingHref} />}
-              nativeButton={false}
             >
               {PRIMARY_LABEL[intent as Exclude<BookingIntent, "contact">]}
-              <ArrowRight className="ml-1 size-4" data-icon="inline-end" />
-            </Button>
+            </BookingTrigger>
           )}
           {whatsappHref && (
             <Button

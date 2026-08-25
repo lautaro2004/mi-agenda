@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { ArrowRight, Clock, MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { BookingTrigger } from "@/components/public-site/booking/booking-trigger";
 import { formatPrice } from "@/lib/currency";
 import type { BookingIntent } from "@/lib/booking-intent";
 import type { Service } from "@/lib/types";
@@ -10,9 +10,6 @@ interface HeroBookingCardProps {
   intent: BookingIntent;
   featuredService: Service | null;
   usesResources: boolean;
-  // Link a /reservar con el servicio destacado preseleccionado — null cuando
-  // no hay featuredService (nada que reservar).
-  bookingHref: string | null;
   whatsappHref: string | null;
 }
 
@@ -55,8 +52,8 @@ function getCopy(intent: BookingIntent, usesResources: boolean): CardCopy {
 // (con o sin recursos) o, si no hay ninguno, una invitación a consultar por
 // WhatsApp. Nunca inventa un servicio ni un número — si no hay nada
 // accionable (sin reservable y sin WhatsApp configurado), no se renderiza.
-export function HeroBookingCard({ intent, featuredService, usesResources, bookingHref, whatsappHref }: HeroBookingCardProps) {
-  if (featuredService && bookingHref) {
+export function HeroBookingCard({ intent, featuredService, usesResources, whatsappHref }: HeroBookingCardProps) {
+  if (featuredService) {
     const copy = getCopy(intent, usesResources);
 
     return (
@@ -75,15 +72,14 @@ export function HeroBookingCard({ intent, featuredService, usesResources, bookin
           </div>
         </div>
 
-        <Button
+        <BookingTrigger
+          serviceId={featuredService.id}
           size="sm"
           className="mt-3 w-full bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-          render={<Link href={bookingHref} />}
-          nativeButton={false}
         >
           {copy.cta}
           <ArrowRight className="size-3.5" data-icon="inline-end" />
-        </Button>
+        </BookingTrigger>
       </div>
     );
   }

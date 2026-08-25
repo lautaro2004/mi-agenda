@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { prisma } from "@/lib/prisma";
 
 // Ej: "Mango IT" -> "mango-it". Determinístico, sin dependencias externas.
@@ -43,7 +45,14 @@ export async function getOrCreateSlug(businessId: string): Promise<string> {
   return slug;
 }
 
-export async function getBusinessIdBySlug(slug: string): Promise<string | null> {
+// cache() de React: cada página pública (ver app/s/[slug]/page.tsx y
+// app/s/[slug]/reservar/page.tsx) llama a esto tanto en generateMetadata()
+// como en el componente de página — sin memoizar, eso era una consulta a
+// Postgres DUPLICADA en cada navegación (una de las causas reales de la
+// sensación de lentitud del flujo de reserva, ver auditoría). cache() dedupea
+// por argumento dentro de un mismo request/render — no cambia ningún
+// comportamiento, solo evita repetir el mismo query dos veces.
+export const getBusinessIdBySlug = cache(async (slug: string): Promise<string | null> => {
   const business = await prisma.business.findUnique({ where: { slug }, select: { id: true } });
   return business?.id ?? null;
-}
+});

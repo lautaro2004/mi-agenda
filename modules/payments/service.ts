@@ -8,6 +8,7 @@ import {
   uploadPaymentProof,
 } from "@/lib/payment-proofs";
 import { findPendingPaymentAppointments } from "@/modules/appointments/service";
+import { notifyPaymentProofReceived } from "@/modules/notifications/service";
 
 export class PaymentProofValidationError extends Error {}
 
@@ -78,6 +79,12 @@ export async function submitProofForAppointment(params: {
     }),
   ]);
 
+  void notifyPaymentProofReceived({
+    businessId: params.businessId,
+    appointmentId: appointment.id,
+    customerName: updated.customerName,
+  });
+
   return { proof, appointment: updated };
 }
 
@@ -91,7 +98,7 @@ export async function submitUnassignedProof(params: { businessId: string; file: 
   const storagePath = buildPaymentProofPath(params.businessId, null, params.file.mimeType);
   await uploadPaymentProof(storagePath, params.file.bytes, params.file.mimeType);
 
-  return prisma.paymentProof.create({
+  const proof = await prisma.paymentProof.create({
     data: {
       businessId: params.businessId,
       appointmentId: null,
@@ -101,6 +108,10 @@ export async function submitUnassignedProof(params: { businessId: string; file: 
       fileSizeBytes: params.file.bytes.length,
     },
   });
+
+  void notifyPaymentProofReceived({ businessId: params.businessId, appointmentId: null });
+
+  return proof;
 }
 
 // Completa el vínculo una vez que el cliente contestó a cuál turno

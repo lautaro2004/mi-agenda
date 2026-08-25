@@ -13,7 +13,7 @@ export async function PATCH(
     const body = (await request.json()) as { action: "cancel" | "reschedule" } & Record<string, unknown>;
 
     if (body.action === "cancel") {
-      const appointment = await cancelAppointment(id);
+      const appointment = await cancelAppointment(id, "dashboard");
       return NextResponse.json({ appointment });
     }
 
@@ -62,7 +62,7 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const appointment = await cancelAppointment(id);
+    const appointment = await cancelAppointment(id, "dashboard");
     return NextResponse.json({ appointment });
   } catch (error) {
     console.error("[Appointments API] DELETE error:", error);

@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { ArrowRight, MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { BookingTrigger } from "@/components/public-site/booking/booking-trigger";
 import { HeroBookingCard } from "@/components/public-site/hero-booking-card";
 import type { BookingIntent } from "@/lib/booking-intent";
 import type { Business, SeoConfig, Service } from "@/lib/types";
@@ -10,12 +10,10 @@ interface PublicHeroProps {
   business: Business;
   seo: Pick<SeoConfig, "h1">;
   intent: BookingIntent;
-  bookingHref: string;
   whatsappHref: string | null;
   heroImageUrl: string | null;
   featuredService: Service | null;
   featuredServiceUsesResources: boolean;
-  featuredServiceHref: string | null;
 }
 
 const BOOKING_CTA_LABEL: Record<Exclude<BookingIntent, "contact">, string> = {
@@ -33,22 +31,18 @@ export function PublicHero({
   business,
   seo,
   intent,
-  bookingHref,
   whatsappHref,
   heroImageUrl,
   featuredService,
   featuredServiceUsesResources,
-  featuredServiceHref,
 }: PublicHeroProps) {
   // Mismo criterio en todo el sitio (header, CTA intermedio, CTA final): sin
   // servicio reservable, el CTA principal pasa a ser WhatsApp directamente
   // — nunca dos botones que abren lo mismo (ver sección 4 de la tarea).
-  const primary =
-    intent !== "contact"
-      ? { href: bookingHref, label: BOOKING_CTA_LABEL[intent], external: false }
-      : whatsappHref
-        ? { href: whatsappHref, label: "Consultar por WhatsApp", external: true }
-        : { href: "#servicios", label: "Ver servicios", external: false };
+  const showBookingCta = intent !== "contact";
+  const fallback = whatsappHref
+    ? { href: whatsappHref, label: "Consultar por WhatsApp", external: true }
+    : { href: "#servicios", label: "Ver servicios", external: false };
   const showSecondaryWhatsapp = intent !== "contact" && !!whatsappHref;
 
   return (
@@ -78,15 +72,25 @@ export function PublicHero({
           </h1>
 
           <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row lg:items-start">
-            <Button
-              size="lg"
-              className="h-11 bg-[var(--brand-primary,var(--primary))] px-6 text-base hover:bg-[var(--brand-primary,var(--primary))]/90"
-              render={primary.external ? <a href={primary.href} target="_blank" rel="noopener noreferrer" /> : <Link href={primary.href} />}
-              nativeButton={false}
-            >
-              {primary.label}
-              <ArrowRight className="ml-1 size-4" data-icon="inline-end" />
-            </Button>
+            {showBookingCta ? (
+              <BookingTrigger
+                size="lg"
+                className="h-11 bg-[var(--brand-primary,var(--primary))] px-6 text-base hover:bg-[var(--brand-primary,var(--primary))]/90"
+              >
+                {BOOKING_CTA_LABEL[intent as Exclude<BookingIntent, "contact">]}
+                <ArrowRight className="ml-1 size-4" data-icon="inline-end" />
+              </BookingTrigger>
+            ) : (
+              <Button
+                size="lg"
+                className="h-11 bg-[var(--brand-primary,var(--primary))] px-6 text-base hover:bg-[var(--brand-primary,var(--primary))]/90"
+                render={fallback.external ? <a href={fallback.href} target="_blank" rel="noopener noreferrer" /> : <a href={fallback.href} />}
+                nativeButton={false}
+              >
+                {fallback.label}
+                <ArrowRight className="ml-1 size-4" data-icon="inline-end" />
+              </Button>
+            )}
             {showSecondaryWhatsapp && (
               <Button
                 size="lg"
@@ -158,7 +162,6 @@ export function PublicHero({
               intent={intent}
               featuredService={featuredService}
               usesResources={featuredServiceUsesResources}
-              bookingHref={featuredServiceHref}
               whatsappHref={whatsappHref}
             />
           </div>

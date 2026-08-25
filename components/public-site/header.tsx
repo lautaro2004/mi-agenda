@@ -6,6 +6,7 @@ import { Menu, MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { BookingTrigger } from "@/components/public-site/booking/booking-trigger";
 import type { BookingIntent } from "@/lib/booking-intent";
 import type { Business } from "@/lib/types";
 
@@ -17,7 +18,6 @@ interface PublicHeaderProps {
   hasSchedule: boolean;
   hasMenu?: boolean;
   whatsappHref: string | null;
-  bookingHref: string;
 }
 
 const CTA_LABEL: Record<BookingIntent, string> = {
@@ -30,7 +30,7 @@ const CTA_LABEL: Record<BookingIntent, string> = {
 // sección apuntan siempre a /s/[slug]#ancla (ruta completa, no solo #ancla),
 // así funcionan igual estés parado en la página principal o en la de
 // reserva.
-export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, hasMenu, whatsappHref, bookingHref }: PublicHeaderProps) {
+export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, hasMenu, whatsappHref }: PublicHeaderProps) {
   const [open, setOpen] = React.useState(false);
   const base = `/s/${slug}`;
   const hasBookable = intent !== "contact";
@@ -77,27 +77,23 @@ export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, has
             </Button>
           )}
           {hasBookable && (
-            <Button
+            <BookingTrigger
               size="sm"
               className="bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-              render={<Link href={bookingHref} />}
-              nativeButton={false}
             >
               {CTA_LABEL[intent]}
-            </Button>
+            </BookingTrigger>
           )}
         </div>
 
         <div className="flex items-center md:hidden">
           {hasBookable && (
-            <Button
+            <BookingTrigger
               size="sm"
               className="mr-1 bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-              render={<Link href={bookingHref} />}
-              nativeButton={false}
             >
               {CTA_LABEL[intent]}
-            </Button>
+            </BookingTrigger>
           )}
           <Sheet open={open} onOpenChange={setOpen}>
             <Button size="icon" variant="ghost" aria-label="Abrir menú" onClick={() => setOpen(true)}>

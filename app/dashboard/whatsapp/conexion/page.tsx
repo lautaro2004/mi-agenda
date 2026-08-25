@@ -41,7 +41,7 @@ export default function WhatsAppConnectionPage() {
       <div>
         <PageHeader
           title="Conexión"
-          description="Vinculá el WhatsApp de tu negocio para que Mi Agenda pueda responder a tus clientes."
+          description="Vinculá el WhatsApp de tu negocio para que Nexo pueda responder a tus clientes."
         />
         <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
           <Skeleton className="h-72 rounded-2xl" />
@@ -58,7 +58,7 @@ export default function WhatsAppConnectionPage() {
     <div>
       <PageHeader
         title="Conexión"
-        description="Vinculá el WhatsApp de tu negocio para que Mi Agenda pueda responder a tus clientes."
+        description="Vinculá el WhatsApp de tu negocio para que Nexo pueda responder a tus clientes."
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -75,7 +75,7 @@ export default function WhatsAppConnectionPage() {
               </div>
               <h4 className="mt-4 text-base font-semibold text-foreground">Tu WhatsApp no está conectado</h4>
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                Conectá el WhatsApp de tu negocio para que Mi Agenda pueda recibir y responder mensajes
+                Conectá el WhatsApp de tu negocio para que Nexo pueda recibir y responder mensajes
                 automáticamente.
               </p>
               {whatsappEnabled ? (

@@ -12,10 +12,18 @@
 // carta digital (ver modules/business/menu.ts) — único kind que no es
 // imagen, mismo bucket público igual: una carta de restaurante no es
 // información sensible.
-export type SiteAssetKind = "logo" | "hero" | "service" | "gallery" | "menu";
+// "avatar" = foto de perfil del USUARIO (User.image de better-auth), no de
+// un Business — reutiliza el mismo bucket/helpers de Storage (ver
+// lib/site-assets.ts) con el userId como prefijo del path en vez del
+// businessId, pero es la única variante que no cuelga de Business.
+export type SiteAssetKind = "logo" | "hero" | "service" | "gallery" | "menu" | "avatar";
 
 export const ASSET_LIMITS: Record<SiteAssetKind, { maxBytes: number; mimeTypes: string[] }> = {
   logo: {
+    maxBytes: 2 * 1024 * 1024,
+    mimeTypes: ["image/png", "image/jpeg", "image/webp"],
+  },
+  avatar: {
     maxBytes: 2 * 1024 * 1024,
     mimeTypes: ["image/png", "image/jpeg", "image/webp"],
   },

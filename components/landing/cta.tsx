@@ -27,7 +27,7 @@ export function LandingCta() {
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <Button size="lg" className="h-11 px-6 text-base" render={<Link href="/registro" />} nativeButton={false}>
-            Empezar gratis
+            Probar Nexo gratis
             <ArrowRight className="ml-1 size-4" data-icon="inline-end" />
           </Button>
           <a

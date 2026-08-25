@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Sparkles } from "lucide-react";
 
 import { PlanCard } from "@/components/subscription-plan-card";
+import { SubscriptionPromoCodeForm } from "@/components/subscription-promo-code-form";
 import { StepActions } from "@/components/onboarding/step-actions";
 import { SubscriptionStatusBadge } from "@/components/subscription-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,12 +14,13 @@ import { daysRemaining, useActivePlans, useBusinessSubscription } from "@/lib/su
 
 // Ya no crea ninguna Subscription: solo LEE la que ya existe (todo negocio
 // tiene una desde que se crea — ver ensureTrialSubscription en
-// modules/billing/subscription.ts). La única fuente de verdad es
-// Business → Subscription → Plan; esta pantalla nunca escribe acá.
+// modules/billing/subscription.ts). La única escritura que sí puede pasar
+// acá es aplicar un código promocional (sección 6 del pedido) — reusa el
+// mismo endpoint/lógica que /dashboard/suscripcion, nunca una segunda.
 export default function SubscriptionStepPage() {
   const router = useRouter();
   const { completeOnboarding } = useOnboarding();
-  const { data, loading, error } = useBusinessSubscription();
+  const { data, loading, error, reload } = useBusinessSubscription();
   const { plans, loading: plansLoading } = useActivePlans();
 
   function handleFinish() {
@@ -72,6 +74,12 @@ export default function SubscriptionStepPage() {
               <span>Tu suscripción no está activa todavía. Elegí un plan para habilitar la IA.</span>
             </div>
           )}
+        </div>
+      )}
+
+      {!loading && subscription && (
+        <div className="mt-6">
+          <SubscriptionPromoCodeForm onApplied={reload} />
         </div>
       )}
 

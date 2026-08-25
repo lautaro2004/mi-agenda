@@ -70,9 +70,9 @@ export function LandingTeachNotConfigure() {
                 "Servicios y precios",
                 "Horarios de atención",
                 "Preguntas frecuentes",
+                "Políticas del negocio",
                 "Proceso de trabajo",
-                "Objetivos y restricciones",
-                "Información adicional",
+                "Información propia y adicional",
                 "Documentos y recursos",
               ].map((item, index) => (
                 <motion.li

@@ -23,15 +23,15 @@ export function LandingBookingShowcase() {
     <section className="px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
       <div className="mx-auto max-w-5xl">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-medium text-primary">Una capacidad más</p>
+          <p className="text-sm font-medium text-primary">Incluido en el plan Gratis</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
-            Cuando tu negocio necesita reservas,
+            Recibí reservas reales
             <br />
-            Nexo también se encarga.
+            desde tu sitio web, sin pagar nada.
           </h2>
           <p className="mt-4 text-muted-foreground">
             Nexo consulta la disponibilidad real de tu negocio y confirma el turno en la misma
-            conversación — desde tu sitio web o desde WhatsApp.
+            conversación, directamente en tu sitio público.
           </p>
         </div>
 

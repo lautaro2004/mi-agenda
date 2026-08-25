@@ -63,8 +63,8 @@ export function LandingHero() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="mt-6 max-w-2xl text-base text-muted-foreground sm:text-lg"
         >
-          Nexo aprende cómo funciona tu negocio y te ayuda a atender clientes, gestionar reservas y
-          automatizar tareas desde un solo lugar.
+          Un asistente que aprende cómo funciona tu negocio y recibe reservas, responde consultas y
+          ayuda a tus clientes desde tu sitio web y WhatsApp.
         </motion.p>
 
         <motion.div
@@ -74,7 +74,7 @@ export function LandingHero() {
           className="mt-10 flex flex-col items-center gap-4 sm:flex-row"
         >
           <Button size="lg" className="h-11 px-6 text-base" render={<Link href="/registro" />} nativeButton={false}>
-            Empezar gratis
+            Probar Nexo gratis
             <ArrowRight className="ml-1 size-4" data-icon="inline-end" />
           </Button>
           <a

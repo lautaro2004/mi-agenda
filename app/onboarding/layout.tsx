@@ -13,7 +13,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <MessageCircle className="size-4" />
             </span>
-            <span>Mi Agenda</span>
+            <span>Nexo</span>
           </Link>
           <ThemeToggle />
         </div>

@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationsBell } from "@/components/dashboard/notifications-bell";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { DASHBOARD_NAV } from "@/lib/dashboard-nav";
 import { useOnboarding } from "@/lib/onboarding-store";
@@ -84,6 +86,7 @@ export function DashboardTopbar() {
       </h1>
 
       <ThemeToggle />
+      <NotificationsBell />
 
       <DropdownMenu>
         <DropdownMenuTrigger
@@ -99,14 +102,16 @@ export function DashboardTopbar() {
           }
         />
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">{business.name || userName || "Tu negocio"}</span>
-            <span className="text-xs text-muted-foreground">{session?.user?.email}</span>
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="flex flex-col">
+              <span className="text-sm font-medium text-foreground">{business.name || userName || "Tu negocio"}</span>
+              <span className="text-xs text-muted-foreground">{session?.user?.email}</span>
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem render={<Link href="/dashboard/cuenta" />}>
             <User className="size-4" data-icon="inline-start" />
-            Mi cuenta
+            Mi perfil
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link href="/dashboard/suscripcion" />}>
             <CreditCard className="size-4" data-icon="inline-start" />

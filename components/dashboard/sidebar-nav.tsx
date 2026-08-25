@@ -16,7 +16,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
         <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <MessageCircle className="size-4" />
         </span>
-        <span>Mi Agenda</span>
+        <span>Nexo</span>
       </Link>
 
       <nav className="flex flex-1 flex-col gap-1 py-2">

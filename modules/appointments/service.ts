@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import type { BusinessSchedule } from "@/lib/types";
 import { getSlotsForDate } from "@/modules/ai/booking/flow";
 import { getActiveServiceResources } from "@/modules/business/resource";
+import { notifyBookingCancelled, notifyBookingCreated, notifyBookingPending } from "@/modules/notifications/service";
 
 // Único punto de entrada de disponibilidad/reserva del sistema — lo usan
 // tanto el Booking Flow de WhatsApp (modules/ai/booking/flow.ts) como los
@@ -146,6 +147,11 @@ export interface CreateAppointmentParams {
   status?: "confirmed" | "pending_payment";
   depositAmount?: number | null;
   totalAmount?: number | null;
+  // "customer" (sitio público o WhatsApp) dispara notificación al dueño;
+  // "dashboard" (el dueño agendando a mano) no la dispara — notificarlo de
+  // su propia acción sería ruido, no algo que requiera su atención (ver
+  // sección 4 del pedido: solo eventos que puedan requerir acción).
+  source: "customer" | "dashboard";
 }
 
 export async function createAppointment(params: CreateAppointmentParams) {
@@ -185,6 +191,18 @@ export async function createAppointment(params: CreateAppointmentParams) {
       });
     });
 
+    if (params.source === "customer") {
+      const notifyInput = {
+        businessId: appointment.businessId,
+        id: appointment.id,
+        customerName: appointment.customerName,
+        serviceName: appointment.serviceName,
+        date: appointment.date,
+        startTime: appointment.startTime,
+      };
+      void (appointment.status === "pending_payment" ? notifyBookingPending(notifyInput) : notifyBookingCreated(notifyInput));
+    }
+
     return { appointment };
   } catch (error) {
     const bookingError = toBookingError(error);
@@ -216,8 +234,24 @@ export async function getAppointments(
   });
 }
 
-export async function cancelAppointment(id: string) {
-  return prisma.appointment.update({ where: { id }, data: { status: "cancelled" } });
+// source: mismo criterio que createAppointment — solo una cancelación
+// iniciada por el CLIENTE (WhatsApp) notifica al dueño; una cancelación que
+// el propio dueño hace desde el dashboard no.
+export async function cancelAppointment(id: string, source: "customer" | "dashboard") {
+  const appointment = await prisma.appointment.update({ where: { id }, data: { status: "cancelled" } });
+
+  if (source === "customer") {
+    void notifyBookingCancelled({
+      businessId: appointment.businessId,
+      id: appointment.id,
+      customerName: appointment.customerName,
+      serviceName: appointment.serviceName,
+      date: appointment.date,
+      startTime: appointment.startTime,
+    });
+  }
+
+  return appointment;
 }
 
 export interface RescheduleAppointmentParams {

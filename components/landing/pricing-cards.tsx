@@ -67,7 +67,7 @@ export function PricingCards({ plans }: { plans: PublicPlan[] }) {
             </ul>
 
             <Button className="mt-8 w-full" size="lg" render={<Link href="/registro" />} nativeButton={false}>
-              Empezar gratis
+              Probar Nexo gratis
             </Button>
           </motion.div>
         );

@@ -1,18 +1,17 @@
-import Link from "next/link";
 import { ArrowRight, Clock, MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { BookingTrigger } from "@/components/public-site/booking/booking-trigger";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import { formatPrice } from "@/lib/currency";
 import { isBookableService, type Service } from "@/lib/types";
 
 interface ServicesSectionProps {
   services: Service[];
-  slug: string;
   whatsappNumber: string | null;
 }
 
-export function ServicesSection({ services, slug, whatsappNumber }: ServicesSectionProps) {
+export function ServicesSection({ services, whatsappNumber }: ServicesSectionProps) {
   if (services.length === 0) return null;
 
   return (
@@ -68,15 +67,14 @@ export function ServicesSection({ services, slug, whatsappNumber }: ServicesSect
 
               <div className="mt-5 border-t border-border pt-4">
                 {bookable ? (
-                  <Button
+                  <BookingTrigger
+                    serviceId={service.id}
                     size="sm"
                     className="w-full bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-                    render={<Link href={`/s/${slug}/reservar?servicio=${service.id}`} />}
-                    nativeButton={false}
                   >
                     Reservar turno
                     <ArrowRight className="size-3.5" data-icon="inline-end" />
-                  </Button>
+                  </BookingTrigger>
                 ) : consultHref ? (
                   <Button size="sm" variant="outline" className="w-full" render={<a href={consultHref} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>
                     <MessageCircle className="size-3.5" data-icon="inline-start" />

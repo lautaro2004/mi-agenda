@@ -11,7 +11,6 @@ import { buildFallbackSeoConfig, buildLocalBusinessJsonLd, getSeoConfig } from "
 import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
 import { cn } from "@/lib/utils";
 import {
-  getBookingHref,
   getBookingIntent,
   getFeaturedBookableService,
   getVisibleServices,
@@ -20,6 +19,7 @@ import {
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import { isBookableService } from "@/lib/types";
 
+import { BookingModalProvider } from "@/components/public-site/booking/booking-modal-context";
 import { PublicHeader } from "@/components/public-site/header";
 import { PublicHero } from "@/components/public-site/hero";
 import { AboutSection } from "@/components/public-site/about-section";
@@ -114,20 +114,18 @@ export default async function PublicSitePage({ params }: PageProps) {
   const template = resolveSiteTemplate(business.siteTemplate, intent);
   // En intent "meeting" el servicio reservable (ej. "Reunión inicial") no se
   // muestra como card comercial — se ofrece como CTA de conversión en su
-  // lugar (ver getBookingHref), preseleccionado en el link de reserva.
+  // lugar (ver getVisibleServices), preseleccionado al abrir el modal.
   const visibleServices = getVisibleServices(services, intent);
-  const bookingHref = getBookingHref(slug, services, intent);
   const jsonLd = buildLocalBusinessJsonLd({ business, services, schedule, slug });
 
-  // Servicio a destacar en la hero booking card — mismo criterio que
-  // getBookingHref (primer reservable en orden existente), nunca uno nuevo.
-  // Solo se consulta si usa recursos cuando efectivamente hay uno destacado:
-  // una query liviana y puntual, no un fetch por cada servicio de la página.
+  // Servicio a destacar en la hero booking card — determinístico: el primer
+  // reservable en el orden ya existente, nunca uno nuevo. Solo se consulta si
+  // usa recursos cuando efectivamente hay uno destacado: una query liviana y
+  // puntual, no un fetch por cada servicio de la página.
   const featuredService = getFeaturedBookableService(services);
   const featuredServiceResources = featuredService
     ? await getActiveServiceResources(business.id, featuredService.id)
     : [];
-  const featuredServiceHref = featuredService ? `/s/${slug}/reservar?servicio=${featuredService.id}` : null;
 
   const whatsappHref = buildWhatsappHref(business.whatsappNumber);
   // Mensaje propio (no genérico) para el botón flotante — los demás puntos
@@ -139,6 +137,7 @@ export default async function PublicSitePage({ params }: PageProps) {
   // da null y "--brand-primary" nunca se define — todo el acento de marca
   // cae en el --primary del tema, sin ningún cambio visual.
   const brandColor = sanitizeHexColor(getBrandColor(business));
+  const modalTitle = intent === "meeting" ? "Agendar reunión" : "Reservar turno";
 
   return (
     <div
@@ -147,65 +146,70 @@ export default async function PublicSitePage({ params }: PageProps) {
     >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <PublicHeader
-        business={business}
+      <BookingModalProvider
         slug={slug}
-        intent={intent}
-        hasFaqs={faqs.length > 0}
-        hasSchedule={schedule.some((d) => d.enabled)}
-        hasMenu={hasMenu}
+        services={bookableServices}
+        business={business}
         whatsappHref={whatsappHref}
-        bookingHref={bookingHref}
-      />
+        title={modalTitle}
+      >
+        <PublicHeader
+          business={business}
+          slug={slug}
+          intent={intent}
+          hasFaqs={faqs.length > 0}
+          hasSchedule={schedule.some((d) => d.enabled)}
+          hasMenu={hasMenu}
+          whatsappHref={whatsappHref}
+        />
 
-      {template === "booking" ? (
-        <main>
-          <BookingHero
-            business={business}
-            whatsappHref={whatsappHref}
-            heroImageUrl={business.heroImageUrl}
-            usesResources={featuredServiceResources.length > 0}
-          />
-          <BookingPageClient
-            slug={slug}
-            services={bookableServices}
-            business={business}
-            whatsappHref={whatsappHref}
-          />
-          <BookingImportantInfo business={business} whatsappHref={whatsappHref} />
-          {hasMenu && <MenuCallout slug={slug} />}
-          <GallerySection blocks={galleryBlocks} />
-          <ScheduleSection schedule={schedule} />
-          <FaqSection faqs={faqs} limit={5} />
-        </main>
-      ) : (
-        <main>
-          <PublicHero
-            business={business}
-            seo={seo}
-            intent={intent}
-            bookingHref={bookingHref}
-            whatsappHref={whatsappHref}
-            heroImageUrl={business.heroImageUrl}
-            featuredService={featuredService}
-            featuredServiceUsesResources={featuredServiceResources.length > 0}
-            featuredServiceHref={featuredServiceHref}
-          />
-          <AboutSection description={business.description} />
-          <ServicesSection services={visibleServices} slug={slug} whatsappNumber={business.whatsappNumber} />
-          {hasMenu && <MenuCallout slug={slug} />}
-          <GallerySection blocks={galleryBlocks} />
-          <ProcessSection intent={intent} />
-          <BookingSection services={bookableServices} intent={intent} bookingHref={bookingHref} whatsappHref={whatsappHref} />
-          <ScheduleSection schedule={schedule} />
-          <FaqSection faqs={faqs} />
-          <FinalCtaSection intent={intent} bookingHref={bookingHref} whatsappHref={whatsappHref} />
-        </main>
-      )}
+        {template === "booking" ? (
+          <main>
+            <BookingHero
+              business={business}
+              whatsappHref={whatsappHref}
+              heroImageUrl={business.heroImageUrl}
+              usesResources={featuredServiceResources.length > 0}
+            />
+            <BookingPageClient
+              slug={slug}
+              services={bookableServices}
+              business={business}
+              whatsappHref={whatsappHref}
+            />
+            <BookingImportantInfo business={business} whatsappHref={whatsappHref} />
+            {hasMenu && <MenuCallout slug={slug} />}
+            <GallerySection blocks={galleryBlocks} />
+            <ScheduleSection schedule={schedule} />
+            <FaqSection faqs={faqs} limit={5} />
+          </main>
+        ) : (
+          <main>
+            <PublicHero
+              business={business}
+              seo={seo}
+              intent={intent}
+              whatsappHref={whatsappHref}
+              heroImageUrl={business.heroImageUrl}
+              featuredService={featuredService}
+              featuredServiceUsesResources={featuredServiceResources.length > 0}
+            />
+            <AboutSection description={business.description} />
+            <ServicesSection services={visibleServices} whatsappNumber={business.whatsappNumber} />
+            {hasMenu && <MenuCallout slug={slug} />}
+            <GallerySection blocks={galleryBlocks} />
+            <ProcessSection intent={intent} />
+            <BookingSection services={bookableServices} intent={intent} whatsappHref={whatsappHref} />
+            <ScheduleSection schedule={schedule} />
+            <FaqSection faqs={faqs} />
+            <FinalCtaSection intent={intent} whatsappHref={whatsappHref} />
+          </main>
+        )}
 
-      <PublicFooter business={business} slug={slug} />
-      <FloatingWhatsapp href={floatingWhatsappHref} liftedOnMobile={template === "booking"} />
-      {template === "booking" && <BookingStickyCta />}
+        <PublicFooter business={business} slug={slug} />
+        <FloatingWhatsapp href={floatingWhatsappHref} liftedOnMobile={template === "booking"} />
+        {template === "booking" && <BookingStickyCta />}
+      </BookingModalProvider>
     </div>
   );
 }

@@ -27,6 +27,8 @@ export interface SubscriptionPlanInfo {
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
   statsEnabled: boolean;
+  galleryEnabled: boolean;
+  digitalMenuEnabled: boolean;
   active: boolean;
 }
 
@@ -83,18 +85,24 @@ export interface PublicPlan extends SubscriptionPlanInfo {
 // de negocio: un plan nuevo sin entrada acá simplemente no tiene subtítulo.
 export const PLAN_SUBTITLE_BY_SLUG: Record<string, string> = {
   gratis: "Probalo",
-  esencial: "Atendé",
-  profesional: "Automatizá",
+  esencial: "Automatizá",
+  profesional: "Centralizá",
 };
 
 // Bullets generados a partir de datos REALES del Plan — nunca el mismo
 // texto fijo para los 4 planes (ver resolvePlanFeatures en
 // modules/billing/subscription.ts, mismo criterio que usan los gates).
+// Orden a propósito "comercial primero, técnico después": lo que el cliente
+// recibe (reservas, atención, WhatsApp, carta, fotos) antes que cómo está
+// limitado por dentro (créditos de IA, siempre al final — ver sección 2 del
+// pedido: los créditos NO son el argumento de venta principal).
 export function buildPlanFeatureLines(plan: SubscriptionPlanInfo): string[] {
   const lines = ["Sitio web y reservas online"];
   lines.push(plan.whatsappEnabled ? "WhatsApp con IA" : "Asistente IA básico (sin WhatsApp)");
   if (plan.depositsEnabled) lines.push("Señas y comprobantes de pago");
-  if (plan.customTrainingEnabled) lines.push("Entrenamiento personalizado del asistente");
+  if (plan.galleryEnabled) lines.push("Galería de fotos");
+  if (plan.digitalMenuEnabled) lines.push("Carta digital + QR");
+  if (plan.customTrainingEnabled) lines.push("Entrenamiento continuo del asistente");
   if (plan.statsEnabled) lines.push("Estadísticas de tu negocio");
   lines.push(plan.maxServices !== null ? `Hasta ${plan.maxServices} servicios` : "Servicios ilimitados");
   lines.push(`${new Intl.NumberFormat("es-AR").format(plan.aiCredits)} respuestas de IA / mes`);

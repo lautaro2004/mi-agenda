@@ -8,7 +8,9 @@ import { LandingHowItWorks } from "@/components/landing/how-it-works";
 import { LandingSimulatorShowcase } from "@/components/landing/simulator-showcase";
 import { LandingProductPreview } from "@/components/landing/product-preview";
 import { LandingBookingShowcase } from "@/components/landing/booking-showcase";
+import { LandingWhatsappShowcase } from "@/components/landing/whatsapp-showcase";
 import { LandingResourcesShowcase } from "@/components/landing/resources-showcase";
+import { LandingMenuShowcase } from "@/components/landing/menu-showcase";
 import { LandingAudience } from "@/components/landing/audience";
 import { LandingOnboardingHighlight } from "@/components/landing/onboarding-highlight";
 import { LandingPricing } from "@/components/landing/pricing";
@@ -29,7 +31,9 @@ export default function Home() {
         <LandingSimulatorShowcase />
         <LandingProductPreview />
         <LandingBookingShowcase />
+        <LandingWhatsappShowcase />
         <LandingResourcesShowcase />
+        <LandingMenuShowcase />
         <LandingAudience />
         <LandingOnboardingHighlight />
         <LandingPricing />

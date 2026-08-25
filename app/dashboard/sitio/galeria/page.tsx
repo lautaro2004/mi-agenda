@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Images, Plus } from "lucide-react";
 
@@ -10,12 +11,17 @@ import { GalleryBlockDialog } from "@/components/dashboard/gallery-block-dialog"
 import { GalleryBlockCard } from "@/components/dashboard/gallery-block-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requestJson } from "@/lib/api-client";
+import { useBusinessSubscription } from "@/lib/subscription-client";
 import type { GalleryBlock, GalleryImage } from "@/lib/types";
 import type { GalleryBlockFormValues } from "@/lib/schemas";
 
 export default function GalleryPage() {
   const [blocks, setBlocks] = React.useState<GalleryBlock[] | null>(null);
   const [loadError, setLoadError] = React.useState(false);
+  const { data: subscriptionData } = useBusinessSubscription();
+  // undefined mientras carga: no bloqueamos "Nuevo bloque" antes de saber el
+  // plan real (mismo criterio que app/dashboard/whatsapp/conexion/page.tsx).
+  const galleryEnabled = subscriptionData?.subscription?.plan.galleryEnabled ?? true;
 
   const load = React.useCallback(() => {
     setLoadError(false);
@@ -89,17 +95,33 @@ export default function GalleryPage() {
         title="Contenido visual"
         description="Administrá fotos y bloques visuales para tu sitio público."
         action={
-          <GalleryBlockDialog
-            onSubmit={handleCreate}
-            trigger={
-              <Button>
-                <Plus className="size-4" data-icon="inline-start" />
-                Nuevo bloque
-              </Button>
-            }
-          />
+          galleryEnabled ? (
+            <GalleryBlockDialog
+              onSubmit={handleCreate}
+              trigger={
+                <Button>
+                  <Plus className="size-4" data-icon="inline-start" />
+                  Nuevo bloque
+                </Button>
+              }
+            />
+          ) : (
+            <Button disabled>
+              <Plus className="size-4" data-icon="inline-start" />
+              Nuevo bloque
+            </Button>
+          )
         }
       />
+
+      {!galleryEnabled && (
+        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+          <p className="text-foreground">La galería de fotos está disponible desde el plan Esencial.</p>
+          <Button size="sm" className="mt-3" render={<Link href="/dashboard/suscripcion" />} nativeButton={false}>
+            Ver planes
+          </Button>
+        </div>
+      )}
 
       {loadError ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">

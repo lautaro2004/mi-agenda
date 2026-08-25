@@ -26,15 +26,22 @@ interface PlanWithUsage {
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
   statsEnabled: boolean;
+  galleryEnabled: boolean;
+  digitalMenuEnabled: boolean;
   active: boolean;
   businessCount: number;
 }
 
-const FEATURE_LABEL: Record<"whatsappEnabled" | "depositsEnabled" | "customTrainingEnabled" | "statsEnabled", string> = {
+const FEATURE_LABEL: Record<
+  "whatsappEnabled" | "depositsEnabled" | "customTrainingEnabled" | "statsEnabled" | "galleryEnabled" | "digitalMenuEnabled",
+  string
+> = {
   whatsappEnabled: "WhatsApp",
   depositsEnabled: "Señas",
   customTrainingEnabled: "Entrenamiento",
   statsEnabled: "Estadísticas",
+  galleryEnabled: "Galería",
+  digitalMenuEnabled: "Carta + QR",
 };
 
 const numberFormatter = new Intl.NumberFormat("es-AR");

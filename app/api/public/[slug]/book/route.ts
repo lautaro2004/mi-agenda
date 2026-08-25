@@ -51,6 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     status: depositQuote ? "pending_payment" : "confirmed",
     depositAmount: depositQuote?.depositAmount,
     totalAmount: depositQuote?.totalAmount,
+    source: "customer",
   });
 
   if ("error" in result) {

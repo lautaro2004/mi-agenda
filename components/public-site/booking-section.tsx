@@ -1,14 +1,13 @@
-import Link from "next/link";
-import { ArrowRight, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { BookingTrigger } from "@/components/public-site/booking/booking-trigger";
 import type { BookingIntent } from "@/lib/booking-intent";
 import type { Service } from "@/lib/types";
 
 interface BookingSectionProps {
   services: Service[];
   intent: BookingIntent;
-  bookingHref: string;
   whatsappHref: string | null;
 }
 
@@ -25,11 +24,10 @@ const COPY: Record<Exclude<BookingIntent, "contact">, { title: string; subtitle:
   },
 };
 
-// Sección de transición entre Servicios y Proceso/Horarios: solo un CTA
-// hacia bookingHref (la pantalla dedicada donde vive el BookingWidget real)
-// — no se incrusta el formulario acá para no repetir la pantalla de reserva
-// completa dos veces en la misma página.
-export function BookingSection({ services, intent, bookingHref, whatsappHref }: BookingSectionProps) {
+// Sección de transición entre Servicios y Proceso/Horarios: solo un CTA que
+// abre el modal de reserva compartido (BookingModal) — no se incrusta el
+// formulario acá para no repetirlo dos veces en la misma página.
+export function BookingSection({ services, intent, whatsappHref }: BookingSectionProps) {
   if (services.length === 0 || intent === "contact") return null;
   const copy = COPY[intent];
 
@@ -40,15 +38,12 @@ export function BookingSection({ services, intent, bookingHref, whatsappHref }: 
         <p className="mt-3 text-sm text-muted-foreground sm:text-base">{copy.subtitle}</p>
 
         <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Button
+          <BookingTrigger
             size="lg"
             className="h-11 px-6 bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-            render={<Link href={bookingHref} />}
-            nativeButton={false}
           >
             {copy.cta}
-            <ArrowRight className="size-4" data-icon="inline-end" />
-          </Button>
+          </BookingTrigger>
           {whatsappHref && (
             <Button
               size="lg"

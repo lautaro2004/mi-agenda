@@ -6,10 +6,11 @@ import { getBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { buildFallbackSeoConfig, getSeoConfig } from "@/modules/business/seo";
 import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
-import { getBookingHref, getBookingIntent } from "@/lib/booking-intent";
+import { getBookingIntent } from "@/lib/booking-intent";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import { isBookableService } from "@/lib/types";
 
+import { BookingModalProvider } from "@/components/public-site/booking/booking-modal-context";
 import { PublicHeader } from "@/components/public-site/header";
 import { PublicFooter } from "@/components/public-site/footer";
 import { FloatingWhatsapp } from "@/components/public-site/floating-whatsapp";
@@ -59,7 +60,6 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
 
   const intent = getBookingIntent(services);
   const isMeeting = intent === "meeting";
-  const bookingHref = getBookingHref(slug, services, intent);
 
   const whatsappHref = buildWhatsappHref(business.whatsappNumber);
   const floatingWhatsappHref = buildWhatsappHref(business.whatsappNumber, "Hola, vi su sitio web y quería hacer una consulta.");
@@ -70,41 +70,48 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
       className="min-h-screen bg-background"
       style={brandColor ? ({ "--brand-primary": brandColor } as CSSProperties) : undefined}
     >
-      <PublicHeader
-        business={business}
+      <BookingModalProvider
         slug={slug}
-        intent={intent}
-        hasFaqs={faqs.length > 0}
-        hasSchedule={schedule.some((d) => d.enabled)}
+        services={bookableServices}
+        business={business}
         whatsappHref={whatsappHref}
-        bookingHref={bookingHref}
-      />
+        title={isMeeting ? "Agendar reunión" : "Reservar turno"}
+      >
+        <PublicHeader
+          business={business}
+          slug={slug}
+          intent={intent}
+          hasFaqs={faqs.length > 0}
+          hasSchedule={schedule.some((d) => d.enabled)}
+          whatsappHref={whatsappHref}
+        />
 
-      <main className="mx-auto max-w-lg px-4 py-14 sm:px-6 sm:py-20">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            {isMeeting ? "Agendá una reunión" : "Reservá tu turno"}
-          </h1>
-          <p className="mt-2.5 text-sm text-muted-foreground">
-            {isMeeting
-              ? "Contanos qué necesitás y coordinemos una reunión para conocer tu proyecto."
-              : "Elegí el servicio, la fecha y el horario. La disponibilidad es en tiempo real."}
-          </p>
-        </div>
+        <main className="mx-auto max-w-lg px-4 py-14 sm:px-6 sm:py-20">
+          <div className="text-center">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              {isMeeting ? "Agendá una reunión" : "Reservá tu turno"}
+            </h1>
+            <p className="mt-2.5 text-sm text-muted-foreground">
+              {isMeeting
+                ? "Contanos qué necesitás y coordinemos una reunión para conocer tu proyecto."
+                : "Elegí el servicio, la fecha y el horario. La disponibilidad es en tiempo real."}
+            </p>
+          </div>
 
-        <div className="mt-8">
-          <BookingWidget
-            slug={slug}
-            services={bookableServices}
-            business={business}
-            whatsappHref={whatsappHref}
-            initialServiceId={servicio}
-          />
-        </div>
-      </main>
+          <div className="mt-8">
+            <BookingWidget
+              slug={slug}
+              services={bookableServices}
+              business={business}
+              whatsappHref={whatsappHref}
+              initialServiceId={servicio}
+            />
+          </div>
+        </main>
 
-      <PublicFooter business={business} slug={slug} />
-      <FloatingWhatsapp href={floatingWhatsappHref} />
+        <PublicFooter business={business} slug={slug} />
+        <FloatingWhatsapp href={floatingWhatsappHref} />
+      </BookingModalProvider>
     </div>
   );
 }

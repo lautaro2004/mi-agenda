@@ -1,23 +1,28 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Clock, MessageSquareOff, MessageSquareWarning, UserX, CalendarX2, RefreshCcw } from "lucide-react";
+import { Clock, MessageSquareOff, RefreshCcw, Split, CalendarX2, FileWarning } from "lucide-react";
 
 const painPoints = [
   {
     icon: RefreshCcw,
-    title: "Repetir las mismas respuestas",
+    title: "Siempre las mismas preguntas",
     description: "Horarios, precios y direcciones, una y otra vez, todos los días.",
   },
   {
-    icon: MessageSquareOff,
-    title: "Mensajes que se pierden",
-    description: "Entre tantos chats, algunas consultas quedan sin respuesta.",
+    icon: Split,
+    title: "Reservas por mil canales distintos",
+    description: "WhatsApp, Instagram, teléfono — cada una en un lugar diferente, difícil de seguir.",
   },
   {
-    icon: UserX,
-    title: "Clientes que se van a la competencia",
-    description: "Si tardás en responder, muchos prueban con otro negocio.",
+    icon: MessageSquareOff,
+    title: "Mensajes que quedan sin responder",
+    description: "Entre tantos chats, algunas consultas se pierden y esos clientes no vuelven.",
+  },
+  {
+    icon: CalendarX2,
+    title: "Confirmar horarios a mano",
+    description: "Ida y vuelta por chat para saber si hay un lugar libre, turno por turno.",
   },
   {
     icon: Clock,
@@ -25,14 +30,9 @@ const painPoints = [
     description: "Tus clientes escriben a cualquier hora, pero vos no podés estar siempre disponible.",
   },
   {
-    icon: CalendarX2,
-    title: "Agenda desorganizada",
-    description: "Turnos anotados en papel, agendas y chats distintos que nunca cierran.",
-  },
-  {
-    icon: MessageSquareWarning,
-    title: "Dudas que se acumulan",
-    description: "Las preguntas frecuentes te interrumpen el día a día una y otra vez.",
+    icon: FileWarning,
+    title: "Información desactualizada",
+    description: "Precios viejos, horarios que cambiaron — y nadie avisó a los clientes.",
   },
 ];
 

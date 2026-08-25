@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { ResourcePicker, type ResourceOption } from "@/components/dashboard/resource-picker";
+import { SlotPicker } from "@/components/public-site/booking/slot-picker";
 import { PAYMENT_PROOF_LIMITS } from "@/lib/payment-proof-limits";
 import { manualAppointmentSchema, type ManualAppointmentValues } from "@/lib/schemas";
 import { isBookableService, type Business, type Service } from "@/lib/types";
@@ -318,40 +319,23 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
           </Field>
 
           <Field data-invalid={!!errors.startTime}>
-            <FieldLabel htmlFor="booking-time">Horario</FieldLabel>
+            {/* Sin htmlFor: SlotPicker puede renderizar chips (varios
+                botones) o un Select según la cantidad de horarios — no hay
+                un único control al que asociar la label. */}
+            <FieldLabel>Horario</FieldLabel>
             <Controller
               control={control}
               name="startTime"
               render={({ field }) => (
-                <Select
+                <SlotPicker
+                  slots={slots}
+                  loading={loadingSlots}
                   value={field.value}
-                  onValueChange={(value) => {
-                    field.onChange(value);
+                  onChange={(slot) => {
+                    field.onChange(slot);
                     setValue("resourceId", undefined);
                   }}
-                >
-                  <SelectTrigger id="booking-time" className="w-full">
-                    <SelectValue placeholder={loadingSlots ? "Buscando…" : "Elegí un horario"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {loadingSlots ? (
-                      <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                        <Loader2 className="size-3.5 animate-spin" />
-                        Buscando horarios disponibles…
-                      </div>
-                    ) : slots && slots.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        No hay horarios disponibles para esta fecha.
-                      </div>
-                    ) : (
-                      (slots ?? []).map((slot) => (
-                        <SelectItem key={slot} value={slot}>
-                          {slot}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                />
               )}
             />
             <FieldError errors={[errors.startTime]} />

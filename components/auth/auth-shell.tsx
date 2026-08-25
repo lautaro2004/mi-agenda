@@ -28,7 +28,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <MessageCircle className="size-4" />
             </span>
-            <span>Mi Agenda</span>
+            <span>Nexo</span>
           </Link>
           {children}
         </div>

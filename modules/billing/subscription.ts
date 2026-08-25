@@ -21,7 +21,7 @@ export { BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus };
 // "manual" es todo lo que existe hoy (asignado desde Superadmin). Se deja
 // listo el valor "mercadopago" para cuando exista esa integración — no se
 // implementa checkout/webhooks en esta etapa.
-export const SUBSCRIPTION_PROVIDERS = ["manual", "mercadopago"] as const;
+export const SUBSCRIPTION_PROVIDERS = ["manual", "mercadopago", "promo_code"] as const;
 
 // Plan que se asigna a negocios nuevos (ver ensureTrialSubscription) y al
 // que se backfillean los negocios que existían antes de este sistema (ver
@@ -43,6 +43,8 @@ export interface PlanSummary {
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
   statsEnabled: boolean;
+  galleryEnabled: boolean;
+  digitalMenuEnabled: boolean;
   active: boolean;
 }
 
@@ -188,6 +190,8 @@ export interface PlanFeatures {
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
   statsEnabled: boolean;
+  galleryEnabled: boolean;
+  digitalMenuEnabled: boolean;
 }
 
 const UNGATED_FEATURES: PlanFeatures = {
@@ -196,6 +200,8 @@ const UNGATED_FEATURES: PlanFeatures = {
   depositsEnabled: true,
   customTrainingEnabled: true,
   statsEnabled: true,
+  galleryEnabled: true,
+  digitalMenuEnabled: true,
 };
 
 export function resolvePlanFeatures(sub: BusinessSubscription | null): PlanFeatures {
@@ -206,6 +212,8 @@ export function resolvePlanFeatures(sub: BusinessSubscription | null): PlanFeatu
     depositsEnabled: sub.plan.depositsEnabled,
     customTrainingEnabled: sub.plan.customTrainingEnabled,
     statsEnabled: sub.plan.statsEnabled,
+    galleryEnabled: sub.plan.galleryEnabled,
+    digitalMenuEnabled: sub.plan.digitalMenuEnabled,
   };
 }
 
@@ -317,6 +325,8 @@ export interface PlanInput {
   depositsEnabled?: boolean;
   customTrainingEnabled?: boolean;
   statsEnabled?: boolean;
+  galleryEnabled?: boolean;
+  digitalMenuEnabled?: boolean;
   active?: boolean;
 }
 
@@ -334,6 +344,8 @@ export async function createPlan(data: PlanInput): Promise<PlanWithUsage> {
       depositsEnabled: data.depositsEnabled ?? true,
       customTrainingEnabled: data.customTrainingEnabled ?? true,
       statsEnabled: data.statsEnabled ?? true,
+      galleryEnabled: data.galleryEnabled ?? true,
+      digitalMenuEnabled: data.digitalMenuEnabled ?? true,
       active: data.active ?? true,
     },
   });
@@ -358,6 +370,8 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
       ...(data.depositsEnabled !== undefined ? { depositsEnabled: data.depositsEnabled } : {}),
       ...(data.customTrainingEnabled !== undefined ? { customTrainingEnabled: data.customTrainingEnabled } : {}),
       ...(data.statsEnabled !== undefined ? { statsEnabled: data.statsEnabled } : {}),
+      ...(data.galleryEnabled !== undefined ? { galleryEnabled: data.galleryEnabled } : {}),
+      ...(data.digitalMenuEnabled !== undefined ? { digitalMenuEnabled: data.digitalMenuEnabled } : {}),
       ...(data.active !== undefined ? { active: data.active } : {}),
     },
   });
@@ -378,6 +392,8 @@ function planToSummary(plan: {
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
   statsEnabled: boolean;
+  galleryEnabled: boolean;
+  digitalMenuEnabled: boolean;
   active: boolean;
 }): PlanSummary {
   return {
@@ -392,6 +408,8 @@ function planToSummary(plan: {
     depositsEnabled: plan.depositsEnabled,
     customTrainingEnabled: plan.customTrainingEnabled,
     statsEnabled: plan.statsEnabled,
+    galleryEnabled: plan.galleryEnabled,
+    digitalMenuEnabled: plan.digitalMenuEnabled,
     active: plan.active,
   };
 }

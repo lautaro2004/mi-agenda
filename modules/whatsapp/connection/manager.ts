@@ -320,6 +320,11 @@ class WhatsAppConnectionManager {
         conversationRepository.setManualMode(jid, true);
         if (!conversation.labels.includes("human_required")) {
           conversationRepository.toggleLabel(jid, "human_required");
+          // Mismo guard que evita duplicar la etiqueta: notifica al dueño
+          // una sola vez por escalamiento, no en cada mensaje siguiente de
+          // una conversación que ya quedó en modo manual.
+          const { notifyHumanRequired } = await import("@/modules/notifications/service");
+          void notifyHumanRequired({ businessId, jid, contactName: conversation.contactName });
         }
       } else if (response.labelHint && !conversation.labels.includes(response.labelHint)) {
         conversationRepository.toggleLabel(jid, response.labelHint);

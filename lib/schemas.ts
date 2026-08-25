@@ -34,6 +34,33 @@ export const registerSchema = z
 
 export type RegisterFormValues = z.infer<typeof registerSchema>;
 
+// ── Perfil de usuario (/dashboard/cuenta) ────────────────────────────────
+// Solo "name"/"image" — el User de better-auth (prisma/schema.prisma) no
+// tiene un campo "lastName" separado, y el email es de solo lectura acá
+// (changeEmail no está habilitado en lib/auth/auth.ts, ver auditoría).
+export const profileSchema = z.object({
+  name: z.string().min(2, "Ingresá tu nombre"),
+  image: z.string().nullable(),
+});
+
+export type ProfileFormValues = z.infer<typeof profileSchema>;
+
+// Mismo mínimo de 8 caracteres que registerSchema — better-auth valida el
+// mismo mínimo server-side por default, esto solo evita el viaje redondo
+// para un error obvio.
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Ingresá tu contraseña actual"),
+    newPassword: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    confirmNewPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmNewPassword, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirmNewPassword"],
+  });
+
+export type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
+
 export const loginSchema = z.object({
   email: z.string().email("Ingresá un email válido"),
   password: z.string().min(1, "Ingresá tu contraseña"),
@@ -436,6 +463,8 @@ export const planSchema = z.object({
   depositsEnabled: z.boolean().default(true),
   customTrainingEnabled: z.boolean().default(true),
   statsEnabled: z.boolean().default(true),
+  galleryEnabled: z.boolean().default(true),
+  digitalMenuEnabled: z.boolean().default(true),
   active: z.boolean().default(true),
 });
 
@@ -462,3 +491,39 @@ export const assignSubscriptionSchema = z.object({
 });
 
 export type AssignSubscriptionValues = z.infer<typeof assignSubscriptionSchema>;
+
+// ── Superadmin: Códigos promocionales ────────────────────────────────────
+// Formato NEXO-XXXX-XXX-XXXX de ejemplo (ver generatePromoCode en
+// modules/promo-codes/service.ts) pero el campo acepta cualquier string
+// razonable — Superadmin puede tipear uno a mano en vez de generarlo.
+const PROMO_CODE_RE = /^[A-Z0-9-]+$/;
+
+export const promoCodeSchema = z.object({
+  code: z.string().min(4, "El código es muy corto").max(40).regex(PROMO_CODE_RE, "Solo mayúsculas, números y guiones"),
+  planId: z.string().min(1, "Elegí un plan"),
+  // Días de bonificación — la UI ofrece presets (30/60/90/180/365) más un
+  // valor custom, ver comentario en el modelo PromoCode.
+  durationDays: z.coerce.number().int().min(1, "Necesita al menos 1 día"),
+  // vacío/null = sin límite de usos.
+  maxUses: z.coerce.number().int().min(1).nullable(),
+  // string (input type="date", YYYY-MM-DD) — se parsea a Date en el server,
+  // mismo criterio que assignSubscriptionSchema de arriba.
+  expiresAt: z.string().min(1, "Falta la fecha de vencimiento"),
+  active: z.boolean().default(true),
+  description: z.string().max(300, "La descripción es demasiado larga").optional(),
+});
+
+export type PromoCodeFormInput = z.input<typeof promoCodeSchema>;
+export type PromoCodeFormValues = z.output<typeof promoCodeSchema>;
+
+export const promoCodeUpdateSchema = promoCodeSchema.partial();
+export type PromoCodeUpdateValues = z.infer<typeof promoCodeUpdateSchema>;
+
+// Aplicación por parte del negocio (sección 6 del pedido) — un solo campo,
+// nunca expone planId/duración/etc: eso lo decide el código, no quien lo
+// aplica.
+export const redeemPromoCodeSchema = z.object({
+  code: z.string().min(1, "Ingresá un código"),
+});
+
+export type RedeemPromoCodeValues = z.infer<typeof redeemPromoCodeSchema>;

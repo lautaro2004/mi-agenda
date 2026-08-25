@@ -395,6 +395,7 @@ async function handleNeedConfirmation(
         status: depositQuote ? "pending_payment" : "confirmed",
         depositAmount: depositQuote?.depositAmount,
         totalAmount: depositQuote?.totalAmount,
+        source: "customer",
       });
 
       if ("error" in result) {
@@ -494,7 +495,7 @@ async function handleCancelConfirm(
     if (session.existingAppointmentId) {
       try {
         const { cancelAppointment } = await import("@/modules/appointments/service");
-        await cancelAppointment(session.existingAppointmentId);
+        await cancelAppointment(session.existingAppointmentId, "customer");
       } catch {
         // Proceed even if DB fails
       }

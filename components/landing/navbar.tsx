@@ -48,7 +48,7 @@ export function LandingNavbar() {
             Ingresar
           </Button>
           <Button size="sm" render={<Link href="/registro" />} nativeButton={false}>
-            Empezar gratis
+            Probar Nexo gratis
           </Button>
         </div>
 
@@ -87,7 +87,7 @@ export function LandingNavbar() {
                   Ingresar
                 </Button>
                 <Button render={<Link href="/registro" />} nativeButton={false}>
-                  Empezar gratis
+                  Probar Nexo gratis
                 </Button>
               </div>
             </SheetContent>

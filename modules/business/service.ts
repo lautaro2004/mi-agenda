@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { prisma } from "@/lib/prisma";
 import { defaultSchedule } from "@/lib/mock-data";
 import { WEEK_DAYS } from "@/lib/types";
@@ -95,7 +97,14 @@ function toClientFaq(row: { id: string; businessId: string; question: string; an
   return { id: row.id, businessId: row.businessId, question: row.question, answer: row.answer };
 }
 
-export async function getBusinessState(businessId: string) {
+// cache() de React: en el sitio público, generateMetadata() y el componente
+// de página llaman a esto por separado en el mismo request (ver
+// app/s/[slug]/page.tsx y app/s/[slug]/reservar/page.tsx) — sin memoizar,
+// eran 4 queries a Postgres repetidas dos veces en cada navegación (una de
+// las causas reales de la lentitud percibida del flujo de reserva, ver
+// auditoría). Dedupea por businessId dentro del mismo request/render; en el
+// dashboard (donde se llama una sola vez por request) no cambia nada.
+export const getBusinessState = cache(async (businessId: string) => {
   const [business, scheduleRows, serviceRows, faqRows] = await Promise.all([
     prisma.business.findUnique({ where: { id: businessId } }),
     prisma.schedule.findMany({ where: { businessId } }),
@@ -109,7 +118,7 @@ export async function getBusinessState(businessId: string) {
     services: serviceRows.map(toClientService),
     faqs: faqRows.map(toClientFaq),
   };
-}
+});
 
 // Superset laxo de BusinessInfoValues: "category" es string libre en vez del
 // enum cerrado, para que el mismo servicio sirva tanto al formulario del

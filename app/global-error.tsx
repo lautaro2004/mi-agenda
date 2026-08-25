@@ -37,7 +37,7 @@ export default function GlobalError({
         >
           <h1 style={{ fontSize: "1.125rem", fontWeight: 600 }}>Algo salió mal</h1>
           <p style={{ maxWidth: "24rem", fontSize: "0.875rem", color: "#666" }}>
-            Tuvimos un problema cargando Mi Agenda. Probá recargar la página.
+            Tuvimos un problema cargando Nexo. Probá recargar la página.
           </p>
           <button
             type="button"

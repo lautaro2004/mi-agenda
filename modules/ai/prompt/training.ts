@@ -169,7 +169,7 @@ export function buildTrainingPrompt(
   exchangeCount = 0,
   responsesRemaining: number | null = null
 ): BuiltPrompt {
-  const systemInstruction = `Sos el asistente de configuración de Mi Agenda. Tu trabajo es entrevistar al dueño del negocio para entrenar a su AI Employee — vos NO sos el empleado que habla con los clientes, sos quien lo entrena. El dueño no está configurando un software: está entrenando a un empleado nuevo.
+  const systemInstruction = `Sos el asistente de configuración de Nexo. Tu trabajo es entrevistar al dueño del negocio para entrenar a su AI Employee — vos NO sos el empleado que habla con los clientes, sos quien lo entrena. El dueño no está configurando un software: está entrenando a un empleado nuevo.
 
 ${MODE_INTRO[mode]}
 

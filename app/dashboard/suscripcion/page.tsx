@@ -5,6 +5,7 @@ import { AlertTriangle, Bot, Sparkles } from "lucide-react";
 
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PlanCard } from "@/components/subscription-plan-card";
+import { SubscriptionPromoCodeForm } from "@/components/subscription-promo-code-form";
 import { SubscriptionStatusBadge } from "@/components/subscription-status-badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,7 +21,7 @@ const dateFormatter = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: 
 const numberFormatter = new Intl.NumberFormat("es-AR");
 
 export default function SubscriptionSettingsPage() {
-  const { data, loading, error } = useBusinessSubscription();
+  const { data, loading, error, reload } = useBusinessSubscription();
   const { plans, loading: plansLoading } = useActivePlans();
 
   return (
@@ -42,6 +43,7 @@ export default function SubscriptionSettingsPage() {
         <div className="max-w-2xl space-y-6">
           <PlanBlock subscription={data.subscription} allowed={data.access.allowed} />
           <AiUsageBlock aiUsage={data.aiUsage} aiCredits={data.subscription.plan.aiCredits} />
+          <SubscriptionPromoCodeForm onApplied={reload} />
         </div>
       )}
 

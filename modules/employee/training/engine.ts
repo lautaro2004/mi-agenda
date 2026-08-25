@@ -183,6 +183,15 @@ export async function runTrainingTurn(params: {
   const limit = await getAiResponseLimit(businessId, mode);
 
   if (assistantResponseCount >= limit) {
+    // Notifica solo la primera vez que se cruza el límite en este período
+    // (=== en vez de >=): los intentos siguientes vuelven a caer acá con un
+    // count ya mayor a limit (LIMIT_REACHED_REPLY también cuenta como
+    // respuesta asistente), así que esta igualdad es naturalmente un
+    // disparo único sin bookkeeping extra.
+    if (assistantResponseCount === limit) {
+      const { notifyAiLimitReached } = await import("@/modules/notifications/service");
+      void notifyAiLimitReached({ businessId, limit });
+    }
     // No llamamos a Gemini ni una vez más: se cierra determinísticamente,
     // igual que el botón "Terminar configuración" (ver
     // ignoreRemainingSections), y se le explica al dueño con el mismo texto

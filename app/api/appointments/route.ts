@@ -85,6 +85,7 @@ export async function POST(request: Request) {
       durationMinutes: service.durationMinutes > 0 ? service.durationMinutes : 60,
       notes,
       resourceId: resourceId ?? null,
+      source: "dashboard",
     });
 
     if ("error" in result) {

@@ -32,6 +32,8 @@ interface PlanLike {
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
   statsEnabled: boolean;
+  galleryEnabled: boolean;
+  digitalMenuEnabled: boolean;
   active: boolean;
 }
 
@@ -58,6 +60,8 @@ export function PlanDialog({ trigger, plan, onSubmit }: PlanDialogProps) {
     depositsEnabled: plan?.depositsEnabled ?? true,
     customTrainingEnabled: plan?.customTrainingEnabled ?? true,
     statsEnabled: plan?.statsEnabled ?? true,
+    galleryEnabled: plan?.galleryEnabled ?? true,
+    digitalMenuEnabled: plan?.digitalMenuEnabled ?? true,
     active: plan?.active ?? true,
   };
 
@@ -201,6 +205,22 @@ export function PlanDialog({ trigger, plan, onSubmit }: PlanDialogProps) {
                     control={control}
                     name="statsEnabled"
                     render={({ field }) => <Switch id="plan-stats" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-gallery">Galería de fotos</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="galleryEnabled"
+                    render={({ field }) => <Switch id="plan-gallery" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-menu">Carta digital + QR</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="digitalMenuEnabled"
+                    render={({ field }) => <Switch id="plan-menu" checked={field.value} onCheckedChange={field.onChange} />}
                   />
                 </Field>
               </div>

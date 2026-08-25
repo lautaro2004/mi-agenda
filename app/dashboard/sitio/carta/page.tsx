@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requestJson } from "@/lib/api-client";
 import { useOnboarding } from "@/lib/onboarding-store";
+import { useBusinessSubscription } from "@/lib/subscription-client";
 import { ASSET_LIMITS } from "@/lib/asset-limits";
 
 interface MenuState {
@@ -37,6 +38,10 @@ function fileNameFromUrl(url: string): string {
 export default function MenuPage() {
   const { state: onboardingState } = useOnboarding();
   const slug = onboardingState.business.slug;
+  const { data: subscriptionData } = useBusinessSubscription();
+  // undefined mientras carga: no bloqueamos la carta antes de saber el plan
+  // real (mismo criterio que app/dashboard/whatsapp/conexion/page.tsx).
+  const digitalMenuEnabled = subscriptionData?.subscription?.plan.digitalMenuEnabled ?? true;
 
   const [menu, setMenu] = React.useState<MenuState | null>(null);
   const [loadError, setLoadError] = React.useState(false);
@@ -152,8 +157,21 @@ export default function MenuPage() {
               {menu.menuEnabled ? "Carta activa" : "Carta desactivada"}
             </p>
           </div>
-          <Switch checked={menu.menuEnabled} disabled={toggling} onCheckedChange={(checked) => void handleToggle(checked)} />
+          <Switch
+            checked={menu.menuEnabled}
+            disabled={toggling || (!digitalMenuEnabled && !menu.menuEnabled)}
+            onCheckedChange={(checked) => void handleToggle(checked)}
+          />
         </div>
+
+        {!digitalMenuEnabled && !menu.menuEnabled && (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+            <p className="text-foreground">La carta digital está disponible desde el plan Profesional.</p>
+            <Button size="sm" className="mt-3" render={<Link href="/dashboard/suscripcion" />} nativeButton={false}>
+              Ver planes
+            </Button>
+          </div>
+        )}
 
         <div className="mt-6 border-t border-border pt-6">
           <p className="text-sm font-medium text-foreground">PDF cargado</p>
