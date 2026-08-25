@@ -14,6 +14,7 @@ import { LandingMenuShowcase } from "@/components/landing/menu-showcase";
 import { LandingAudience } from "@/components/landing/audience";
 import { LandingOnboardingHighlight } from "@/components/landing/onboarding-highlight";
 import { LandingPricing } from "@/components/landing/pricing";
+import { LandingLeadEvaluationSection } from "@/components/landing/lead-evaluation-section";
 import { LandingCta } from "@/components/landing/cta";
 import { LandingFooter } from "@/components/landing/footer";
 
@@ -37,6 +38,7 @@ export default function Home() {
         <LandingAudience />
         <LandingOnboardingHighlight />
         <LandingPricing />
+        <LandingLeadEvaluationSection />
         <LandingCta />
       </main>
       <LandingFooter />

@@ -91,6 +91,7 @@ model Business {
   subscription   Subscription?
   notifications  BusinessNotification[]
   promoCodeRedemptions PromoCodeRedemption[]
+  convertedFromLeads   Lead[]
 }
 
 // Centro de notificaciones del dueño (ver modules/notifications/service.ts,
@@ -783,6 +784,65 @@ model PromoCodeRedemption {
 
   @@index([promoCodeId])
   @@index([businessId])
+}
+
+// ── Leads comerciales (landing) ──────────────────────────────────────────
+// Captación simple, no un CRM: un visitante de la landing sin cuenta manda
+// el formulario de evaluación (ver app/api/leads/route.ts, público, sin
+// auth) y esto queda acá para que Superadmin lo trabaje manualmente. Un Lead
+// puede existir toda su vida sin volverse nunca un Business real — no hay
+// ninguna creación automática de Business desde este modelo (ver sección 9
+// del pedido).
+model Lead {
+  id           String   @id @default(cuid())
+  name         String
+  businessName String
+  whatsapp     String
+  email        String
+  // Texto libre — mismo criterio que Business.category (ver comentario ahí):
+  // el <Select> de la landing restringe a BUSINESS_CATEGORIES, pero la
+  // columna no fuerza esa lista cerrada.
+  industry     String
+  // Array nativo de Postgres (Prisma soporta String[] directo, sin tabla de
+  // unión) — valores válidos en LEAD_GOALS (lib/types.ts). "Qué querés
+  // mejorar" es multi-selección a propósito: un negocio real casi siempre
+  // marca más de una opción.
+  goals         String[]
+  // "under_20" | "20_50" | "50_100" | "over_100" | "unknown" — ver
+  // LEAD_MONTHLY_VOLUMES en lib/types.ts. Nullable: la pregunta es opcional
+  // de responder en el form (nunca se fuerza a adivinar un número).
+  monthlyVolume String?
+  message       String?
+  wantsMeeting  Boolean  @default(false)
+  // NEW | CONTACTED | MEETING | PROPOSAL | CONVERTED | LOST — String, no
+  // enum de Prisma: mismo criterio que Appointment.status/Subscription.status
+  // en este mismo schema, nunca se usó `enum` acá. Ver LEAD_STATUSES.
+  status String @default("NEW")
+  // Slug de Plan ("gratis"|"esencial"|"profesional"), nunca una FK — es una
+  // sugerencia calculada por reglas simples (ver
+  // modules/leads/suggest-plan.ts), no una asignación real de plan. Si el
+  // Plan se borra/renombra después, el historial del lead no debe romperse.
+  suggestedPlan String?
+  // Notas internas de seguimiento — solo las ve Superadmin, nunca el lead.
+  notes String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  contactedAt DateTime?
+  meetingAt   DateTime?
+  convertedAt DateTime?
+
+  // Vínculo opcional si el lead se convirtió en un Business real ya
+  // existente (sección 9 del pedido: Superadmin lo relaciona a mano eligiendo
+  // uno existente — este modelo NUNCA crea un Business). SetNull: si ese
+  // Business se borra después, el lead conserva su historial, solo pierde
+  // el vínculo.
+  convertedBusinessId String?
+  convertedBusiness   Business? @relation(fields: [convertedBusinessId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([convertedBusinessId])
 }
 
 model Membership {

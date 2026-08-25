@@ -681,6 +681,59 @@ export interface TrainingPlan {
 export const BILLING_SUBSCRIPTION_STATUSES = ["trialing", "active", "past_due", "canceled", "expired"] as const;
 export type BillingSubscriptionStatus = (typeof BILLING_SUBSCRIPTION_STATUSES)[number];
 
+// ── Leads comerciales (landing) ──────────────────────────────────────────
+// Ver modelo Lead en prisma/schema.prisma y modules/leads/service.ts. Estas
+// constantes son la única fuente de verdad de qué valores son válidos —
+// tanto el form público (lib/schemas.ts) como Superadmin las importan de
+// acá, nunca se repite la lista en otro lado.
+
+export const LEAD_STATUSES = ["NEW", "CONTACTED", "MEETING", "PROPOSAL", "CONVERTED", "LOST"] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
+export const LEAD_STATUS_META: Record<LeadStatus, { label: string; className: string }> = {
+  NEW: { label: "Nuevo", className: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+  CONTACTED: { label: "Contactado", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  MEETING: { label: "Reunión", className: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
+  PROPOSAL: { label: "Propuesta", className: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400" },
+  CONVERTED: { label: "Convertido", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  LOST: { label: "Perdido", className: "bg-muted text-muted-foreground" },
+};
+
+// "Qué querés mejorar" del formulario — multi-selección a propósito (ver
+// comentario en el modelo Lead). El orden acá es el orden en que se
+// muestran las opciones en el form.
+export const LEAD_GOALS = [
+  "more_bookings",
+  "automate_inquiries",
+  "better_web_presence",
+  "organize_business",
+  "automate_whatsapp",
+  "digital_menu",
+  "other",
+] as const;
+export type LeadGoal = (typeof LEAD_GOALS)[number];
+
+export const LEAD_GOAL_LABEL: Record<LeadGoal, string> = {
+  more_bookings: "Recibir más reservas",
+  automate_inquiries: "Automatizar consultas",
+  better_web_presence: "Tener una mejor presencia web",
+  organize_business: "Organizar mejor mi negocio",
+  automate_whatsapp: "Automatizar WhatsApp",
+  digital_menu: "Carta digital / QR",
+  other: "Otro",
+};
+
+export const LEAD_MONTHLY_VOLUMES = ["under_20", "20_50", "50_100", "over_100", "unknown"] as const;
+export type LeadMonthlyVolume = (typeof LEAD_MONTHLY_VOLUMES)[number];
+
+export const LEAD_MONTHLY_VOLUME_LABEL: Record<LeadMonthlyVolume, string> = {
+  under_20: "Menos de 20 por mes",
+  "20_50": "20-50",
+  "50_100": "50-100",
+  over_100: "Más de 100",
+  unknown: "No sé",
+};
+
 export const ONBOARDING_STEPS = [
   { id: 1, slug: "negocio", title: "Tu negocio", description: "Contanos sobre tu negocio" },
   { id: 2, slug: "horarios", title: "Horarios", description: "Definí tus horarios de atención" },

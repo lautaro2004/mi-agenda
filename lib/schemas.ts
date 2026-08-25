@@ -16,6 +16,9 @@ import {
   MEMORY_IMPORTANCE_LEVELS,
   SERVICE_CATEGORIES,
   WEEK_DAYS,
+  LEAD_GOALS,
+  LEAD_MONTHLY_VOLUMES,
+  LEAD_STATUSES,
   type EmployeeCapabilityKey,
 } from "@/lib/types";
 
@@ -502,6 +505,47 @@ export const grantBenefitSchema = z.object({
 });
 
 export type GrantBenefitValues = z.infer<typeof grantBenefitSchema>;
+
+// ── Leads comerciales (landing) ──────────────────────────────────────────
+// Público, sin auth (ver app/api/leads/route.ts) — validación real de
+// entrada server-side, nunca confiar solo en el <form> del cliente. "website"
+// es un honeypot: un campo oculto por CSS que un visitante real nunca
+// completa pero un bot que autocompleta todos los inputs sí — si llega con
+// contenido, el server responde éxito falso sin crear el Lead (nunca se le
+// avisa al bot que fue detectado).
+export const leadFormSchema = z.object({
+  name: z.string().trim().min(2, "Ingresá tu nombre").max(100),
+  businessName: z.string().trim().min(2, "Ingresá el nombre de tu negocio").max(100),
+  whatsapp: z.string().trim().min(6, "Ingresá un WhatsApp válido").max(30),
+  email: z.string().trim().email("Ingresá un email válido").max(200),
+  industry: z.string().trim().min(1, "Elegí un rubro").max(80),
+  goals: z.array(z.enum(LEAD_GOALS)).min(1, "Elegí al menos una opción"),
+  monthlyVolume: z.enum(LEAD_MONTHLY_VOLUMES).optional(),
+  message: z.string().trim().max(500, "Contanos en menos de 500 caracteres").optional(),
+  wantsMeeting: z.boolean(),
+  // Sin restricción de longitud a propósito: un bot puede escribir cualquier
+  // cosa acá (una URL, texto random). Si esto llegara a fallar la
+  // validación del schema, la ruta respondería 400 — eso SÍ delataría al
+  // bot que algo lo distingue de un envío real. En cambio, este campo
+  // siempre pasa el schema, y app/api/leads/route.ts es quien decide en
+  // silencio: si viene con contenido, responde éxito falso sin crear el Lead.
+  website: z.string().max(200).optional(),
+});
+
+export type LeadFormValues = z.infer<typeof leadFormSchema>;
+
+// Actualización desde Superadmin (sección 7 del pedido: estado, notas,
+// reunión, conversión) — deliberadamente NO incluye ningún campo que venga
+// del formulario público (name/email/goals/etc): un lead no se "reedita" el
+// contacto original desde acá, solo se le hace seguimiento.
+export const leadUpdateSchema = z.object({
+  status: z.enum(LEAD_STATUSES).optional(),
+  notes: z.string().max(2000, "Las notas son demasiado largas").optional(),
+  meetingAt: z.string().optional(),
+  convertedBusinessId: z.string().optional(),
+});
+
+export type LeadUpdateValues = z.infer<typeof leadUpdateSchema>;
 
 // ── Superadmin: Códigos promocionales ────────────────────────────────────
 // Formato NEXO-XXXX-XXX-XXXX de ejemplo (ver generatePromoCode en
