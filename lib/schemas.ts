@@ -582,3 +582,16 @@ export const redeemPromoCodeSchema = z.object({
 });
 
 export type RedeemPromoCodeValues = z.infer<typeof redeemPromoCodeSchema>;
+
+// Contratación vía Mercado Pago (Fase 3) — cardTokenId lo genera el
+// navegador con Checkout Bricks (CardForm), nunca pasa una tarjeta cruda por
+// acá. payerEmail viaja explícito porque es el que se usó para tokenizar la
+// tarjeta (no necesariamente el mismo que session.user.email, aunque en la
+// práctica suele coincidir).
+export const subscriptionCheckoutSchema = z.object({
+  planId: z.string().min(1, "Elegí un plan"),
+  cardTokenId: z.string().min(1, "Falta el token de la tarjeta"),
+  payerEmail: z.string().email("Email inválido"),
+});
+
+export type SubscriptionCheckoutValues = z.infer<typeof subscriptionCheckoutSchema>;

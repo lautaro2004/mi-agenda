@@ -661,6 +661,25 @@ model Plan {
   galleryEnabled        Boolean  @default(true)
   digitalMenuEnabled    Boolean  @default(true)
 
+  // ── Mercado Pago (ver modules/billing/mercadopago/) ─────────────────────
+  // Gratis (monthlyPrice = 0) nunca tiene estos campos poblados — no necesita
+  // preapproval_plan. mercadoPagoPlanId es el id del preapproval_plan VIGENTE
+  // para nuevas contrataciones: si el precio cambia, se crea un
+  // preapproval_plan nuevo en MP y este campo pasa a apuntar a ese id nuevo
+  // (la documentación de MP no confirma que transaction_amount se pueda
+  // actualizar sobre un plan existente sin afectar a quienes ya lo tienen
+  // autorizado — ver sync-plan.ts). Las Subscription ya autorizadas guardan
+  // su propio providerSubscriptionId, independiente de este campo, así que
+  // "reapuntar" acá nunca las afecta.
+  mercadoPagoPlanId       String?   @unique
+  // "synced" | "pending" | "error" | null = todavía nunca se intentó
+  // sincronizar (plan Gratis, o plan pago recién creado antes del primer
+  // intento). Nunca se muestra "sincronizado" en la UI de Superadmin si esto
+  // no dice "synced" — ver sección 15 del pedido.
+  mercadoPagoSyncStatus   String?
+  mercadoPagoLastSyncedAt DateTime?
+  mercadoPagoSyncError    String?
+
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -685,14 +704,28 @@ model Subscription {
   status                 String    @default("trialing")
   currentPeriodStart     DateTime?
   currentPeriodEnd       DateTime?
-  // "manual" (asignado desde Superadmin) | "mercadopago" (cuando exista esa
-  // integración — no implementada acá) | "promo_code" (canje de un
+  // "manual" (asignado desde Superadmin) | "mercadopago" (pago recurrente
+  // real, ver modules/billing/mercadopago/) | "promo_code" (canje de un
   // PromoCode) | "benefit" (bonificación temporal otorgada a mano desde
   // /superadmin/empresas — ver grantTemporaryPlan() más abajo). Todos pasan
   // por assignSubscription() tal cual, nunca una segunda lógica de
-  // suscripciones.
+  // suscripciones. Mercado Pago es la fuente de verdad del COBRO cuando
+  // provider = "mercadopago"; Nexo sigue siendo la fuente de verdad de qué
+  // implica ese estado (gating, créditos IA) vía resolveAiAccess/
+  // resolvePlanFeatures, que nunca miran mercadoPagoStatus directamente.
   provider               String?
+  // Reutilizado tal cual como el id del preapproval de Mercado Pago cuando
+  // provider = "mercadopago" — nunca se agregó un mercadoPagoSubscriptionId
+  // aparte, este campo ya cumplía exactamente ese rol desde que existe.
   providerSubscriptionId String?
+  // Estado CRUDO devuelto por Mercado Pago (pending|authorized|paused|cancelled)
+  // — separado a propósito de "status" de arriba: "status" es el vocabulario
+  // interno de Nexo (trialing/active/past_due/canceled/expired) que ya
+  // entienden resolveAiAccess/resolvePlanFeatures; este campo es solo para
+  // mostrar/depurar el valor real de MP sin traducir, nunca se lee para
+  // decidir gating. Ver mapMercadoPagoStatus() para el mapping documentado.
+  mercadoPagoStatus       String?
+  mercadoPagoLastSyncedAt DateTime?
   // Bonificación temporal en curso (otorgada a mano o vía PromoCode): no
   // null = esta Subscription debe revertirse a previousPlanId cuando
   // benefitExpiresAt pase — ver revertExpiredBenefits() en
@@ -703,7 +736,9 @@ model Subscription {
   // cancela cualquier reversión automática pendiente). previousPlanId es un
   // id suelto (sin FK, mismo criterio que PaymentProof.reviewedBy): es un
   // snapshot de a qué volver, no debe poder bloquear ni verse bloqueado por
-  // el ciclo de vida de ese Plan.
+  // el ciclo de vida de ese Plan. Nunca se setean para provider="mercadopago"
+  // — un beneficio/promo y una suscripción paga son conceptos separados
+  // (sección 9/17/18 del pedido).
   benefitExpiresAt DateTime?
   previousPlanId   String?
   createdAt              DateTime  @default(now())
@@ -719,6 +754,19 @@ model Subscription {
   @@index([planId])
   @@index([status])
   @@index([benefitExpiresAt])
+}
+
+// Idempotencia de POST /api/webhooks/mercadopago (Fase 4): Mercado Pago
+// reintenta una notificación hasta recibir 200, así que el mismo evento
+// puede llegar más de una vez. `id` es el id de notificación que manda MP en
+// el body del webhook (no data.id, que es el id del preapproval/pago) — un
+// segundo intento con el mismo id choca contra el @id y el handler corta ahí
+// sin reprocesar. Fila de auditoría liviana, nunca se borra ni se lee para
+// nada más que este chequeo.
+model MercadoPagoWebhookEvent {
+  id         String   @id
+  type       String
+  receivedAt DateTime @default(now())
 }
 
 // ── Códigos promocionales ────────────────────────────────────────────────

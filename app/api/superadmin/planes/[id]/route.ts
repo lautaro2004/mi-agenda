@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSuperadminSession } from "@/lib/auth/superadmin";
 import { planUpdateSchema } from "@/lib/schemas";
 import { updatePlan } from "@/modules/billing/subscription";
+import { syncPlanWithMercadoPago } from "@/modules/billing/mercadopago/sync-plan";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -31,7 +32,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (!plan) {
       return NextResponse.json({ error: "Plan no encontrado." }, { status: 404 });
     }
-    return NextResponse.json({ plan });
+    // Fase 2: cualquier edición de un plan pago vuelve a sincronizar con
+    // Mercado Pago (metadata in-place, o una versión nueva del preapproval_plan
+    // si cambió el precio — ver syncPlanWithMercadoPago). Si el plan pasó a
+    // ser Gratis o ya era Gratis, esto es un no-op.
+    const synced = await syncPlanWithMercadoPago(plan);
+    return NextResponse.json({ plan: synced ?? plan });
   } catch (error) {
     console.error("[superadmin/planes/:id] Error al actualizar plan:", error);
     return NextResponse.json({ error: "No pudimos actualizar el plan. ¿El slug ya existe?" }, { status: 400 });

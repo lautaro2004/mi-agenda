@@ -18,10 +18,10 @@ import { BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus } from "@
 // comodidad de import para el resto de los módulos server-side.
 export { BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus };
 
-// "manual" es la asignación directa desde Superadmin. "mercadopago" queda
-// listo para cuando exista esa integración — no se implementa
-// checkout/webhooks en esta etapa. "promo_code"/"benefit" son bonificaciones
-// temporales (ver benefitExpiresAt/previousPlanId más abajo).
+// "manual" es la asignación directa desde Superadmin. "mercadopago" es un
+// cobro recurrente real (ver modules/billing/mercadopago/, Fase 3+).
+// "promo_code"/"benefit" son bonificaciones temporales (ver
+// benefitExpiresAt/previousPlanId más abajo).
 export const SUBSCRIPTION_PROVIDERS = ["manual", "mercadopago", "promo_code", "benefit"] as const;
 
 // Plan que se asigna a negocios nuevos (ver ensureTrialSubscription) y al
@@ -47,6 +47,12 @@ export interface PlanSummary {
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
   active: boolean;
+  // Ver modules/billing/mercadopago/sync-plan.ts — null = Gratis (nunca
+  // sincroniza) o un plan pago que todavía no se sincronizó ni una vez.
+  mercadoPagoPlanId: string | null;
+  mercadoPagoSyncStatus: string | null;
+  mercadoPagoLastSyncedAt: Date | null;
+  mercadoPagoSyncError: string | null;
 }
 
 export interface BusinessSubscription {
@@ -58,6 +64,11 @@ export interface BusinessSubscription {
   currentPeriodEnd: Date | null;
   provider: string | null;
   providerSubscriptionId: string | null;
+  // Estado crudo de Mercado Pago (pending|authorized|paused|cancelled) —
+  // nunca se usa para decidir gating, solo para mostrar/depurar. Ver
+  // comentario en el modelo Subscription.
+  mercadoPagoStatus: string | null;
+  mercadoPagoLastSyncedAt: Date | null;
   // no null = bonificación temporal en curso — ver comentario en el modelo
   // Subscription (prisma/schema.prisma) y revertExpiredBenefits() más abajo.
   benefitExpiresAt: Date | null;
@@ -77,6 +88,8 @@ function toBusinessSubscription(row: SubscriptionWithPlan): BusinessSubscription
     currentPeriodEnd: row.currentPeriodEnd,
     provider: row.provider,
     providerSubscriptionId: row.providerSubscriptionId,
+    mercadoPagoStatus: row.mercadoPagoStatus,
+    mercadoPagoLastSyncedAt: row.mercadoPagoLastSyncedAt,
     benefitExpiresAt: row.benefitExpiresAt,
     previousPlanId: row.previousPlanId,
     plan: planToSummary(row.plan),
@@ -293,6 +306,16 @@ export async function listActivePlans(): Promise<PublicPlan[]> {
   return plans.map((p) => ({ ...planToSummary(p), description: p.description }));
 }
 
+// Único lector de un Plan por id fuera de Superadmin (create/updatePlan) —
+// usado por modules/billing/mercadopago/checkout.ts (Fase 3) para validar
+// active/mercadoPagoPlanId antes de contratar, sin que ese módulo toque
+// prisma directamente (mismo criterio de dependencia en un solo sentido que
+// sync-plan.ts).
+export async function getPlanById(planId: string): Promise<PlanSummary | null> {
+  const plan = await prisma.plan.findUnique({ where: { id: planId } });
+  return plan ? planToSummary(plan) : null;
+}
+
 // ── Administración de Planes (Superadmin) ────────────────────────────────
 
 export interface PlanWithUsage extends PlanSummary {
@@ -387,6 +410,44 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
   return { ...planToSummary(plan), description: plan.description, createdAt: plan.createdAt.toISOString(), updatedAt: plan.updatedAt.toISOString(), businessCount: count };
 }
 
+// ── Sincronización con Mercado Pago (ver modules/billing/mercadopago/) ──
+// Único punto que escribe los 4 campos mercadoPago* de Plan — separado a
+// propósito de createPlan()/updatePlan(): esos dos son el CRUD del "Plan de
+// Nexo" tal como lo edita Superadmin a mano (nunca aceptan estos campos como
+// input), esto es lo que llama la orquestación de sync después de hablar con
+// la API de Mercado Pago. mercadoPagoLastSyncedAt se pisa siempre con "ahora"
+// — cada llamada acá ES un intento de sincronización, exitoso o no.
+export interface PlanMercadoPagoSyncUpdate {
+  // Ausente = no se creó/reemplazó ningún preapproval_plan en este intento
+  // (ej. una sincronización que solo actualiza metadata). Presente = pisa el
+  // id vigente, típicamente porque se creó una versión nueva por cambio de
+  // precio.
+  mercadoPagoPlanId?: string;
+  mercadoPagoSyncStatus: "synced" | "error";
+  mercadoPagoSyncError: string | null;
+}
+
+export async function updatePlanMercadoPagoSync(
+  planId: string,
+  data: PlanMercadoPagoSyncUpdate
+): Promise<PlanWithUsage | null> {
+  const existing = await prisma.plan.findUnique({ where: { id: planId } });
+  if (!existing) return null;
+
+  const plan = await prisma.plan.update({
+    where: { id: planId },
+    data: {
+      ...(data.mercadoPagoPlanId !== undefined ? { mercadoPagoPlanId: data.mercadoPagoPlanId } : {}),
+      mercadoPagoSyncStatus: data.mercadoPagoSyncStatus,
+      mercadoPagoSyncError: data.mercadoPagoSyncError,
+      mercadoPagoLastSyncedAt: new Date(),
+    },
+  });
+
+  const count = await prisma.subscription.count({ where: { planId } });
+  return { ...planToSummary(plan), description: plan.description, createdAt: plan.createdAt.toISOString(), updatedAt: plan.updatedAt.toISOString(), businessCount: count };
+}
+
 function planToSummary(plan: {
   id: string;
   name: string;
@@ -402,6 +463,10 @@ function planToSummary(plan: {
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
   active: boolean;
+  mercadoPagoPlanId: string | null;
+  mercadoPagoSyncStatus: string | null;
+  mercadoPagoLastSyncedAt: Date | null;
+  mercadoPagoSyncError: string | null;
 }): PlanSummary {
   return {
     id: plan.id,
@@ -418,6 +483,10 @@ function planToSummary(plan: {
     galleryEnabled: plan.galleryEnabled,
     digitalMenuEnabled: plan.digitalMenuEnabled,
     active: plan.active,
+    mercadoPagoPlanId: plan.mercadoPagoPlanId,
+    mercadoPagoSyncStatus: plan.mercadoPagoSyncStatus,
+    mercadoPagoLastSyncedAt: plan.mercadoPagoLastSyncedAt,
+    mercadoPagoSyncError: plan.mercadoPagoSyncError,
   };
 }
 
@@ -441,6 +510,15 @@ export interface AssignSubscriptionInput {
   // los pasan.
   benefitExpiresAt?: Date | null;
   previousPlanId?: string | null;
+  // Ausentes/undefined = sin vínculo con Mercado Pago (el caso normal:
+  // asignación manual/beneficio/promo, ninguno de los tres pasa esto — ver
+  // Fase 9). Igual criterio que benefitExpiresAt/previousPlanId arriba: una
+  // asignación que no los pasa explícitamente los limpia — quien SÍ tiene un
+  // preapproval vigente (checkout.ts, el webhook) los vuelve a pasar en cada
+  // llamada, nunca asume que quedaron de una vez anterior.
+  providerSubscriptionId?: string | null;
+  mercadoPagoStatus?: string | null;
+  mercadoPagoLastSyncedAt?: Date | null;
 }
 
 export type AssignSubscriptionError = "plan_not_found" | "plan_inactive";
@@ -464,6 +542,9 @@ export async function assignSubscription(
       provider: input.provider ?? "manual",
       benefitExpiresAt: input.benefitExpiresAt ?? null,
       previousPlanId: input.previousPlanId ?? null,
+      providerSubscriptionId: input.providerSubscriptionId ?? null,
+      mercadoPagoStatus: input.mercadoPagoStatus ?? null,
+      mercadoPagoLastSyncedAt: input.mercadoPagoLastSyncedAt ?? null,
     },
     update: {
       planId: input.planId,
@@ -473,6 +554,9 @@ export async function assignSubscription(
       provider: input.provider ?? "manual",
       benefitExpiresAt: input.benefitExpiresAt ?? null,
       previousPlanId: input.previousPlanId ?? null,
+      providerSubscriptionId: input.providerSubscriptionId ?? null,
+      mercadoPagoStatus: input.mercadoPagoStatus ?? null,
+      mercadoPagoLastSyncedAt: input.mercadoPagoLastSyncedAt ?? null,
     },
     include: { plan: true },
   });

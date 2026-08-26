@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Pencil, Plus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Pencil, Plus } from "lucide-react";
 
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PlanDialog } from "@/components/superadmin/plan-dialog";
@@ -30,6 +30,65 @@ interface PlanWithUsage {
   digitalMenuEnabled: boolean;
   active: boolean;
   businessCount: number;
+  mercadoPagoPlanId: string | null;
+  mercadoPagoSyncStatus: string | null;
+  mercadoPagoLastSyncedAt: string | null;
+  mercadoPagoSyncError: string | null;
+}
+
+const dateTimeFormatter = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+// Columna "Mercado Pago" (sección 15 del pedido): nunca debe poder leerse
+// como "conectado" si mercadoPagoSyncStatus no es exactamente "synced" — un
+// plan pago sin sincronizar todavía y uno con error se muestran distinto a
+// propósito, para que Superadmin nunca crea que un plan está conectado sin
+// estarlo.
+function MercadoPagoStatusCell({ plan }: { plan: PlanWithUsage }) {
+  if (plan.monthlyPrice <= 0) {
+    return <span className="text-xs text-muted-foreground">No aplica</span>;
+  }
+
+  if (plan.mercadoPagoSyncStatus === "synced" && plan.mercadoPagoPlanId) {
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge variant="outline" className="w-fit gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 className="size-3" />
+          Conectado
+        </Badge>
+        <p className="font-mono text-[11px] text-muted-foreground" title={plan.mercadoPagoPlanId}>
+          {plan.mercadoPagoPlanId.slice(0, 18)}…
+        </p>
+        {plan.mercadoPagoLastSyncedAt && (
+          <p className="text-[11px] text-muted-foreground">
+            {dateTimeFormatter.format(new Date(plan.mercadoPagoLastSyncedAt))}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (plan.mercadoPagoSyncStatus === "error") {
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge variant="outline" className="w-fit gap-1 border-destructive/30 text-destructive">
+          <AlertTriangle className="size-3" />
+          Error
+        </Badge>
+        {plan.mercadoPagoSyncError && (
+          <p className="max-w-48 truncate text-[11px] text-destructive" title={plan.mercadoPagoSyncError}>
+            {plan.mercadoPagoSyncError}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Badge variant="outline" className="w-fit gap-1 text-muted-foreground">
+      <Circle className="size-3" />
+      No conectado
+    </Badge>
+  );
 }
 
 const FEATURE_LABEL: Record<
@@ -68,10 +127,25 @@ export default function SuperadminPlanesPage() {
 
   React.useEffect(loadPlans, []);
 
+  // El plan de Nexo se guarda igual pase lo que pase con Mercado Pago (ver
+  // syncPlanWithMercadoPago) — pero si el sync falló, hay que decírselo a
+  // Superadmin en vez de un genérico "Plan creado/actualizado" que sugiera
+  // que todo salió bien (sección 2/15 del pedido).
+  function notifyPlanSaved(plan: PlanWithUsage, savedLabel: string) {
+    if (plan.mercadoPagoSyncStatus === "error") {
+      toast.warning(`${savedLabel}, pero no se pudo sincronizar con Mercado Pago: ${plan.mercadoPagoSyncError ?? "error desconocido"}`);
+    } else {
+      toast.success(savedLabel);
+    }
+  }
+
   async function handleCreate(values: PlanFormValues) {
     try {
-      await requestJson("/api/superadmin/planes", { method: "POST", body: JSON.stringify(values) });
-      toast.success("Plan creado");
+      const { plan } = await requestJson<{ plan: PlanWithUsage }>("/api/superadmin/planes", {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      notifyPlanSaved(plan, "Plan creado");
       loadPlans();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No pudimos crear el plan.");
@@ -80,8 +154,11 @@ export default function SuperadminPlanesPage() {
 
   async function handleUpdate(id: string, values: PlanFormValues) {
     try {
-      await requestJson(`/api/superadmin/planes/${id}`, { method: "PATCH", body: JSON.stringify(values) });
-      toast.success("Plan actualizado");
+      const { plan } = await requestJson<{ plan: PlanWithUsage }>(`/api/superadmin/planes/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(values),
+      });
+      notifyPlanSaved(plan, "Plan actualizado");
       loadPlans();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No pudimos actualizar el plan.");
@@ -121,6 +198,7 @@ export default function SuperadminPlanesPage() {
               <th className="px-4 py-3 font-medium">Funcionalidades</th>
               <th className="px-4 py-3 font-medium">Empresas</th>
               <th className="px-4 py-3 font-medium">Estado</th>
+              <th className="px-4 py-3 font-medium">Mercado Pago</th>
               <th className="px-4 py-3 font-medium" />
             </tr>
           </thead>
@@ -128,14 +206,14 @@ export default function SuperadminPlanesPage() {
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3" colSpan={7}>
+                  <td className="px-4 py-3" colSpan={8}>
                     <Skeleton className="h-5 w-full" />
                   </td>
                 </tr>
               ))
             ) : !plans || plans.length === 0 ? (
               <tr>
-                <td className="px-4 py-8 text-center text-muted-foreground" colSpan={7}>
+                <td className="px-4 py-8 text-center text-muted-foreground" colSpan={8}>
                   Todavía no hay planes creados.
                 </td>
               </tr>
@@ -173,6 +251,9 @@ export default function SuperadminPlanesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={plan.active ? "secondary" : "outline"}>{plan.active ? "Activo" : "Inactivo"}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <MercadoPagoStatusCell plan={plan} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">

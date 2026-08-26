@@ -30,6 +30,10 @@ export interface SubscriptionPlanInfo {
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
   active: boolean;
+  // null = Gratis, o un plan pago que Superadmin todavía no sincronizó con
+  // Mercado Pago (ver modules/billing/mercadopago/sync-plan.ts) — en ambos
+  // casos no se puede contratar todavía, ver subscription-checkout-dialog.tsx.
+  mercadoPagoPlanId: string | null;
 }
 
 export interface BusinessSubscriptionInfo {

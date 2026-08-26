@@ -2,13 +2,24 @@ import { Check } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SubscriptionCheckoutDialog } from "@/components/subscription-checkout-dialog";
 import { formatPriceInCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { PLAN_SUBTITLE_BY_SLUG, buildPlanFeatureLines, type PublicPlan } from "@/lib/subscription-client";
 
 // Compartida por /dashboard/suscripcion y /onboarding/suscripcion — ambas
 // muestran los mismos planes reales (GET /api/plans), nunca datos inventados.
-export function PlanCard({ plan, isCurrent }: { plan: PublicPlan; isCurrent: boolean }) {
+// onContracted es opcional: /onboarding/suscripcion (donde todavía no existe
+// ningún flujo de contratación real) puede seguir sin pasarlo, ver más abajo.
+export function PlanCard({
+  plan,
+  isCurrent,
+  onContracted,
+}: {
+  plan: PublicPlan;
+  isCurrent: boolean;
+  onContracted?: () => void;
+}) {
   const subtitle = PLAN_SUBTITLE_BY_SLUG[plan.slug];
 
   return (
@@ -49,6 +60,12 @@ export function PlanCard({ plan, isCurrent }: { plan: PublicPlan; isCurrent: boo
           <Button className="w-full" variant="outline" disabled>
             Plan actual
           </Button>
+        ) : plan.monthlyPrice > 0 && plan.mercadoPagoPlanId && onContracted ? (
+          <SubscriptionCheckoutDialog
+            plan={plan}
+            onSuccess={onContracted}
+            trigger={<Button className="w-full">Contratar</Button>}
+          />
         ) : (
           <div className="flex items-center gap-2">
             <Button className="flex-1" disabled>

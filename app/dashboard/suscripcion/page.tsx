@@ -49,9 +49,7 @@ export default function SubscriptionSettingsPage() {
 
       <div className="mt-10 max-w-4xl">
         <h2 className="text-base font-semibold text-foreground">Planes disponibles</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          El cambio de plan todavía se gestiona manualmente — muy pronto vas a poder elegirlo directamente desde acá.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Contratá un plan pago con tu tarjeta, procesado por Mercado Pago.</p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {plansLoading ? (
@@ -60,7 +58,12 @@ export default function SubscriptionSettingsPage() {
             <p className="text-sm text-muted-foreground">No hay planes disponibles por el momento.</p>
           ) : (
             plans.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} isCurrent={plan.id === data?.subscription?.plan.id} />
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                isCurrent={plan.id === data?.subscription?.plan.id}
+                onContracted={reload}
+              />
             ))
           )}
         </div>
