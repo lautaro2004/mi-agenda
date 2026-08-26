@@ -2,18 +2,42 @@ import type { BusinessSubscription } from "@/modules/billing/subscription";
 import { assignSubscription, getPlanById, getSubscriptionWithPlan } from "@/modules/billing/subscription";
 import { createPreapproval } from "@/modules/billing/mercadopago/subscriptions";
 import { mapMercadoPagoStatus } from "@/modules/billing/mercadopago/status-map";
+import { MercadoPagoNotConfiguredError } from "@/modules/billing/mercadopago/client";
+import { describeMercadoPagoError } from "@/modules/billing/mercadopago/errors";
 
 // ── Contratación (Fase 3) ─────────────────────────────────────────────────
 // Único punto que crea un preapproval real en Mercado Pago. Reutiliza
 // assignSubscription() para el efecto sobre Nexo — nunca escribe
 // prisma.subscription directamente acá.
 
-export type CheckoutError =
-  | "plan_not_found"
-  | "plan_inactive"
-  | "plan_not_synced"
-  | "already_subscribed"
-  | "mercadopago_error";
+// Cada código deja claro DE DÓNDE viene el problema — el frontend usa esto
+// para diferenciar "esto es un problema de configuración/estado de Nexo"
+// (el usuario no puede resolverlo probando otra tarjeta) de "esto es un
+// rechazo real de Mercado Pago" (el usuario sí puede accionar: revisar la
+// tarjeta, probar otra). Ver components/subscription-checkout-dialog.tsx.
+export type CheckoutErrorCode =
+  | "PLAN_NOT_FOUND"
+  | "PLAN_INACTIVE"
+  | "PLAN_NOT_SYNCED"
+  | "ALREADY_SUBSCRIBED"
+  | "MERCADOPAGO_NOT_CONFIGURED"
+  | "MERCADOPAGO_CHECKOUT_ERROR"
+  | "MERCADOPAGO_UNEXPECTED_STATUS"
+  | "NEXO_ACTIVATION_ERROR"
+  | "UNEXPECTED_ERROR";
+
+export interface CheckoutErrorResult {
+  code: CheckoutErrorCode;
+  // Siempre seguro de mostrar tal cual.
+  message: string;
+  // Detalle más específico cuando hay uno (ej. derivado de las causes de
+  // Mercado Pago) — también siempre seguro de mostrar.
+  detail?: string;
+  // Código técnico corto (ej. "cc_rejected_other_reason" o un status HTTP) —
+  // pensado para mostrarse discretamente en sandbox, nunca contiene datos
+  // sensibles (son códigos públicos documentados por Mercado Pago).
+  technicalCode?: string;
+}
 
 export interface CheckoutInput {
   businessId: string;
@@ -24,20 +48,51 @@ export interface CheckoutInput {
 
 export type CheckoutResult =
   | { ok: true; subscription: BusinessSubscription; mercadoPagoStatus: string }
-  | { ok: false; error: CheckoutError; message?: string };
+  | { ok: false; error: CheckoutErrorResult };
+
+type SimpleErrorCode = Exclude<CheckoutErrorCode, "MERCADOPAGO_CHECKOUT_ERROR" | "MERCADOPAGO_UNEXPECTED_STATUS">;
+
+const SIMPLE_ERROR_MESSAGE: Record<SimpleErrorCode, string> = {
+  PLAN_NOT_FOUND: "El plan elegido no existe.",
+  PLAN_INACTIVE: "Ese plan ya no está disponible.",
+  PLAN_NOT_SYNCED: "Ese plan todavía no está disponible para contratar — probá de nuevo en unos minutos.",
+  ALREADY_SUBSCRIBED: "Ya tenés una suscripción paga activa.",
+  MERCADOPAGO_NOT_CONFIGURED: "La contratación online todavía no está configurada.",
+  NEXO_ACTIVATION_ERROR: "El pago se procesó, pero no pudimos activar tu plan.",
+  UNEXPECTED_ERROR: "No pudimos procesar la contratación. Intentá de nuevo en unos minutos.",
+};
+
+function simpleError(code: SimpleErrorCode, detail?: string): CheckoutResult {
+  return { ok: false, error: { code, message: SIMPLE_ERROR_MESSAGE[code], detail } };
+}
 
 export async function createSubscriptionCheckout(input: CheckoutInput): Promise<CheckoutResult> {
+  try {
+    return await runCheckout(input);
+  } catch (error) {
+    // Cualquier falla no prevista (ej. la base caída al leer el Plan) — no
+    // debería pasar, pero si pasa el frontend igual recibe la forma
+    // estructurada de siempre en vez de un 500 crudo.
+    console.error(
+      `[checkout] Error inesperado procesando la contratación (negocio ${input.businessId}, plan ${input.planId}):`,
+      error instanceof Error ? error.message : error
+    );
+    return simpleError("UNEXPECTED_ERROR");
+  }
+}
+
+async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   const plan = await getPlanById(input.planId);
-  if (!plan) return { ok: false, error: "plan_not_found" };
-  if (!plan.active) return { ok: false, error: "plan_inactive" };
+  if (!plan) return simpleError("PLAN_NOT_FOUND");
+  if (!plan.active) return simpleError("PLAN_INACTIVE");
   // Gratis (monthlyPrice=0) tampoco tiene mercadoPagoPlanId — este chequeo
   // ya lo cubre, no hace falta un caso especial aparte: no tiene sentido
   // "contratar" Gratis vía Mercado Pago.
-  if (!plan.mercadoPagoPlanId) return { ok: false, error: "plan_not_synced" };
+  if (!plan.mercadoPagoPlanId) return simpleError("PLAN_NOT_SYNCED");
 
   const existing = await getSubscriptionWithPlan(input.businessId);
   if (existing?.provider === "mercadopago" && existing.status === "active") {
-    return { ok: false, error: "already_subscribed" };
+    return simpleError("ALREADY_SUBSCRIBED");
   }
 
   let preapproval;
@@ -52,8 +107,32 @@ export async function createSubscriptionCheckout(input: CheckoutInput): Promise<
       externalReference: input.businessId,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido al crear la suscripción en Mercado Pago.";
-    return { ok: false, error: "mercadopago_error", message };
+    if (error instanceof MercadoPagoNotConfiguredError) {
+      console.error(`[checkout] Mercado Pago no configurado — negocio ${input.businessId}, plan ${input.planId}.`);
+      return simpleError("MERCADOPAGO_NOT_CONFIGURED");
+    }
+
+    // Nunca se loguea cardTokenId/payerEmail acá — solo lo que devolvió la
+    // API de Mercado Pago sobre SU rechazo (status/error/causes), nunca
+    // nuestras credenciales ni datos de tarjeta (que ni siquiera llegan a
+    // este catch: describeMercadoPagoError solo lee el error del SDK).
+    const info = describeMercadoPagoError(error);
+    console.error(`[checkout] Mercado Pago rechazó la creación del preapproval — negocio ${input.businessId}, plan ${input.planId}:`, {
+      httpStatus: info.httpStatus,
+      mpErrorSlug: info.mpErrorSlug,
+      causes: info.causes,
+      message: info.rawMessage,
+    });
+
+    return {
+      ok: false,
+      error: {
+        code: "MERCADOPAGO_CHECKOUT_ERROR",
+        message: "Mercado Pago rechazó la suscripción.",
+        detail: info.detail,
+        technicalCode: info.technicalCode ?? undefined,
+      },
+    };
   }
 
   // "NO activar el plan pago únicamente porque el usuario volvió desde
@@ -66,10 +145,17 @@ export async function createSubscriptionCheckout(input: CheckoutInput): Promise<
   // para que lo resuelva el webhook (Fase 4) cuando MP confirme el estado.
   const internalStatus = mapMercadoPagoStatus(preapproval.status ?? "");
   if (!internalStatus) {
+    console.error(
+      `[checkout] Mercado Pago devolvió un status sin mapping interno — negocio ${input.businessId}, preapproval ${preapproval.id}, status="${preapproval.status}".`
+    );
     return {
       ok: false,
-      error: "mercadopago_error",
-      message: `Mercado Pago devolvió un estado inesperado ("${preapproval.status}") — no se activó el plan todavía.`,
+      error: {
+        code: "MERCADOPAGO_UNEXPECTED_STATUS",
+        message: "Mercado Pago todavía no confirmó el pago.",
+        detail: "Probá de nuevo en unos minutos.",
+        technicalCode: preapproval.status ?? undefined,
+      },
     };
   }
 
@@ -89,10 +175,16 @@ export async function createSubscriptionCheckout(input: CheckoutInput): Promise<
     // No debería pasar (ya validamos active arriba), pero si el plan se
     // desactivó en la fracción de segundo entre ambos chequeos, no dejamos
     // un preapproval autorizado en Mercado Pago sin ningún reflejo en Nexo.
+    console.error(
+      `[checkout] La suscripción se creó en Mercado Pago (${preapproval.id}, negocio ${input.businessId}) pero assignSubscription falló: ${result.error}.`
+    );
     return {
       ok: false,
-      error: "mercadopago_error",
-      message: `La suscripción se creó en Mercado Pago (${preapproval.id}) pero no pudo activarse en Nexo — contactar soporte.`,
+      error: {
+        code: "NEXO_ACTIVATION_ERROR",
+        message: "El pago se procesó, pero no pudimos activar tu plan.",
+        detail: "Contactanos para regularizar tu suscripción — el pago ya fue autorizado por Mercado Pago.",
+      },
     };
   }
 
