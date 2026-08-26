@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { maskTail } from "@/lib/mask-secret";
 import type { PublicPlan } from "@/lib/subscription-client";
 
 const PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
@@ -83,6 +84,16 @@ export function SubscriptionCheckoutDialog({ plan, trigger, onSuccess }: Subscri
       setCheckoutError({ error: "MISSING_PAYER_EMAIL", message: "Falta el email para procesar el pago." });
       throw new Error("payer.email ausente en la respuesta del Card Payment Brick");
     }
+
+    // TEMPORAL — diagnóstico de "Card token service not found" (ver reporte
+    // de esta investigación). Solo los últimos 6 caracteres del token que
+    // generó el Brick y de la Public Key que usó — nunca el valor completo
+    // ni datos de tarjeta. Se ve en la consola del navegador (F12); sirve
+    // para comparar contra el card_token_id que loguea el backend y
+    // confirmar que es EL MISMO token, sin transformarse en el camino, y
+    // contra qué Public Key quedó realmente inicializado el Brick en
+    // producción. Sacar una vez resuelta la investigación.
+    console.log(`[checkout][diag] card_token_id=${maskTail(formData.token)} public_key=${maskTail(PUBLIC_KEY)}`);
 
     setSubmitting(true);
     try {

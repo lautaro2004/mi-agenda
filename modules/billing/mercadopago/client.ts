@@ -1,5 +1,7 @@
 import { MercadoPagoConfig } from "mercadopago";
 
+import { maskTail } from "@/lib/mask-secret";
+
 // ── Cliente server-only de Mercado Pago ─────────────────────────────────
 // Único punto que instancia MercadoPagoConfig — modules/billing/mercadopago/
 // plans.ts (y, en fases siguientes, subscriptions.ts/webhooks.ts) importan
@@ -49,4 +51,13 @@ export function getMercadoPagoClient(): MercadoPagoConfig {
 // cargaron credenciales (ver app/superadmin/planes/page.tsx).
 export function isMercadoPagoConfigured(): boolean {
   return !!process.env.MERCADOPAGO_ACCESS_TOKEN;
+}
+
+// TEMPORAL — diagnóstico de "Card token service not found" en producción
+// (ver modules/billing/mercadopago/checkout.ts). Nunca devuelve el Access
+// Token completo, solo sus últimos 6 caracteres — alcanza para confirmar
+// desde los logs de Netlify qué credencial se está usando en runtime sin
+// poder reconstruirla. Sacar una vez resuelta la investigación.
+export function getAccessTokenFingerprint(): string {
+  return maskTail(process.env.MERCADOPAGO_ACCESS_TOKEN);
 }

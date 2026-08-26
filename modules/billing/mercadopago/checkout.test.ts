@@ -46,6 +46,7 @@ function assertNoSensitiveLeak(value: unknown) {
 }
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   getPlanById.mockReset();
@@ -55,6 +56,7 @@ beforeEach(() => {
   getSubscriptionWithPlan.mockResolvedValue(null);
   getPlanById.mockResolvedValue(PLAN_ESENCIAL);
   consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
 describe("createSubscriptionCheckout — validaciones de Nexo", () => {
@@ -132,6 +134,21 @@ describe("createSubscriptionCheckout — contratación exitosa", () => {
       })
     );
     expect(result.ok).toBe(true);
+  });
+
+  it("loguea un diagnóstico temporal con preapproval_plan_id y solo los últimos 6 caracteres del card_token_id/Access Token", async () => {
+    createPreapproval.mockResolvedValue({ id: "preapproval_1", status: "authorized" });
+    assignSubscription.mockResolvedValue({ ok: true, subscription: { id: "sub_1", status: "active" } });
+
+    await createSubscriptionCheckout(INPUT);
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("[checkout][diag]"));
+    const loggedLines: unknown[] = consoleLogSpy.mock.calls.map((call: unknown[]) => call[0]);
+    const diagLine = loggedLines.find((line): line is string => typeof line === "string" && line.includes("[checkout][diag]"));
+    expect(diagLine).toContain("preapproval_plan_id=mp_plan_1");
+    expect(diagLine).not.toContain("card_token_abc");
+    expect(diagLine).toMatch(/card_token_id=…[a-z0-9_]{1,6}/);
+    assertNoSensitiveLeak(diagLine);
   });
 });
 

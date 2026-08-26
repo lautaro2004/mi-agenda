@@ -2,8 +2,9 @@ import type { BusinessSubscription } from "@/modules/billing/subscription";
 import { assignSubscription, getPlanById, getSubscriptionWithPlan } from "@/modules/billing/subscription";
 import { createPreapproval } from "@/modules/billing/mercadopago/subscriptions";
 import { mapMercadoPagoStatus } from "@/modules/billing/mercadopago/status-map";
-import { MercadoPagoNotConfiguredError } from "@/modules/billing/mercadopago/client";
+import { MercadoPagoNotConfiguredError, getAccessTokenFingerprint } from "@/modules/billing/mercadopago/client";
 import { describeMercadoPagoError } from "@/modules/billing/mercadopago/errors";
+import { maskTail } from "@/lib/mask-secret";
 
 // ── Contratación (Fase 3) ─────────────────────────────────────────────────
 // Único punto que crea un preapproval real en Mercado Pago. Reutiliza
@@ -95,6 +96,19 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
     return simpleError("ALREADY_SUBSCRIBED");
   }
 
+  // TEMPORAL — diagnóstico de "Card token service not found" (ver reporte de
+  // esta investigación). Nunca el valor completo de ningún secreto ni datos
+  // de tarjeta: solo los últimos 6 caracteres del card_token_id/Access Token
+  // y el preapproval_plan_id (que no es sensible, es un id de MP). Sirve
+  // para comparar en los logs de Netlify: (a) que el card_token_id que llega
+  // acá sea el mismo que generó el Brick en el navegador (sin transformarse
+  // en el camino) y (b) qué Access Token está realmente activo en runtime,
+  // para descartar una mezcla de credenciales TEST/producción o de
+  // aplicaciones distintas. Sacar una vez resuelta la investigación.
+  console.log(
+    `[checkout][diag] negocio=${input.businessId} preapproval_plan_id=${plan.mercadoPagoPlanId} card_token_id=${maskTail(input.cardTokenId)} access_token=${getAccessTokenFingerprint()}`
+  );
+
   let preapproval;
   try {
     preapproval = await createPreapproval({
@@ -112,16 +126,19 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
       return simpleError("MERCADOPAGO_NOT_CONFIGURED");
     }
 
-    // Nunca se loguea cardTokenId/payerEmail acá — solo lo que devolvió la
-    // API de Mercado Pago sobre SU rechazo (status/error/causes), nunca
-    // nuestras credenciales ni datos de tarjeta (que ni siquiera llegan a
-    // este catch: describeMercadoPagoError solo lee el error del SDK).
+    // Nunca se loguea cardTokenId/payerEmail completos acá — solo lo que
+    // devolvió la API de Mercado Pago sobre SU rechazo (status/error/causes)
+    // más las mismas huellas (últimos 6 caracteres) que el log de diagnóstico
+    // de arriba, para tener todo junto en el mismo lugar cuando algo falla.
     const info = describeMercadoPagoError(error);
     console.error(`[checkout] Mercado Pago rechazó la creación del preapproval — negocio ${input.businessId}, plan ${input.planId}:`, {
       httpStatus: info.httpStatus,
       mpErrorSlug: info.mpErrorSlug,
       causes: info.causes,
       message: info.rawMessage,
+      cardTokenIdTail: maskTail(input.cardTokenId),
+      accessTokenTail: getAccessTokenFingerprint(),
+      preapprovalPlanId: plan.mercadoPagoPlanId,
     });
 
     return {
