@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { MessageCircle } from "lucide-react";
 
 import { DASHBOARD_NAV } from "@/lib/dashboard-nav";
 import { cn } from "@/lib/utils";
@@ -13,9 +13,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <Link href="/" className="flex items-center gap-2 px-2 py-4 font-semibold tracking-tight">
-        <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <MessageCircle className="size-4" />
-        </span>
+        <Image src="/logo-nexo-mark.png" alt="Nexo" width={32} height={32} className="size-8" priority />
         <span>Nexo</span>
       </Link>
 

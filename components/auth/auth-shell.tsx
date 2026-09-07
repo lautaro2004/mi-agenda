@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { MessageCircle, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import Image from "next/image";
+import { ShieldCheck, Sparkles, Zap } from "lucide-react";
 
 const highlights = [
   {
@@ -25,9 +26,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col justify-center px-4 py-12 sm:px-6 lg:px-16">
         <div className="mx-auto w-full max-w-sm">
           <Link href="/" className="mb-10 flex items-center gap-2 font-semibold tracking-tight">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageCircle className="size-4" />
-            </span>
+            <Image src="/logo-nexo-mark.png" alt="Nexo" width={32} height={32} className="size-8" priority />
             <span>Nexo</span>
           </Link>
           {children}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
+import Image from "next/image";
 
 import { StepIndicator } from "@/components/onboarding/step-indicator";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -10,9 +10,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageCircle className="size-4" />
-            </span>
+            <Image src="/logo-nexo-mark.png" alt="Nexo" width={32} height={32} className="size-8" priority />
             <span>Nexo</span>
           </Link>
           <ThemeToggle />

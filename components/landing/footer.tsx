@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export function LandingFooter() {
   return (
@@ -6,9 +7,7 @@ export function LandingFooter() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm text-muted-foreground sm:flex-row">
         <div className="flex flex-col items-center gap-1 sm:items-start">
           <Link href="/" className="flex items-center gap-2 font-semibold text-foreground">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
-              N
-            </span>
+            <Image src="/logo-nexo-mark.png" alt="Nexo" width={28} height={28} className="size-7" />
             Nexo
           </Link>
           <p className="text-xs text-muted-foreground">Un producto de Kodexa</p>
