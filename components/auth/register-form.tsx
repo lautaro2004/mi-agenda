@@ -20,6 +20,7 @@ import {
 import { registerSchema, type RegisterFormValues } from "@/lib/schemas";
 import { useOnboarding } from "@/lib/onboarding-store";
 import { authClient } from "@/lib/auth/auth-client";
+import { trackEvent } from "@/lib/analytics";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -45,6 +46,10 @@ export function RegisterForm() {
   async function onSubmit(values: RegisterFormValues) {
     setFormError(null);
     setSubmitting(true);
+    // Único punto de registro real del producto — se dispara acá sin
+    // importar desde qué landing/entrada llegó el visitante (sección
+    // "IMPORTANTE PARA MARKETING" del pedido de /negocio-online).
+    trackEvent("registro_iniciado");
 
     const { error } = await authClient.signUp.email({
       name: values.ownerName,
@@ -78,6 +83,7 @@ export function RegisterForm() {
       // El negocio ya quedó creado por /api/business/setup; esto solo sincroniza el estado local.
     }
 
+    trackEvent("registro_completado");
     router.push("/onboarding");
   }
 

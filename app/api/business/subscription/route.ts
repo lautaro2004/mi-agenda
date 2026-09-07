@@ -29,6 +29,10 @@ export async function GET() {
           status: sub.status,
           currentPeriodStart: sub.currentPeriodStart?.toISOString() ?? null,
           currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
+          // Fase 5: la UI solo ofrece "Cancelar suscripción" cuando el plan
+          // pago corre por Mercado Pago — uno manual/beneficio/promo no
+          // tiene nada que cancelar del lado de un proveedor externo.
+          provider: sub.provider,
           plan: sub.plan,
         }
       : null,

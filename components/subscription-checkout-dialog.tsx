@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { initMercadoPago, CardPayment } from "@mercadopago/sdk-react";
-import { toast } from "sonner";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { maskTail } from "@/lib/mask-secret";
@@ -21,6 +20,14 @@ function ensureMercadoPagoInitialized() {
   initMercadoPago(PUBLIC_KEY, { locale: "es-AR" });
   mpInitialized = true;
 }
+
+// Aproximación en hex del --primary de app/globals.css (oklch(0.585 0.233
+// 277.117) claro / oklch(0.685 0.169 277.117) oscuro, convertido vía OKLCH →
+// sRGB) — Mercado Pago no soporta fontFamily en customVariables (confirmado
+// contra la documentación oficial: solo expone tamaños/pesos de fuente, no
+// tipografía), así que esto es lo más cerca que se puede llegar de que el
+// Brick combine con el resto de la UI sin tocar la fuente en sí.
+const BRICK_PRIMARY_COLOR = { light: "#615fff", dark: "#828cff" };
 
 // Forma del callback onSubmit del Card Payment Brick, solo los campos que
 // usamos (el tipo real del SDK, ICardPaymentFormData, no se reexporta desde
@@ -50,6 +57,11 @@ interface CheckoutErrorBody {
 // de verdad de estos códigos.
 const MERCADOPAGO_ERROR_CODES = new Set(["MERCADOPAGO_CHECKOUT_ERROR", "MERCADOPAGO_UNEXPECTED_STATUS"]);
 
+// Cuánto queda visible el panel de éxito antes de cerrarse solo — el X del
+// diálogo sigue disponible para cerrarlo antes si el usuario no quiere
+// esperar.
+const AUTO_CLOSE_MS = 1800;
+
 interface SubscriptionCheckoutDialogProps {
   plan: PublicPlan;
   trigger: React.ReactElement;
@@ -67,6 +79,7 @@ export function SubscriptionCheckoutDialog({ plan, trigger, onSuccess }: Subscri
   const [open, setOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [checkoutError, setCheckoutError] = React.useState<CheckoutErrorBody | null>(null);
+  const [succeeded, setSucceeded] = React.useState(false);
 
   React.useEffect(() => {
     if (open) ensureMercadoPagoInitialized();
@@ -74,94 +87,156 @@ export function SubscriptionCheckoutDialog({ plan, trigger, onSuccess }: Subscri
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
-    if (next) setCheckoutError(null);
+    if (next) {
+      setCheckoutError(null);
+      setSucceeded(false);
+    }
   }
 
-  async function handleSubmit(formData: CardPaymentFormData) {
-    setCheckoutError(null);
+  // useCallback con deps mínimas y estables: es el otro lado del mismo
+  // problema que CARD_PAYMENT_CUSTOMIZATION — onSubmit/onError también están
+  // en el array de dependencias del useEffect que monta el Brick, así que
+  // una función nueva en cada render también dispara un remount.
+  const handleSubmit = React.useCallback(
+    async (formData: CardPaymentFormData) => {
+      setCheckoutError(null);
 
-    if (!formData.payer.email) {
-      setCheckoutError({ error: "MISSING_PAYER_EMAIL", message: "Falta el email para procesar el pago." });
-      throw new Error("payer.email ausente en la respuesta del Card Payment Brick");
-    }
-
-    // TEMPORAL — diagnóstico de "Card token service not found" (ver reporte
-    // de esta investigación). Solo los últimos 6 caracteres del token que
-    // generó el Brick y de la Public Key que usó — nunca el valor completo
-    // ni datos de tarjeta. Se ve en la consola del navegador (F12); sirve
-    // para comparar contra el card_token_id que loguea el backend y
-    // confirmar que es EL MISMO token, sin transformarse en el camino, y
-    // contra qué Public Key quedó realmente inicializado el Brick en
-    // producción. Sacar una vez resuelta la investigación.
-    console.log(`[checkout][diag] card_token_id=${maskTail(formData.token)} public_key=${maskTail(PUBLIC_KEY)}`);
-
-    setSubmitting(true);
-    try {
-      // fetch directo, no requestJson(): requestJson asume que el campo
-      // `error` del body YA es el texto para mostrar (ver lib/api-client.ts)
-      // — acá `error` es un código estable (CheckoutErrorCode) y `message`/
-      // `detail`/`technicalCode` son los que arma el backend para mostrar
-      // (ver checkout.ts). Cambiar el contrato de requestJson afectaría a
-      // todos los demás endpoints que lo usan, así que este componente lo
-      // maneja por su cuenta.
-      const response = await fetch("/api/subscriptions/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: plan.id, cardTokenId: formData.token, payerEmail: formData.payer.email }),
-      });
-
-      if (!response.ok) {
-        const body: CheckoutErrorBody = await response.json().catch(() => ({
-          error: "UNKNOWN_ERROR",
-          message: "No pudimos procesar el pago.",
-        }));
-        setCheckoutError(body);
-        // Re-lanzar (sin volver a tocar el estado del diálogo): el Brick usa
-        // el rechazo de esta promesa para volver a habilitar el formulario
-        // en vez de mostrar éxito — el diálogo se queda abierto tal cual
-        // está (open nunca pasa a false acá) para que se pueda corregir y
-        // reintentar sin perder el resto del flujo.
-        throw new Error(body.message);
+      if (!formData.payer.email) {
+        setCheckoutError({ error: "MISSING_PAYER_EMAIL", message: "Falta el email para procesar el pago." });
+        throw new Error("payer.email ausente en la respuesta del Card Payment Brick");
       }
 
-      toast.success(`¡Listo! Ya contrataste ${plan.name}.`);
-      setOpen(false);
-      onSuccess();
-    } finally {
-      setSubmitting(false);
-    }
-  }
+      // TEMPORAL — diagnóstico de "Card token service not found" (ya
+      // resuelto: era específico de tokens TEST contra /preapproval, no de
+      // nuestra integración — ver reporte de esa investigación). Se deja
+      // este log liviano por ahora porque sigue siendo útil para correlacionar
+      // con el log del backend; sacar cuando ya no haga falta.
+      console.log(`[checkout][diag] card_token_id=${maskTail(formData.token)} public_key=${maskTail(PUBLIC_KEY)}`);
+
+      setSubmitting(true);
+      try {
+        // fetch directo, no requestJson(): requestJson asume que el campo
+        // `error` del body YA es el texto para mostrar (ver lib/api-client.ts)
+        // — acá `error` es un código estable (CheckoutErrorCode) y `message`/
+        // `detail`/`technicalCode` son los que arma el backend para mostrar
+        // (ver checkout.ts). Cambiar el contrato de requestJson afectaría a
+        // todos los demás endpoints que lo usan, así que este componente lo
+        // maneja por su cuenta.
+        const response = await fetch("/api/subscriptions/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planId: plan.id, cardTokenId: formData.token, payerEmail: formData.payer.email }),
+        });
+
+        if (!response.ok) {
+          const body: CheckoutErrorBody = await response.json().catch(() => ({
+            error: "UNKNOWN_ERROR",
+            message: "No pudimos procesar el pago.",
+          }));
+          setCheckoutError(body);
+          // Re-lanzar: el Brick usa el rechazo de esta promesa para volver a
+          // habilitar el formulario en vez de mostrar éxito — el diálogo
+          // sigue abierto (nunca se toca `open` acá) para corregir y
+          // reintentar sin perder el resto del flujo.
+          throw new Error(body.message);
+        }
+
+        setSucceeded(true);
+        onSuccess();
+        window.setTimeout(() => setOpen(false), AUTO_CLOSE_MS);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [plan.id, onSuccess]
+  );
+
+  const handleBrickError = React.useCallback((error: unknown) => {
+    console.error("[checkout] Card Payment Brick error:", error);
+  }, []);
+
+  const initialization = React.useMemo(() => ({ amount: plan.monthlyPrice }), [plan.monthlyPrice]);
+
+  // Memoizado con deps vacías a propósito: el color se calcula UNA sola vez
+  // al montar (el modo claro/oscuro de esta app sigue prefers-color-scheme,
+  // no un toggle en vivo — no hace falta recalcular). Crítico que la
+  // referencia de este objeto nunca cambie mientras el diálogo sigue
+  // abierto: ver el comentario grande más abajo sobre por qué un
+  // `customization` inestable rompía el formulario a mitad de pago.
+  const customization = React.useMemo(() => {
+    const isDark = typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+    return {
+      visual: {
+        hideFormTitle: true,
+        style: {
+          theme: "flat" as const,
+          customVariables: {
+            baseColor: isDark ? BRICK_PRIMARY_COLOR.dark : BRICK_PRIMARY_COLOR.light,
+          },
+        },
+      },
+    };
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={trigger} />
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Contratar {plan.name}</DialogTitle>
-          <DialogDescription>Los datos de tu tarjeta se procesan directamente con Mercado Pago.</DialogDescription>
-        </DialogHeader>
-
-        {checkoutError && <CheckoutErrorNotice error={checkoutError} />}
-
-        {!PUBLIC_KEY ? (
-          <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <span>La contratación online todavía no está configurada. Contactanos para activar tu plan.</span>
-          </div>
+        {succeeded ? (
+          <SuccessPanel planName={plan.name} />
         ) : (
-          open && (
-            <CardPayment
-              initialization={{ amount: plan.monthlyPrice }}
-              customization={{ visual: { hideFormTitle: true, hidePaymentButton: submitting } }}
-              onSubmit={handleSubmit}
-              onError={(error) => {
-                console.error("[checkout] Card Payment Brick error:", error);
-              }}
-            />
-          )
+          <>
+            <DialogHeader>
+              <DialogTitle>Contratar {plan.name}</DialogTitle>
+              <DialogDescription>Los datos de tu tarjeta se procesan directamente con Mercado Pago.</DialogDescription>
+            </DialogHeader>
+
+            {checkoutError && <CheckoutErrorNotice error={checkoutError} />}
+
+            {!PUBLIC_KEY ? (
+              <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>La contratación online todavía no está configurada. Contactanos para activar tu plan.</span>
+              </div>
+            ) : (
+              open && (
+                <div className="relative">
+                  <CardPayment
+                    initialization={initialization}
+                    customization={customization}
+                    onSubmit={handleSubmit}
+                    onError={handleBrickError}
+                  />
+                  {submitting && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
+                      <span className="size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
+                      Procesando el pago…
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Panel de éxito — reemplaza al Brick por completo en vez de solo cerrar el
+// diálogo de golpe con un toast: da una confirmación clara antes de
+// desaparecer sola (o al cerrar el diálogo a mano).
+function SuccessPanel({ planName }: { planName: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-6 text-center">
+      <div className="flex size-12 items-center justify-center rounded-full bg-emerald-500/10">
+        <CheckCircle2 className="size-7 text-emerald-600 dark:text-emerald-400" />
+      </div>
+      <div>
+        <p className="text-base font-semibold text-foreground">¡Listo, ya sos parte de {planName}!</p>
+        <p className="mt-1 text-sm text-muted-foreground">Tu suscripción quedó activa. Ya podés cerrar esta ventana.</p>
+      </div>
+    </div>
   );
 }
 

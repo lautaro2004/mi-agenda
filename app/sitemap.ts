@@ -11,6 +11,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [
     { url: SITE_URL, lastModified: new Date(), changeFrequency: "monthly" },
+    // Landing de adquisición para tráfico de Google/Meta Ads.
+    { url: `${SITE_URL}/negocio-online`, lastModified: new Date(), changeFrequency: "monthly" },
     ...businesses.map((b) => ({
       url: `${SITE_URL}/s/${b.slug}`,
       lastModified: b.updatedAt,

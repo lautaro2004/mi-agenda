@@ -45,7 +45,15 @@ describe("createPreapprovalPlan", () => {
         auto_recurring: { frequency: 1, frequency_type: "months", transaction_amount: 12000, currency_id: "ARS" },
       },
     });
-    expect(result).toEqual({ id: "mp_plan_1", status: "active", reason: "Esencial", transactionAmount: 12000, currencyId: "ARS" });
+    expect(result).toEqual({
+      id: "mp_plan_1",
+      status: "active",
+      reason: "Esencial",
+      transactionAmount: 12000,
+      currencyId: "ARS",
+      applicationId: null,
+      collectorId: null,
+    });
   });
 
   it("lanza si Mercado Pago responde sin id", async () => {
@@ -69,6 +77,25 @@ describe("getPreapprovalPlan", () => {
 
     expect(preApprovalPlanGet).toHaveBeenCalledWith({ preApprovalPlanId: "mp_plan_1" });
     expect(result.transactionAmount).toBe(12000);
+  });
+
+  // application_id/collector_id — agregados para el diagnóstico de "Card
+  // token service not found" (ver checkout.ts#logPreapprovalPlanDiagnostics):
+  // confirman a qué aplicación/cuenta de Mercado Pago pertenece el plan.
+  it("expone application_id/collector_id cuando Mercado Pago los devuelve", async () => {
+    preApprovalPlanGet.mockResolvedValue({
+      id: "mp_plan_1",
+      status: "active",
+      reason: "Esencial",
+      auto_recurring: { transaction_amount: 12000, currency_id: "ARS" },
+      application_id: 8376092370977313,
+      collector_id: 265408537,
+    });
+
+    const result = await getPreapprovalPlan("mp_plan_1");
+
+    expect(result.applicationId).toBe(8376092370977313);
+    expect(result.collectorId).toBe(265408537);
   });
 });
 

@@ -1,6 +1,7 @@
 import type { BusinessSubscription } from "@/modules/billing/subscription";
 import { assignSubscription, getPlanById, getSubscriptionWithPlan } from "@/modules/billing/subscription";
 import { createPreapproval } from "@/modules/billing/mercadopago/subscriptions";
+import { getPreapprovalPlan } from "@/modules/billing/mercadopago/plans";
 import { mapMercadoPagoStatus } from "@/modules/billing/mercadopago/status-map";
 import { MercadoPagoNotConfiguredError, getAccessTokenFingerprint } from "@/modules/billing/mercadopago/client";
 import { describeMercadoPagoError } from "@/modules/billing/mercadopago/errors";
@@ -67,6 +68,36 @@ function simpleError(code: SimpleErrorCode, detail?: string): CheckoutResult {
   return { ok: false, error: { code, message: SIMPLE_ERROR_MESSAGE[code], detail } };
 }
 
+// TEMPORAL — diagnóstico de "Card token service not found" (ver reporte de
+// esta investigación). Relee el preapproval_plan con el MISMO Access Token
+// que se va a usar para crear la suscripción — application_id/collector_id
+// no son secretos (identifican públicamente qué aplicación/cuenta de
+// Mercado Pago es dueña del plan), y compararlos contra el fingerprint del
+// Access Token en cada intento permite confirmar en los logs de Netlify que
+// no cambiaron entre despliegues. Puramente observacional: si esta consulta
+// falla, se loguea y se sigue con el flujo normal — nunca bloquea ni cambia
+// el resultado del checkout (ver runCheckout: el resultado de esta función
+// no se usa para ninguna decisión todavía).
+async function logPreapprovalPlanDiagnostics(mercadoPagoPlanId: string): Promise<void> {
+  try {
+    const plan = await getPreapprovalPlan(mercadoPagoPlanId);
+    console.log("[checkout][diag] GET /preapproval_plan/:id ->", {
+      id: plan.id,
+      applicationId: plan.applicationId,
+      collectorId: plan.collectorId,
+      status: plan.status,
+      currencyId: plan.currencyId,
+      transactionAmount: plan.transactionAmount,
+      accessTokenTail: getAccessTokenFingerprint(),
+    });
+  } catch (error) {
+    console.warn(
+      `[checkout][diag] No se pudo releer el preapproval_plan ${mercadoPagoPlanId} para el diagnóstico (no bloquea el checkout):`,
+      error instanceof Error ? error.message : error
+    );
+  }
+}
+
 export async function createSubscriptionCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   try {
     return await runCheckout(input);
@@ -108,6 +139,7 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   console.log(
     `[checkout][diag] negocio=${input.businessId} preapproval_plan_id=${plan.mercadoPagoPlanId} card_token_id=${maskTail(input.cardTokenId)} access_token=${getAccessTokenFingerprint()}`
   );
+  await logPreapprovalPlanDiagnostics(plan.mercadoPagoPlanId);
 
   let preapproval;
   try {

@@ -316,6 +316,16 @@ export async function getPlanById(planId: string): Promise<PlanSummary | null> {
   return plan ? planToSummary(plan) : null;
 }
 
+// Usado por modules/billing/mercadopago/cancel.ts (Fase 5): al cancelar una
+// suscripción paga, el negocio vuelve a Gratis de inmediato — mismo plan por
+// defecto que ensureTrialSubscription()/revertExpiredBenefits() resuelven
+// por slug, expuesto acá como PlanSummary completo (no solo el id) para que
+// cancel.ts no tenga que hacer una segunda query.
+export async function getDefaultPlan(): Promise<PlanSummary | null> {
+  const plan = await prisma.plan.findUnique({ where: { slug: DEFAULT_PLAN_SLUG } });
+  return plan ? planToSummary(plan) : null;
+}
+
 // ── Administración de Planes (Superadmin) ────────────────────────────────
 
 export interface PlanWithUsage extends PlanSummary {

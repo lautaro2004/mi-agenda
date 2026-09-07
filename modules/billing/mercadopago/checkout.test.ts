@@ -7,6 +7,7 @@ const getPlanById = vi.fn();
 const getSubscriptionWithPlan = vi.fn();
 const assignSubscription = vi.fn();
 const createPreapproval = vi.fn();
+const getPreapprovalPlan = vi.fn();
 
 vi.mock("@/modules/billing/subscription", () => ({
   getPlanById: (...args: unknown[]) => getPlanById(...args),
@@ -16,6 +17,10 @@ vi.mock("@/modules/billing/subscription", () => ({
 
 vi.mock("@/modules/billing/mercadopago/subscriptions", () => ({
   createPreapproval: (...args: unknown[]) => createPreapproval(...args),
+}));
+
+vi.mock("@/modules/billing/mercadopago/plans", () => ({
+  getPreapprovalPlan: (...args: unknown[]) => getPreapprovalPlan(...args),
 }));
 
 const { createSubscriptionCheckout } = await import("./checkout");
@@ -47,16 +52,28 @@ function assertNoSensitiveLeak(value: unknown) {
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   getPlanById.mockReset();
   getSubscriptionWithPlan.mockReset();
   assignSubscription.mockReset();
   createPreapproval.mockReset();
+  getPreapprovalPlan.mockReset();
   getSubscriptionWithPlan.mockResolvedValue(null);
   getPlanById.mockResolvedValue(PLAN_ESENCIAL);
+  getPreapprovalPlan.mockResolvedValue({
+    id: "mp_plan_1",
+    status: "active",
+    reason: "Esencial",
+    transactionAmount: 12000,
+    currencyId: "ARS",
+    applicationId: 8376092370977313,
+    collectorId: 265408537,
+  });
   consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
 describe("createSubscriptionCheckout — validaciones de Nexo", () => {
@@ -149,6 +166,62 @@ describe("createSubscriptionCheckout — contratación exitosa", () => {
     expect(diagLine).not.toContain("card_token_abc");
     expect(diagLine).toMatch(/card_token_id=…[a-z0-9_]{1,6}/);
     assertNoSensitiveLeak(diagLine);
+  });
+});
+
+describe("createSubscriptionCheckout — diagnóstico GET /preapproval_plan/:id", () => {
+  it("relee el plan con getPreapprovalPlan ANTES de crear el preapproval, usando el mismo mercadoPagoPlanId", async () => {
+    createPreapproval.mockResolvedValue({ id: "preapproval_1", status: "authorized" });
+    assignSubscription.mockResolvedValue({ ok: true, subscription: { id: "sub_1", status: "active" } });
+
+    const callOrder: string[] = [];
+    getPreapprovalPlan.mockImplementation(async () => {
+      callOrder.push("getPreapprovalPlan");
+      return { id: "mp_plan_1", status: "active", reason: "Esencial", transactionAmount: 12000, currencyId: "ARS", applicationId: 8376092370977313, collectorId: 265408537 };
+    });
+    createPreapproval.mockImplementation(async () => {
+      callOrder.push("createPreapproval");
+      return { id: "preapproval_1", status: "authorized" };
+    });
+
+    await createSubscriptionCheckout(INPUT);
+
+    expect(getPreapprovalPlan).toHaveBeenCalledWith("mp_plan_1");
+    expect(callOrder).toEqual(["getPreapprovalPlan", "createPreapproval"]);
+  });
+
+  it("loguea application_id/collector_id/status/moneda/monto del plan, nunca el Access Token completo", async () => {
+    createPreapproval.mockResolvedValue({ id: "preapproval_1", status: "authorized" });
+    assignSubscription.mockResolvedValue({ ok: true, subscription: { id: "sub_1", status: "active" } });
+
+    await createSubscriptionCheckout(INPUT);
+
+    const diagCall = consoleLogSpy.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === "string" && call[0].includes("GET /preapproval_plan/:id")
+    );
+    expect(diagCall).toBeDefined();
+    const [, payload] = diagCall as [string, Record<string, unknown>];
+    expect(payload).toMatchObject({
+      id: "mp_plan_1",
+      applicationId: 8376092370977313,
+      collectorId: 265408537,
+      status: "active",
+      currencyId: "ARS",
+      transactionAmount: 12000,
+    });
+    assertNoSensitiveLeak(consoleLogSpy.mock.calls);
+  });
+
+  it("si GET /preapproval_plan/:id falla, NO bloquea el checkout — sigue y crea el preapproval igual", async () => {
+    getPreapprovalPlan.mockRejectedValue(new Error("timeout consultando el plan"));
+    createPreapproval.mockResolvedValue({ id: "preapproval_1", status: "authorized" });
+    assignSubscription.mockResolvedValue({ ok: true, subscription: { id: "sub_1", status: "active" } });
+
+    const result = await createSubscriptionCheckout(INPUT);
+
+    expect(result.ok).toBe(true);
+    expect(createPreapproval).toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("No se pudo releer el preapproval_plan"), expect.anything());
   });
 });
 

@@ -18,6 +18,14 @@ export interface PreapprovalPlanSnapshot {
   reason: string | null;
   transactionAmount: number | null;
   currencyId: string | null;
+  // application_id/collector_id no son sensibles (identifican de forma
+  // pública QUÉ aplicación/cuenta de Mercado Pago es dueña del plan, no una
+  // credencial) — se agregaron para el diagnóstico de "Card token service
+  // not found" (ver checkout.ts#logPreapprovalPlanDiagnostics): permiten
+  // confirmar que el plan pertenece a la misma aplicación que el
+  // MERCADOPAGO_ACCESS_TOKEN usado para crearlo/consultarlo.
+  applicationId: number | null;
+  collectorId: number | null;
 }
 
 function toSnapshot(response: {
@@ -25,6 +33,8 @@ function toSnapshot(response: {
   status?: string;
   reason?: string;
   auto_recurring?: { transaction_amount?: number; currency_id?: string };
+  application_id?: number;
+  collector_id?: number;
 }): PreapprovalPlanSnapshot {
   if (!response.id) {
     throw new Error("Mercado Pago no devolvió un id de preapproval_plan.");
@@ -35,6 +45,8 @@ function toSnapshot(response: {
     reason: response.reason ?? null,
     transactionAmount: response.auto_recurring?.transaction_amount ?? null,
     currencyId: response.auto_recurring?.currency_id ?? null,
+    applicationId: response.application_id ?? null,
+    collectorId: response.collector_id ?? null,
   };
 }
 

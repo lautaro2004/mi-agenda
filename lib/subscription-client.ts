@@ -40,6 +40,10 @@ export interface BusinessSubscriptionInfo {
   status: BillingSubscriptionStatus;
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
+  // "mercadopago" | "manual" | "promo_code" | "benefit" | null — solo
+  // "mercadopago" ofrece cancelar desde /dashboard/suscripcion (Fase 5), ver
+  // modules/billing/subscription.ts#SUBSCRIPTION_PROVIDERS.
+  provider: string | null;
   plan: SubscriptionPlanInfo;
 }
 

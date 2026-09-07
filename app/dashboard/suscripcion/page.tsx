@@ -2,11 +2,13 @@
 
 import * as React from "react";
 import { AlertTriangle, Bot, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PlanCard } from "@/components/subscription-plan-card";
 import { SubscriptionPromoCodeForm } from "@/components/subscription-promo-code-form";
 import { SubscriptionStatusBadge } from "@/components/subscription-status-badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -41,7 +43,7 @@ export default function SubscriptionSettingsPage() {
         </div>
       ) : (
         <div className="max-w-2xl space-y-6">
-          <PlanBlock subscription={data.subscription} allowed={data.access.allowed} />
+          <PlanBlock subscription={data.subscription} allowed={data.access.allowed} onCanceled={reload} />
           <AiUsageBlock aiUsage={data.aiUsage} aiCredits={data.subscription.plan.aiCredits} />
           <SubscriptionPromoCodeForm onApplied={reload} />
         </div>
@@ -72,8 +74,40 @@ export default function SubscriptionSettingsPage() {
   );
 }
 
-function PlanBlock({ subscription, allowed }: { subscription: BusinessSubscriptionInfo; allowed: boolean }) {
+function PlanBlock({
+  subscription,
+  allowed,
+  onCanceled,
+}: {
+  subscription: BusinessSubscriptionInfo;
+  allowed: boolean;
+  onCanceled: () => void;
+}) {
   const remaining = subscription.status === "trialing" ? daysRemaining(subscription.currentPeriodEnd) : null;
+  const [canceling, setCanceling] = React.useState(false);
+
+  // Cancelar solo tiene sentido si hay algo que cancelar del lado de
+  // Mercado Pago y todavía no se canceló — un plan manual/beneficio/promo
+  // no tiene cobro externo que cortar (ver cancel.ts).
+  const canCancel = subscription.provider === "mercadopago" && subscription.status !== "canceled" && subscription.status !== "expired";
+
+  async function handleCancel() {
+    if (!confirm(`¿Cancelar tu suscripción a ${subscription.plan.name}? Dejará de cobrarse y volvés al plan Gratis.`)) return;
+
+    setCanceling(true);
+    try {
+      const response = await fetch("/api/subscriptions/cancel", { method: "POST" });
+      const body = await response.json().catch(() => ({ message: "No pudimos cancelar la suscripción." }));
+      if (!response.ok) {
+        toast.error(body.message ?? "No pudimos cancelar la suscripción.");
+        return;
+      }
+      toast.success("Suscripción cancelada — volviste al plan Gratis.");
+      onCanceled();
+    } finally {
+      setCanceling(false);
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
@@ -124,6 +158,14 @@ function PlanBlock({ subscription, allowed }: { subscription: BusinessSubscripti
         <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>Tenés un pago pendiente. Por ahora seguís teniendo acceso, pero convendría regularizarlo.</span>
+        </div>
+      )}
+
+      {canCancel && (
+        <div className="mt-4 border-t border-border pt-4">
+          <Button size="sm" variant="outline" onClick={() => void handleCancel()} disabled={canceling}>
+            {canceling ? "Cancelando…" : "Cancelar suscripción"}
+          </Button>
         </div>
       )}
     </div>
