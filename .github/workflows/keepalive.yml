@@ -1,0 +1,120 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Supabase Keep-Alive
+#
+# Mantiene activos dos proyectos de Supabase (Nexo / mi-agenda y Waste)
+# haciendo una petición HTTP mínima real a la REST API (PostgREST) de cada
+# uno, para que no queden pausados por inactividad (Supabase pausa los
+# proyectos free tier sin actividad reciente).
+#
+# No modifica ni depende del código de ninguna de las dos aplicaciones: es
+# un workflow independiente, no un crawler ni un navegador automatizado —
+# solo dos pedidos HTTP con curl (ya viene instalado en los runners de
+# GitHub, no se agrega ninguna dependencia nueva).
+#
+# La petición hace una consulta mínima real contra una tabla existente de
+# cada proyecto vía la REST API (PostgREST) — "select=id&limit=1" trae como
+# mucho una sola columna de una sola fila, la consulta más chica posible que
+# igual toca Postgres de verdad (no un simple health-check estático):
+#   Nexo:  GET /rest/v1/Plan?select=id&limit=1
+#   Waste: GET /rest/v1/services?select=id&limit=1
+# Si el nombre de la tabla de alguno de los dos proyectos cambia alguna vez,
+# hay que actualizar la URL correspondiente acá abajo (ver los dos pasos
+# "Ping Nexo"/"Ping Waste").
+#
+# ── CÓMO CONFIGURAR LOS SECRETS ─────────────────────────────────────────
+# Repo → Settings → Secrets and variables → Actions → New repository secret.
+# Hacen falta 4, dos por proyecto (nunca hardcodeados acá):
+#
+#   NEXO_SUPABASE_URL   → URL del proyecto Nexo, ej: https://xxxxxxxx.supabase.co
+#                         (sin "/" al final — se concatena más abajo)
+#   NEXO_SUPABASE_KEY   → la "anon" key del proyecto Nexo (Project Settings → API)
+#   WASTE_SUPABASE_URL  → URL del proyecto Waste, mismo formato
+#   WASTE_SUPABASE_KEY  → la "anon" key del proyecto Waste
+#
+# La "anon"/"publishable" key (la de la Data API, Project Settings → API)
+# alcanza y es preferible a la "service_role"/"secret": esta petición solo
+# lee como mucho el id de una fila de una tabla que ya es de lectura pública
+# vía la API — no hace falta una key con privilegios elevados dando vueltas
+# en un secret más. Nunca usar acá la service_role/secret key.
+#
+# ── CÓMO CAMBIAR LA FRECUENCIA ───────────────────────────────────────────
+# Editar la expresión cron de "on.schedule" más abajo (sintaxis estándar:
+# minuto hora día-del-mes mes día-de-semana — siempre en UTC).
+#
+# Ejemplos:
+#   "0 6 */5 * *"  → como está ahora: día-del-mes de a saltos de 5, 06:00 UTC.
+#   "0 6 * * 1"    → todos los lunes a las 06:00 UTC.
+#   "0 */12 * * *" → cada 12 horas.
+#
+# Ojo: "*/5" en el campo día-del-mes NO es un intervalo continuo de 5 días
+# — cron reinicia el conteo en cada mes (corre los días 1, 6, 11, 16, 21, 26
+# y 31; entre el 31 y el 1 del mes siguiente puede pasar apenas 1 día en vez
+# de 5). Para un keep-alive esto no es un problema real (alcanza con
+# "como mucho cada X días"), pero no es un temporizador exacto — si alguna
+# vez necesitás una periodicidad exacta, cron no es la herramienta.
+#
+# Además, GitHub puede demorar o saltear alguna ejecución programada en
+# momentos de mucha carga en su infraestructura, y desactiva automáticamente
+# los workflows programados de un repo sin ningún commit/actividad en 60
+# días (correr este workflow a mano una vez — con el botón "Run workflow",
+# habilitado acá abajo vía workflow_dispatch — lo reactiva).
+# ─────────────────────────────────────────────────────────────────────────
+
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: "0 6 */5 * *"
+  # Permite dispararlo a mano desde la pestaña "Actions" del repo, para
+  # probarlo sin esperar al cron o para reactivar el scheduler si GitHub lo
+  # desactivó por inactividad.
+  workflow_dispatch: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # continue-on-error acá a propósito: si Nexo falla, igual queremos
+      # intentar Waste (y viceversa) en la misma corrida, para tener
+      # visibilidad de los dos en un solo log — el fallo real del workflow
+      # se decide recién en el último paso, mirando ambos resultados.
+      - name: Ping Nexo (mi-agenda)
+        id: nexo
+        continue-on-error: true
+        run: |
+          status=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 \
+            -H "apikey: ${{ secrets.NEXO_SUPABASE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.NEXO_SUPABASE_KEY }}" \
+            "${{ secrets.NEXO_SUPABASE_URL }}/rest/v1/Plan?select=id&limit=1")
+          echo "Nexo respondió HTTP $status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Nexo: la petición a Supabase devolvió HTTP $status"
+            exit 1
+          fi
+
+      - name: Ping Waste
+        id: waste
+        continue-on-error: true
+        run: |
+          status=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 \
+            -H "apikey: ${{ secrets.WASTE_SUPABASE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.WASTE_SUPABASE_KEY }}" \
+            "${{ secrets.WASTE_SUPABASE_URL }}/rest/v1/services?select=id&limit=1")
+          echo "Waste respondió HTTP $status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Waste: la petición a Supabase devolvió HTTP $status"
+            exit 1
+          fi
+
+      # Punto único de verdad de si el workflow como un todo salió bien —
+      # falla claramente (y falla el job/workflow completo) si CUALQUIERA
+      # de los dos pings de arriba falló, aunque el otro haya salido bien.
+      - name: Verificar que ambos proyectos respondieron bien
+        if: always()
+        run: |
+          if [ "${{ steps.nexo.outcome }}" != "success" ] || [ "${{ steps.waste.outcome }}" != "success" ]; then
+            echo "::error::Keep-alive fallido — Nexo: ${{ steps.nexo.outcome }}, Waste: ${{ steps.waste.outcome }}"
+            exit 1
+          fi
+          echo "Ambos proyectos de Supabase respondieron correctamente."
