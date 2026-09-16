@@ -4,17 +4,24 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // "crm" incluido a propósito para probar con `prisma validate` si Prisma
+  // acepta un schema sin ningún modelo todavía (ver
+  // docs/architecture/migracion-schemas-fase3.md, sección C). Si la
+  // validación falla por esto, se saca de esta lista hasta que exista el
+  // primer modelo real de CRM — NUNCA se borra el schema físico de Postgres
+  // por esto, solo esta línea de config de Prisma.
+  schemas  = ["public", "nexo", "crm"]
 }
 
 model Business {
-  id             String        @id @default(cuid())
+  id             String   @id @default(cuid())
   name           String
   description    String?
   phone          String?
   address        String?
   category       String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   logoUrl        String?
   // URL pública de Supabase Storage (bucket "site-assets") — nunca se guarda
   // el binario ni un base64 acá. Ver lib/site-assets.ts: el path dentro del
@@ -33,7 +40,7 @@ model Business {
   // nombre cambia después — cambiar el slug rompería la URL pública ya
   // compartida/indexada. Nullable porque los negocios creados antes de esta
   // feature no tienen uno hasta que se genera de forma perezosa.
-  slug           String?       @unique
+  slug           String?  @unique
 
   // Plantilla del sitio público: "institutional" | "booking" | null. Null
   // (default) = auto-detectar vía getBookingIntent() (ver
@@ -41,7 +48,7 @@ model Business {
   // desactualizado si el negocio después agrega/saca servicios reservables.
   // Un valor explícito acá es una anulación manual desde Configuración >
   // Sitio (ver sección 13 de la tarea) — nunca se escribe solo.
-  siteTemplate   String?
+  siteTemplate String?
 
   // ── Seña / depósito (ver modules/business/deposit.ts) ──────────────────
   // Configuración global del negocio, no por servicio: cuando depositRequired
@@ -49,7 +56,7 @@ model Business {
   // confirmarse directo (ver modules/ai/booking/flow.ts). Con
   // depositRequired = false (default), el flujo de reservas sigue
   // exactamente igual que antes de esta feature — ningún campo de acá se lee.
-  depositRequired      Boolean  @default(false)
+  depositRequired      Boolean @default(false)
   // "fixed" | "percentage" — ver computeDepositAmount() en
   // modules/business/deposit.ts, única fuente de verdad de esta semántica.
   depositType          String?
@@ -75,23 +82,29 @@ model Business {
   menuEnabled Boolean @default(false)
   menuPdfUrl  String?
 
-  appointments   Appointment[]
-  employee       Employee?
-  faqs           FAQ[]
-  galleryBlocks  GalleryBlock[]
-  memberships    Membership[]
-  memoryEntries  MemoryEntry[]
-  paymentProofs  PaymentProof[]
-  resources      Resource[]
-  schedules      Schedule[]
-  services       Service[]
-  trainingPlan   TrainingPlan?
+  appointments          Appointment[]
+  employee              Employee?
+  faqs                  FAQ[]
+  galleryBlocks         GalleryBlock[]
+  memberships           Membership[]
+  memoryEntries         MemoryEntry[]
+  paymentProofs         PaymentProof[]
+  resources             Resource[]
+  schedules             Schedule[]
+  services              Service[]
+  trainingPlan          TrainingPlan?
   trainingConversations TrainingConversation[]
-  seoConfig      SeoConfig?
-  subscription   Subscription?
-  notifications  BusinessNotification[]
-  promoCodeRedemptions PromoCodeRedemption[]
-  convertedFromLeads   Lead[]
+  seoConfig             SeoConfig?
+  subscription          Subscription?
+  notifications         BusinessNotification[]
+  promoCodeRedemptions  PromoCodeRedemption[]
+  convertedFromLeads    Lead[]
+
+  // Entidad del ecosistema Kodexa, no exclusiva de Nexo — ver
+  // docs/architecture/migracion-schemas-fase3.md, sección "Business como
+  // entidad compartida", para el análisis de qué campos de arriba son
+  // conceptualmente específicos de producto (ninguno se separa todavía).
+  @@schema("public")
 }
 
 // Centro de notificaciones del dueño (ver modules/notifications/service.ts,
@@ -105,8 +118,8 @@ model Business {
 // (ej. nombre del cliente, servicio, horario) sin forzar columnas que la
 // mayoría de los tipos no usarían.
 model BusinessNotification {
-  id         String    @id @default(cuid())
-  businessId String
+  id           String    @id @default(cuid())
+  businessId   String
   // human_required | booking_created | booking_pending | booking_cancelled |
   // payment_proof_received | ai_limit_reached — ver NOTIFICATION_TYPES en
   // modules/notifications/service.ts (única fuente de verdad del set).
@@ -125,6 +138,7 @@ model BusinessNotification {
 
   @@index([businessId, readAt])
   @@index([businessId, createdAt])
+  @@schema("nexo")
 }
 
 // Bloque visual reutilizable del sitio público (sección "Contenido visual")
@@ -150,6 +164,7 @@ model GalleryBlock {
 
   @@index([businessId])
   @@index([businessId, active])
+  @@schema("nexo")
 }
 
 // N imágenes por bloque (sección 1 de la tarea: "una o varias imágenes").
@@ -168,6 +183,7 @@ model GalleryImage {
   block GalleryBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
 
   @@index([blockId])
+  @@schema("nexo")
 }
 
 // Configuración SEO generada por IA a partir de datos reales del negocio —
@@ -191,26 +207,28 @@ model SeoConfig {
   updatedAt       DateTime @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@schema("nexo")
 }
 
 model Service {
-  id              String        @id @default(cuid())
+  id              String            @id @default(cuid())
   businessId      String
   name            String
   description     String?
   category        String?
-  durationMinutes Int           @default(60)
-  price           Float         @default(0)
-  active          Boolean       @default(true)
+  durationMinutes Int               @default(60)
+  price           Float             @default(0)
+  active          Boolean           @default(true)
   // URL pública de Supabase Storage (bucket "site-assets", mismo bucket que
   // logo/hero — ver lib/site-assets.ts). Opcional: las cards de servicio del
   // sitio público muestran un fallback visual cuando no hay foto, nunca una
   // imagen inventada.
   imageUrl        String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   appointments    Appointment[]
-  business        Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business        Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   // Ausente/vacío = comportamiento actual (agenda general del negocio). Un
   // service con filas acá pasa a repartirse entre varios recursos físicos
   // intercambiables (ver Resource) en vez de compartir un único slot.
@@ -224,6 +242,7 @@ model Service {
   // fila en vez de crear un duplicado.
   @@unique([businessId, name])
   @@index([businessId])
+  @@schema("nexo")
 }
 
 // Recurso físico reservable (cancha, sala, silla, profesional...). Un mismo
@@ -249,6 +268,7 @@ model Resource {
 
   @@unique([businessId, name])
   @@index([businessId])
+  @@schema("nexo")
 }
 
 // Tabla puente N:M entre Service y Resource.
@@ -262,6 +282,7 @@ model ServiceResource {
 
   @@id([serviceId, resourceId])
   @@index([resourceId])
+  @@schema("nexo")
 }
 
 model Schedule {
@@ -280,6 +301,7 @@ model Schedule {
 
   @@unique([businessId, day])
   @@index([businessId])
+  @@schema("nexo")
 }
 
 model FAQ {
@@ -292,17 +314,18 @@ model FAQ {
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
+  @@schema("nexo")
 }
 
 model MemoryEntry {
-  id         String   @id @default(cuid())
-  businessId String
-  title      String
-  content    String
-  category   String
-  importance String   @default("medium")
-  source     String   @default("manual")
-  active     Boolean  @default(true)
+  id               String   @id @default(cuid())
+  businessId       String
+  title            String
+  content          String
+  category         String
+  importance       String   @default("medium")
+  source           String   @default("manual")
+  active           Boolean  @default(true)
   // Presentes solo cuando source = "document" (ver modules/employee/memory.ts
   // createDocumentMemoryEntry). El archivo original vive en Supabase Storage
   // (bucket privado "knowledge-documents", ver lib/knowledge-documents.ts) —
@@ -315,12 +338,13 @@ model MemoryEntry {
   fileSizeBytes    Int?
   processingStatus String?
   processingError  String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([businessId, active])
+  @@schema("nexo")
 }
 
 model TrainingPlan {
@@ -332,6 +356,8 @@ model TrainingPlan {
 
   business Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
   sections TrainingPlanSection[]
+
+  @@schema("nexo")
 }
 
 model TrainingPlanSection {
@@ -349,6 +375,7 @@ model TrainingPlanSection {
 
   @@unique([planId, key])
   @@index([planId])
+  @@schema("nexo")
 }
 
 // ── Training Chat persistence ────────────────────────────────────────────
@@ -369,6 +396,7 @@ model TrainingConversation {
 
   @@index([businessId])
   @@index([businessId, mode])
+  @@schema("nexo")
 }
 
 model TrainingMessage {
@@ -381,10 +409,11 @@ model TrainingMessage {
   conversation TrainingConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+  @@schema("nexo")
 }
 
 model Appointment {
-  id              String    @id @default(cuid())
+  id              String         @id @default(cuid())
   businessId      String
   serviceId       String?
   serviceName     String
@@ -407,7 +436,7 @@ model Appointment {
   // columna en vez de un "paymentStatus" separado porque para una reserva con
   // seña el estado del pago ES el estado de la reserva: no queda confirmada
   // hasta que el dueño valida el comprobante.
-  status          String    @default("confirmed")
+  status          String         @default("confirmed")
   notes           String?
   // Snapshot al momento de crear el turno (no una referencia viva al precio
   // actual del servicio): si el precio cambia después, un turno pendiente de
@@ -415,11 +444,11 @@ model Appointment {
   // al cliente por WhatsApp. null = este turno no requiere seña.
   depositAmount   Float?
   totalAmount     Float?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  service         Service?  @relation(fields: [serviceId], references: [id])
-  resource        Resource? @relation(fields: [resourceId], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service         Service?       @relation(fields: [serviceId], references: [id])
+  resource        Resource?      @relation(fields: [resourceId], references: [id])
   paymentProofs   PaymentProof[]
 
   @@index([businessId])
@@ -427,6 +456,7 @@ model Appointment {
   @@index([customerPhone])
   @@index([status])
   @@index([resourceId])
+  @@schema("nexo")
 }
 
 // Comprobante de transferencia/pago adjuntado por el cliente vía WhatsApp
@@ -474,6 +504,7 @@ model PaymentProof {
   @@index([businessId])
   @@index([businessId, status])
   @@index([appointmentId])
+  @@schema("nexo")
 }
 
 model User {
@@ -489,6 +520,7 @@ model User {
   sessions      Session[]
 
   @@map("user")
+  @@schema("public")
 }
 
 model Session {
@@ -504,6 +536,7 @@ model Session {
 
   @@index([userId])
   @@map("session")
+  @@schema("public")
 }
 
 model Account {
@@ -524,6 +557,7 @@ model Account {
 
   @@index([userId])
   @@map("account")
+  @@schema("public")
 }
 
 model Verification {
@@ -536,6 +570,7 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+  @@schema("public")
 }
 
 model Employee {
@@ -555,6 +590,8 @@ model Employee {
   capabilities    EmployeeCapability[]
   goals           EmployeeGoal[]
   restrictions    EmployeeRestriction[]
+
+  @@schema("nexo")
 }
 
 model EmployeeGoal {
@@ -567,6 +604,7 @@ model EmployeeGoal {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
+  @@schema("nexo")
 }
 
 model EmployeeRestriction {
@@ -579,6 +617,7 @@ model EmployeeRestriction {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
+  @@schema("nexo")
 }
 
 model EmployeeCapability {
@@ -592,6 +631,7 @@ model EmployeeCapability {
 
   @@unique([employeeId, key])
   @@index([employeeId])
+  @@schema("nexo")
 }
 
 // Ledger de consumo real de IA — sin relación FK a Business a propósito: es
@@ -616,6 +656,7 @@ model AiUsageEvent {
   @@index([businessId])
   @@index([businessId, createdAt])
   @@index([operation])
+  @@schema("nexo")
 }
 
 // ── Planes y suscripciones ───────────────────────────────────────────────
@@ -625,21 +666,25 @@ model AiUsageEvent {
 // cree/actualice Subscription más adelante (provider/providerSubscriptionId
 // quedan listos para eso) pero en esta etapa toda asignación es manual desde
 // /superadmin/empresas/[id] — sin checkout, sin webhooks, sin cobros.
+//
+// Billing específico de Nexo (ver docs/architecture/migracion-schemas-fase3.md):
+// el CRM tendrá su propio Plan/Subscription dentro de `crm` cuando se
+// construya, sin reusar este modelo — no hay billing transversal todavía.
 
 model Plan {
-  id           String   @id @default(cuid())
+  id           String  @id @default(cuid())
   name         String
-  slug         String   @unique
+  slug         String  @unique
   description  String?
-  monthlyPrice Float    @default(0)
-  currency     String   @default("ARS")
+  monthlyPrice Float   @default(0)
+  currency     String  @default("ARS")
   // Unidad: cantidad de respuestas de IA permitidas — el mismo significado
   // que tenían ONBOARDING_MAX_AI_RESPONSES/CONTINUOUS_MAX_AI_RESPONSES antes
   // de este cambio, NUNCA tokens. AiUsageEvent sigue siendo la fuente de
   // verdad del consumo en tokens; esa es una medida distinta que se muestra
   // aparte en Superadmin, nunca convertida a créditos ni viceversa. Ver
   // modules/billing/subscription.ts para cómo se aplica este número.
-  aiCredits    Int      @default(40)
+  aiCredits    Int     @default(40)
 
   // ── Diferenciación comercial más allá de aiCredits ──────────────────────
   // Cada campo está atado a un punto de enforcement real en el código (ver
@@ -651,15 +696,15 @@ model Plan {
   //
   // null = sin límite (Profesional). No confundir con 0.
   maxServices           Int?
-  whatsappEnabled       Boolean  @default(true)
-  depositsEnabled       Boolean  @default(true)
-  customTrainingEnabled Boolean  @default(true)
-  statsEnabled          Boolean  @default(true)
+  whatsappEnabled       Boolean @default(true)
+  depositsEnabled       Boolean @default(true)
+  customTrainingEnabled Boolean @default(true)
+  statsEnabled          Boolean @default(true)
   // Galería de fotos (GalleryBlock) y carta digital + QR (Business.menuEnabled)
   // — nombrado "digitalMenuEnabled" para no colisionar con Business.menuEnabled,
   // que es el switch propio del dueño (independiente del plan).
-  galleryEnabled        Boolean  @default(true)
-  digitalMenuEnabled    Boolean  @default(true)
+  galleryEnabled        Boolean @default(true)
+  digitalMenuEnabled    Boolean @default(true)
 
   // ── Mercado Pago (ver modules/billing/mercadopago/) ─────────────────────
   // Gratis (monthlyPrice = 0) nunca tiene estos campos poblados — no necesita
@@ -680,30 +725,32 @@ model Plan {
   mercadoPagoLastSyncedAt DateTime?
   mercadoPagoSyncError    String?
 
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   subscriptions Subscription[]
   promoCodes    PromoCode[]
+
+  @@schema("nexo")
 }
 
 model Subscription {
-  id     String @id @default(cuid())
+  id                      String    @id @default(cuid())
   // @unique (no solo un índice): un Business tiene A LO SUMO una
   // Subscription, garantizado por la base — "asignar un plan" siempre es un
   // upsert sobre esta única fila, nunca un insert que pueda competir con
   // otra "activa". Esto es lo que pide la sección "un Business debería tener
   // como máximo una suscripción activa/principal" sin necesitar un índice
   // parcial: no existe una segunda fila con la que inconsistir.
-  businessId String @unique
-  planId     String
+  businessId              String    @unique
+  planId                  String
   // trialing | active | past_due | canceled | expired — ver
   // modules/billing/subscription.ts (SUBSCRIPTION_STATUSES) para la
   // semántica de cada uno y qué implica para el acceso a IA.
-  status                 String    @default("trialing")
-  currentPeriodStart     DateTime?
-  currentPeriodEnd       DateTime?
+  status                  String    @default("trialing")
+  currentPeriodStart      DateTime?
+  currentPeriodEnd        DateTime?
   // "manual" (asignado desde Superadmin) | "mercadopago" (pago recurrente
   // real, ver modules/billing/mercadopago/) | "promo_code" (canje de un
   // PromoCode) | "benefit" (bonificación temporal otorgada a mano desde
@@ -713,11 +760,11 @@ model Subscription {
   // provider = "mercadopago"; Nexo sigue siendo la fuente de verdad de qué
   // implica ese estado (gating, créditos IA) vía resolveAiAccess/
   // resolvePlanFeatures, que nunca miran mercadoPagoStatus directamente.
-  provider               String?
+  provider                String?
   // Reutilizado tal cual como el id del preapproval de Mercado Pago cuando
   // provider = "mercadopago" — nunca se agregó un mercadoPagoSubscriptionId
   // aparte, este campo ya cumplía exactamente ese rol desde que existe.
-  providerSubscriptionId String?
+  providerSubscriptionId  String?
   // Estado CRUDO devuelto por Mercado Pago (pending|authorized|paused|cancelled)
   // — separado a propósito de "status" de arriba: "status" es el vocabulario
   // interno de Nexo (trialing/active/past_due/canceled/expired) que ya
@@ -739,21 +786,22 @@ model Subscription {
   // el ciclo de vida de ese Plan. Nunca se setean para provider="mercadopago"
   // — un beneficio/promo y una suscripción paga son conceptos separados
   // (sección 9/17/18 del pedido).
-  benefitExpiresAt DateTime?
-  previousPlanId   String?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  benefitExpiresAt        DateTime?
+  previousPlanId          String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   // Sin onDelete: Cascade a propósito — borrar un Plan mientras tenga
   // Subscriptions debe fallar (comportamiento default de Postgres), nunca
   // arrastrar suscripciones activas a un plan borrado. La UI de Superadmin
   // ni siquiera expone un borrado físico: solo activar/desactivar.
-  plan Plan @relation(fields: [planId], references: [id])
+  plan     Plan     @relation(fields: [planId], references: [id])
 
   @@index([planId])
   @@index([status])
   @@index([benefitExpiresAt])
+  @@schema("nexo")
 }
 
 // Idempotencia de POST /api/webhooks/mercadopago (Fase 4): Mercado Pago
@@ -767,6 +815,8 @@ model MercadoPagoWebhookEvent {
   id         String   @id
   type       String
   receivedAt DateTime @default(now())
+
+  @@schema("nexo")
 }
 
 // ── Códigos promocionales ────────────────────────────────────────────────
@@ -778,11 +828,11 @@ model MercadoPagoWebhookEvent {
 // del pedido). Un código de un solo uso simplemente queda agotado
 // (usedCount alcanza maxUses), nunca se marca "usado" borrándolo.
 model PromoCode {
-  id     String @id @default(cuid())
+  id           String   @id @default(cuid())
   // Siempre mayúsculas (normalizado en el servicio, no acá) — @unique es la
   // fuente real de "no puede haber dos códigos iguales".
-  code   String @unique
-  planId String
+  code         String   @unique
+  planId       String
   // Días de bonificación, no "meses" — el mes calendario es ambiguo (28-31
   // días) y la UI de Superadmin ofrece presets (30/60/90/180/365 = 1/2/3/6/
   // 12 meses) más un valor custom en días, todos representables acá sin
@@ -790,20 +840,21 @@ model PromoCode {
   durationDays Int
   // null = sin límite de usos. No confundir con 0 (0 sería un código que
   // nunca se puede usar, no tiene sentido crearlo así — la UI no lo permite).
-  maxUses   Int?
-  usedCount Int    @default(0)
-  expiresAt DateTime
-  active      Boolean  @default(true)
-  description String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  maxUses      Int?
+  usedCount    Int      @default(0)
+  expiresAt    DateTime
+  active       Boolean  @default(true)
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // RESTRICT (default): un Plan con códigos activos no se borra — mismo
   // criterio que Subscription.plan.
-  plan        Plan                   @relation(fields: [planId], references: [id])
+  plan        Plan                  @relation(fields: [planId], references: [id])
   redemptions PromoCodeRedemption[]
 
   @@index([active])
+  @@schema("nexo")
 }
 
 // Un canje = un uso. appointmentId/etc no aplica acá — el vínculo relevante
@@ -812,14 +863,14 @@ model PromoCode {
 // después de creado: es un log de auditoría, igual criterio que
 // PaymentProof/AiUsageEvent en este mismo schema.
 model PromoCodeRedemption {
-  id          String   @id @default(cuid())
-  promoCodeId String
-  businessId  String
+  id               String   @id @default(cuid())
+  promoCodeId      String
+  businessId       String
   // userId de quien aplicó el código (sesión) — sin relación FK a User a
   // propósito, mismo criterio que PaymentProof.reviewedBy: un dato de
   // auditoría que no debe poder bloquear ni verse bloqueado por el ciclo de
   // vida de la cuenta.
-  userId      String
+  userId           String
   // Snapshot del nombre del plan al momento del canje — si el Plan cambia de
   // nombre después, el historial sigue mostrando lo que realmente se
   // otorgó (mismo criterio que Appointment.depositAmount/totalAmount).
@@ -832,6 +883,7 @@ model PromoCodeRedemption {
 
   @@index([promoCodeId])
   @@index([businessId])
+  @@schema("nexo")
 }
 
 // ── Leads comerciales (landing) ──────────────────────────────────────────
@@ -841,16 +893,23 @@ model PromoCodeRedemption {
 // puede existir toda su vida sin volverse nunca un Business real — no hay
 // ninguna creación automática de Business desde este modelo (ver sección 9
 // del pedido).
+//
+// Vive en `public`, no en `nexo` ni en `crm` (ver
+// docs/architecture/migracion-schemas-fase2.md, sección B "Lead — decisión
+// dedicada", confirmado por decisión explícita en Fase 3): es pipeline
+// comercial de Kodexa, no una feature de ningún producto — no confundir con
+// el futuro concepto de Lead del CRM (que será de clientes de un Business,
+// no de Kodexa).
 model Lead {
-  id           String   @id @default(cuid())
-  name         String
-  businessName String
-  whatsapp     String
-  email        String
+  id            String   @id @default(cuid())
+  name          String
+  businessName  String
+  whatsapp      String
+  email         String
   // Texto libre — mismo criterio que Business.category (ver comentario ahí):
   // el <Select> de la landing restringe a BUSINESS_CATEGORIES, pero la
   // columna no fuerza esa lista cerrada.
-  industry     String
+  industry      String
   // Array nativo de Postgres (Prisma soporta String[] directo, sin tabla de
   // unión) — valores válidos en LEAD_GOALS (lib/types.ts). "Qué querés
   // mejorar" es multi-selección a propósito: un negocio real casi siempre
@@ -865,14 +924,14 @@ model Lead {
   // NEW | CONTACTED | MEETING | PROPOSAL | CONVERTED | LOST — String, no
   // enum de Prisma: mismo criterio que Appointment.status/Subscription.status
   // en este mismo schema, nunca se usó `enum` acá. Ver LEAD_STATUSES.
-  status String @default("NEW")
+  status        String   @default("NEW")
   // Slug de Plan ("gratis"|"esencial"|"profesional"), nunca una FK — es una
   // sugerencia calculada por reglas simples (ver
   // modules/leads/suggest-plan.ts), no una asignación real de plan. Si el
   // Plan se borra/renombra después, el historial del lead no debe romperse.
   suggestedPlan String?
   // Notas internas de seguimiento — solo las ve Superadmin, nunca el lead.
-  notes String?
+  notes         String?
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -891,6 +950,7 @@ model Lead {
   @@index([status])
   @@index([createdAt])
   @@index([convertedBusinessId])
+  @@schema("public")
 }
 
 model Membership {
@@ -906,4 +966,5 @@ model Membership {
   @@unique([userId, businessId])
   @@index([userId])
   @@index([businessId])
+  @@schema("public")
 }

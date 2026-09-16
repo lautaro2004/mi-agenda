@@ -39,6 +39,11 @@ yarn-error.log*
 # whatsapp sessions
 /.whatsapp-sessions/
 
+# volcados de datos reales tomados como red de seguridad antes de migraciones
+# de base de datos (contienen PII de clientes: emails, teléfonos, nombres) —
+# nunca deben commitearse. Ver docs/architecture/migracion-schemas-fase3.md.
+/prisma/_backup_pre_*/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
