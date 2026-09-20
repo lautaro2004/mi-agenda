@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# Mi Agenda
+# Nexo (anteriormente "Mi Agenda")
 
 ## Stack
 

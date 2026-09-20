@@ -1,6 +1,6 @@
-# Mi Agenda
+# Nexo
 
-Mi Agenda es una plataforma SaaS que automatiza la gestión de reservas mediante WhatsApp e Inteligencia Artificial.
+Nexo (anteriormente "Mi Agenda") es una plataforma SaaS que automatiza la gestión de reservas mediante WhatsApp e Inteligencia Artificial.
 
 El objetivo es permitir que cualquier negocio pueda comenzar a recibir y administrar turnos en pocos minutos, sin conocimientos técnicos.
 
@@ -8,9 +8,9 @@ El objetivo es permitir que cualquier negocio pueda comenzar a recibir y adminis
 
 ## Estado del proyecto
 
-**Versión:** Alpha
+**Versión:** en producción, con negocios reales operando.
 
-Actualmente el proyecto se encuentra en proceso de desarrollo hacia su primer MVP.
+El MVP original ya fue superado: además de reservas por WhatsApp, el producto incluye sitio público, AI Studio, suscripciones pagas vía Mercado Pago y un puente con el CRM (Nodo, producto separado). Ver `docs/product/inventario-actual.md` para el detalle verificado de qué existe hoy.
 
 ---
 
@@ -52,7 +52,7 @@ Toda la documentación del proyecto se encuentra en la carpeta `docs`.
 * Roadmap
 * Backlog
 * MVP
-* Sprints
+* Inventario actual (fotografía verificada de qué existe hoy en el código)
 
 ### Arquitectura
 

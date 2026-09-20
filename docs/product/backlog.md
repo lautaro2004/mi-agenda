@@ -4,17 +4,11 @@ Este documento contiene funcionalidades futuras.
 
 No representan compromiso de desarrollo inmediato.
 
+**Nota (2026-09-17):** se retiró de este backlog el ítem "CRM" (historial de clientes, etiquetas, notas internas) que figuraba en Prioridad Alta. El CRM ya existe como producto separado (`crm/`, nombre de trabajo "Nodo"), no como funcionalidad pendiente de Nexo — ver `docs/product/vision.md` sección 5 y `docs/product/roadmap.md`.
+
 ---
 
 # Prioridad Alta (Post MVP)
-
-## CRM
-
-* Historial de clientes.
-* Etiquetas.
-* Notas internas.
-
----
 
 ## Recordatorios
 
