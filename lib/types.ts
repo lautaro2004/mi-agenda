@@ -741,3 +741,14 @@ export const ONBOARDING_STEPS = [
   { id: 4, slug: "preguntas-frecuentes", title: "Preguntas frecuentes", description: "Respondé las dudas más comunes" },
   { id: 5, slug: "suscripcion", title: "Suscripción", description: "Activá tu plan" },
 ] as const;
+
+// Consulta del sitio público, tal como llega por JSON (fechas serializadas).
+export interface Inquiry {
+  id: string;
+  customerName: string;
+  customerWhatsapp: string;
+  customerEmail: string;
+  message: string;
+  status: "NEW" | "IN_PROGRESS" | "RESOLVED";
+  createdAt: string;
+}

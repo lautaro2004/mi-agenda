@@ -34,6 +34,7 @@ import { FloatingWhatsapp } from "@/components/public-site/floating-whatsapp";
 import { BookingHero } from "@/components/public-site/booking/booking-hero";
 import { BookingServicesSection } from "@/components/public-site/booking/booking-services-section";
 import { BookingImportantInfo } from "@/components/public-site/booking/booking-important-info";
+import { BookingInquirySection } from "@/components/public-site/booking/booking-inquiry-section";
 import { BookingStickyCta } from "@/components/public-site/booking/booking-sticky-cta";
 import { GallerySection } from "@/components/public-site/gallery-section";
 import { MenuCallout } from "@/components/public-site/menu-callout";
@@ -173,6 +174,7 @@ export default async function PublicSitePage({ params }: PageProps) {
             />
             <BookingServicesSection services={bookableServices} whatsappHref={whatsappHref} />
             <BookingImportantInfo business={business} whatsappHref={whatsappHref} />
+            <BookingInquirySection slug={slug} />
             {hasMenu && <MenuCallout slug={slug} />}
             <GallerySection blocks={galleryBlocks} />
             <ScheduleSection schedule={schedule} />

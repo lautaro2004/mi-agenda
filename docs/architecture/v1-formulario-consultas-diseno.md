@@ -167,3 +167,14 @@ Por instrucción explícita del usuario, quedan fuera de esta pasada:
 3. **Alcance de la vista de dashboard** (`/dashboard/consultas`, sección 3.9) — ¿entra en V1 o se puede diferir dejando la notificación como único punto de acceso inicial? Lo incluí porque sin eso las consultas de negocios que no usan el CRM prácticamente no tendrían dónde vivir, pero es más alcance del que pidió literalmente el enunciado original ("formulario → Lead").
 4. **Rate limit en memoria.** `isRateLimited` ya es conocido como no distribuido/por-proceso (documentado en `inventario-actual.md`) — sigue siendo el mecanismo disponible, no se propone resolver esa limitación como parte de V1, solo se señala que se hereda.
 5. **Status del modelo `Inquiry`.** Propongo un campo `status` simple desde el día uno (aunque V1 no lo use más que para el default `"new"`) para no tener que migrar el modelo apenas se quiera agregar "marcar como atendida" — a confirmar si se prefiere no incluirlo todavía para mantener el modelo mínimo.
+
+---
+
+## 7. Decisiones cerradas e implementación (2026-09-20)
+
+- Modelo técnico `Inquiry`; en UI "Consultas".
+- `Inquiry.status`: solo `NEW` (default), `IN_PROGRESS`, `RESOLVED` (`INQUIRY_STATUSES` en `lib/schemas.ts`).
+- CRM: un único botón "Sincronizar con Nexo". Internamente `syncLeadsFromNexoAppointments` y `syncLeadsFromNexoInquiries`, orquestadas por `syncLeadsFromNexo`; `POST /api/nexo/sync-leads` devuelve totales combinados más el desglose. Leads con `source: "nexo_inquiry"`.
+- `/dashboard/consultas` incluido con alcance mínimo: listado, datos de contacto y cambio de estado. Sin filtros, asignaciones ni tags.
+- CTA de WhatsApp contextual pre-reserva agregada a `BookingImportantInfo` reutilizando `buildWhatsappHref`; no se tocó el motor de WhatsApp.
+- La migración `20260920000000_add_inquiry` es aditiva (una tabla nueva); **no se aplicó** a ninguna base todavía. El CRM declara solo el mirror de lectura, sin migración propia.

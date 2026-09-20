@@ -14,6 +14,7 @@ import {
   ListChecks,
   MessageCircleQuestion,
   MessageSquare,
+  MessageSquareText,
   Plug,
   ScrollText,
   Store,
@@ -28,6 +29,7 @@ export const DASHBOARD_NAV = [
   { href: "/dashboard/recursos", label: "Recursos", icon: Boxes },
   { href: "/dashboard/preguntas-frecuentes", label: "Preguntas frecuentes", icon: MessageCircleQuestion },
   { href: "/dashboard/turnos", label: "Turnos", icon: CalendarCheck2 },
+  { href: "/dashboard/consultas", label: "Consultas", icon: MessageSquareText },
   { href: "/dashboard/estadisticas", label: "Estadísticas", icon: BarChart3 },
   {
     href: "/dashboard/whatsapp",

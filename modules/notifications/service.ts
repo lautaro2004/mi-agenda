@@ -8,7 +8,7 @@ import type { Prisma } from "@prisma/client";
 // choke point que ya usa cada feature real (createAppointment,
 // cancelAppointment, submitProofForAppointment, el hand-off a humano de
 // WhatsApp, el corte de límite de IA) — nunca una notificación por cada
-// interacción de IA, solo estos 6 eventos puntuales.
+// interacción de IA, solo estos 7 eventos puntuales.
 export const NOTIFICATION_TYPES = [
   "human_required",
   "booking_created",
@@ -16,6 +16,7 @@ export const NOTIFICATION_TYPES = [
   "booking_cancelled",
   "payment_proof_received",
   "ai_limit_reached",
+  "inquiry_received",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -174,5 +175,20 @@ export async function notifyAiLimitReached(input: { businessId: string; limit: n
     title: "Límite de IA alcanzado",
     body: `Tu negocio alcanzó las ${input.limit} respuestas de IA incluidas en tu plan para este período.`,
     resourceHref: "/dashboard/suscripcion",
+  });
+}
+
+export async function notifyInquiryReceived(input: {
+  businessId: string;
+  inquiryId: string;
+  customerName: string;
+}): Promise<void> {
+  await createNotification({
+    businessId: input.businessId,
+    type: "inquiry_received",
+    title: "Nueva consulta",
+    body: `${input.customerName} dejó una consulta desde tu sitio web.`,
+    resourceHref: "/dashboard/consultas",
+    payload: { inquiryId: input.inquiryId },
   });
 }

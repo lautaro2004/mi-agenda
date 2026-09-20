@@ -19,6 +19,7 @@ const DOT_CLASS: Record<NotificationType, string> = {
   booking_pending: "bg-amber-500",
   payment_proof_received: "bg-amber-500",
   ai_limit_reached: "bg-amber-500",
+  inquiry_received: "bg-amber-500",
   booking_created: "bg-emerald-500",
   booking_cancelled: "bg-muted-foreground",
 };

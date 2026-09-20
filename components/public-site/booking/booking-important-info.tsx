@@ -1,5 +1,6 @@
 import { CreditCard, MessageCircleQuestion } from "lucide-react";
 
+import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import type { Business } from "@/lib/types";
 
 interface BookingImportantInfoProps {
@@ -23,6 +24,10 @@ function formatDepositLabel(business: Business): string | null {
 // sección directamente no se renderiza.
 export function BookingImportantInfo({ business, whatsappHref }: BookingImportantInfoProps) {
   const depositLabel = formatDepositLabel(business);
+  const doubtsHref = buildWhatsappHref(
+    business.whatsappNumber,
+    "Hola, tengo una duda sobre disponibilidad, precios o el servicio."
+  );
   if (!depositLabel && !whatsappHref) return null;
 
   return (
@@ -34,6 +39,22 @@ export function BookingImportantInfo({ business, whatsappHref }: BookingImportan
             <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
               <CreditCard className="mt-0.5 size-5 shrink-0 text-[var(--brand-primary,var(--primary))]" />
               <p className="text-sm text-muted-foreground">{depositLabel}</p>
+            </div>
+          )}
+          {doubtsHref && (
+            <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
+              <MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-[var(--brand-primary,var(--primary))]" />
+              <p className="text-sm text-muted-foreground">
+                ¿Tenés dudas sobre disponibilidad, precios o el servicio?{" "}
+                <a
+                  href={doubtsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-[var(--brand-primary,var(--primary))] underline underline-offset-2"
+                >
+                  Consultar por WhatsApp
+                </a>
+              </p>
             </div>
           )}
           {whatsappHref && (

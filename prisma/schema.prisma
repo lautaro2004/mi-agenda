@@ -97,6 +97,7 @@ model Business {
   seoConfig             SeoConfig?
   subscription          Subscription?
   notifications         BusinessNotification[]
+  inquiries             Inquiry[]
   promoCodeRedemptions  PromoCodeRedemption[]
   convertedFromLeads    Lead[]
 
@@ -105,6 +106,30 @@ model Business {
   // entidad compartida", para el análisis de qué campos de arriba son
   // conceptualmente específicos de producto (ninguno se separa todavía).
   @@schema("public")
+}
+
+// Consulta dejada por un visitante desde el formulario del sitio público
+// (ver modules/inquiries/service.ts). Concepto distinto de `Lead` (public):
+// ese es el pipeline comercial de Kodexa; esto es una consulta de un cliente
+// final hacia UN negocio. El CRM la lee (solo lectura) para generar Leads —
+// ver docs/architecture/v1-formulario-consultas-diseno.md.
+model Inquiry {
+  id               String   @id @default(cuid())
+  businessId       String
+  customerName     String
+  customerWhatsapp String
+  customerEmail    String
+  message          String
+  // NEW | IN_PROGRESS | RESOLVED — ver INQUIRY_STATUSES en
+  // lib/schemas.ts (única fuente de verdad del set).
+  status           String   @default("NEW")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+  @@schema("nexo")
 }
 
 // Centro de notificaciones del dueño (ver modules/notifications/service.ts,
@@ -121,7 +146,7 @@ model BusinessNotification {
   id           String    @id @default(cuid())
   businessId   String
   // human_required | booking_created | booking_pending | booking_cancelled |
-  // payment_proof_received | ai_limit_reached — ver NOTIFICATION_TYPES en
+  // payment_proof_received | ai_limit_reached | inquiry_received — ver NOTIFICATION_TYPES en
   // modules/notifications/service.ts (única fuente de verdad del set).
   type         String
   title        String

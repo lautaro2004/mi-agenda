@@ -534,6 +534,27 @@ export const leadFormSchema = z.object({
 
 export type LeadFormValues = z.infer<typeof leadFormSchema>;
 
+// ── Consultas del sitio público (Inquiry) ────────────────────────────────
+// Solo los 4 campos del formulario + honeypot. "website" sigue el mismo
+// criterio que leadFormSchema: nunca falla la validación, la ruta decide en
+// silencio qué hacer si viene con contenido.
+export const INQUIRY_STATUSES = ["NEW", "IN_PROGRESS", "RESOLVED"] as const;
+export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
+
+export const inquirySchema = z.object({
+  customerName: z.string().trim().min(2, "Ingresá tu nombre").max(100),
+  customerWhatsapp: z.string().trim().min(6, "Ingresá un WhatsApp válido").max(30),
+  customerEmail: z.string().trim().email("Ingresá un email válido").max(200),
+  message: z.string().trim().min(1, "Contanos tu consulta").max(500, "Tu consulta es demasiado larga (máx. 500 caracteres)"),
+  website: z.string().max(200).optional(),
+});
+
+export type InquiryFormValues = z.infer<typeof inquirySchema>;
+
+export const inquiryStatusUpdateSchema = z.object({
+  status: z.enum(INQUIRY_STATUSES),
+});
+
 // Actualización desde Superadmin (sección 7 del pedido: estado, notas,
 // reunión, conversión) — deliberadamente NO incluye ningún campo que venga
 // del formulario público (name/email/goals/etc): un lead no se "reedita" el
