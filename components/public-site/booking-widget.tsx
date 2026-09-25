@@ -6,6 +6,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, CheckCircle2, Clock3, Loader2, MessageCircle, Upload } from "lucide-react";
 
+import { ConsentNotice } from "@/components/legal/consent-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -375,7 +376,9 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
         </p>
       )}
 
-      <Button type="submit" className="mt-5 w-full" disabled={isSubmitting}>
+      <ConsentNotice variant="customer" className="mt-5" />
+
+      <Button type="submit" className="mt-3 w-full" disabled={isSubmitting}>
         {isSubmitting ? (
           <>
             <Loader2 className="size-4 animate-spin" data-icon="inline-start" />

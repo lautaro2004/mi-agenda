@@ -1,19 +1,28 @@
 import { NextResponse } from "next/server";
 
 import { cancelAppointment, rescheduleAppointment } from "@/modules/appointments/service";
+import { getCurrentBusinessId } from "@/modules/business/current";
 import { rescheduleAppointmentSchema } from "@/lib/schemas";
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const businessId = await getCurrentBusinessId();
+  if (!businessId) {
+    return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+  }
+
   const { id } = await params;
 
   try {
     const body = (await request.json()) as { action: "cancel" | "reschedule" } & Record<string, unknown>;
 
     if (body.action === "cancel") {
-      const appointment = await cancelAppointment(id, "dashboard");
+      const appointment = await cancelAppointment(businessId, id, "dashboard");
+      if (!appointment) {
+        return NextResponse.json({ error: "Turno no encontrado." }, { status: 404 });
+      }
       return NextResponse.json({ appointment });
     }
 
@@ -24,6 +33,7 @@ export async function PATCH(
       }
 
       const result = await rescheduleAppointment({
+        businessId,
         id,
         newDate: parsed.data.date,
         newStartTime: parsed.data.startTime,
@@ -59,10 +69,18 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const businessId = await getCurrentBusinessId();
+  if (!businessId) {
+    return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+  }
+
   const { id } = await params;
 
   try {
-    const appointment = await cancelAppointment(id, "dashboard");
+    const appointment = await cancelAppointment(businessId, id, "dashboard");
+    if (!appointment) {
+      return NextResponse.json({ error: "Turno no encontrado." }, { status: 404 });
+    }
     return NextResponse.json({ appointment });
   } catch (error) {
     console.error("[Appointments API] DELETE error:", error);

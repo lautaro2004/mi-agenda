@@ -12,7 +12,13 @@ export function LandingFooter() {
           </Link>
           <p className="text-xs text-muted-foreground">Un producto de Kodexa</p>
         </div>
-        <p>© {new Date().getFullYear()} Nexo. Todos los derechos reservados.</p>
+        <div className="flex flex-col items-center gap-2 sm:items-end">
+          <div className="flex gap-4">
+            <Link href="/terminos" className="hover:text-foreground hover:underline">Términos</Link>
+            <Link href="/privacidad" className="hover:text-foreground hover:underline">Privacidad</Link>
+          </div>
+          <p>© {new Date().getFullYear()} Nexo. Todos los derechos reservados.</p>
+        </div>
       </div>
     </footer>
   );

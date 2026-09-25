@@ -21,7 +21,10 @@ export async function GET(request: Request) {
 
       send({ type: "connection", payload: whatsappConnectionManager.getStatus(businessId) });
 
-      const unsubscribe = whatsappEvents.subscribe(send);
+      // Solo eventos del negocio de esta sesión: el bus es global al proceso.
+      const unsubscribe = whatsappEvents.subscribe((eventBusinessId, event) => {
+        if (eventBusinessId === businessId) send(event);
+      });
 
       request.signal.addEventListener("abort", () => {
         unsubscribe();

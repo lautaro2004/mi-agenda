@@ -74,5 +74,5 @@ export function syncIncomingMessage(businessId: string, waMessage: WAMessage): v
     timestamp: new Date(timestampSeconds * 1000).toISOString(),
   };
 
-  conversationRepository.addMessage(conversation.id, message, !fromMe);
+  conversationRepository.addMessage(businessId, conversation.id, message, !fromMe);
 }

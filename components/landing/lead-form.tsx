@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { requestJson } from "@/lib/api-client";
+import { ConsentNotice } from "@/components/legal/consent-notice";
 import { cn } from "@/lib/utils";
 import { leadFormSchema, type LeadFormValues } from "@/lib/schemas";
 import { BUSINESS_CATEGORIES, LEAD_GOALS, LEAD_GOAL_LABEL, LEAD_MONTHLY_VOLUMES, LEAD_MONTHLY_VOLUME_LABEL } from "@/lib/types";
@@ -219,6 +220,8 @@ export function LeadForm({ onSuccess }: { onSuccess: (wantsMeeting: boolean) => 
       </p>
 
       {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+
+      <ConsentNotice variant="account" />
 
       <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
         {isSubmitting ? (

@@ -58,7 +58,7 @@ export async function handleIncomingPaymentMessage(params: {
 
       const nextSession: BookingSession = { ...(conversation.bookingSession ?? DEFAULT_SESSION) };
       delete nextSession.pendingProofSelection;
-      conversationRepository.setBookingSession(jid, nextSession);
+      conversationRepository.setBookingSession(businessId, jid, nextSession);
 
       if ("error" in result) {
         return { text: "No pudimos asociar el comprobante con ese turno. Escribinos y lo resolvemos a mano." };
@@ -97,7 +97,7 @@ export async function handleIncomingPaymentMessage(params: {
     }
 
     const proof = await submitUnassignedProof({ businessId, file });
-    conversationRepository.setBookingSession(jid, {
+    conversationRepository.setBookingSession(businessId, jid, {
       ...(conversation.bookingSession ?? DEFAULT_SESSION),
       pendingProofSelection: { proofId: proof.id, appointmentIds: candidates.map((c) => c.id) },
     });

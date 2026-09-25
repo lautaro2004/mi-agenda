@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
+import { getClientIp, isRateLimited, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 import { PaymentProofValidationError, submitProofForAppointment } from "@/modules/payments/service";
 
 // Subida de comprobante desde el sitio público (ver sección 6/7 de la
@@ -17,6 +18,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) {
     return NextResponse.json({ error: "Negocio no encontrado." }, { status: 404 });
+  }
+
+  // Sube archivos a Storage: el límite más estricto de las rutas públicas.
+  if (isRateLimited(`payment-proof:${businessId}:${getClientIp(request)}`, 10, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
   }
 
   let formData: FormData;

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, CheckCircle2, Loader2, Send } from "lucide-react";
 
+import { ConsentNotice } from "@/components/legal/consent-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -108,7 +109,9 @@ export function InquiryForm({ slug }: { slug: string }) {
         </p>
       )}
 
-      <Button type="submit" className="mt-5 w-full" disabled={isSubmitting}>
+      <ConsentNotice variant="customer" className="mt-5" />
+
+      <Button type="submit" className="mt-3 w-full" disabled={isSubmitting}>
         {isSubmitting ? (
           <>
             <Loader2 className="size-4 animate-spin" data-icon="inline-start" />

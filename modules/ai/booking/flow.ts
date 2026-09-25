@@ -8,7 +8,7 @@ import type {
 } from "@/lib/types";
 import type { AIResponse } from "@/modules/ai/types";
 import type { BusinessContext } from "@/modules/ai/providers/base";
-import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
+import { conversationRepository, type ConversationRef } from "@/modules/whatsapp/conversations/repository";
 import { isBookableService } from "@/modules/business/service";
 
 import type { BookingSession, BookingStep } from "./types";
@@ -212,14 +212,14 @@ function bookingResponse(text: string, escalate = false): AIResponse {
   };
 }
 
-function updateState(id: string, state: ConversationFlowState, session: BookingSession) {
-  conversationRepository.setFlowState(id, state);
-  conversationRepository.setBookingSession(id, session);
+function updateState(ref: ConversationRef, state: ConversationFlowState, session: BookingSession) {
+  conversationRepository.setFlowState(ref.businessId, ref.id, state);
+  conversationRepository.setBookingSession(ref.businessId, ref.id, session);
 }
 
-function clearFlow(id: string) {
-  conversationRepository.setFlowState(id, "IDLE");
-  conversationRepository.clearBookingSession(id);
+function clearFlow(ref: ConversationRef) {
+  conversationRepository.setFlowState(ref.businessId, ref.id, "IDLE");
+  conversationRepository.clearBookingSession(ref.businessId, ref.id);
 }
 
 // ── DEPOSIT / SEÑA ─────────────────────────────────────────────────────────────
@@ -259,7 +259,7 @@ function buildDepositMessage(
 async function handleNeedService(
   message: string,
   session: BookingSession,
-  conversationId: string,
+  conversationId: ConversationRef,
   context: BusinessContext,
 ): Promise<AIResponse> {
   // Un servicio sin duración real (ej. "Landing Page" en una agencia web) no
@@ -296,7 +296,7 @@ async function handleNeedService(
 async function handleNeedDate(
   message: string,
   session: BookingSession,
-  conversationId: string,
+  conversationId: ConversationRef,
   context: BusinessContext,
 ): Promise<AIResponse> {
   const parsed = parseUserDate(message);
@@ -335,7 +335,7 @@ async function handleNeedDate(
 async function handleNeedSlot(
   message: string,
   session: BookingSession,
-  conversationId: string,
+  conversationId: ConversationRef,
 ): Promise<AIResponse> {
   const slot = parseSlotSelection(message, session.availableSlots);
 
@@ -360,7 +360,7 @@ async function handleNeedSlot(
 async function handleNeedConfirmation(
   message: string,
   session: BookingSession,
-  conversationId: string,
+  conversationId: ConversationRef,
   conversation: Conversation,
   context: BusinessContext,
 ): Promise<AIResponse> {
@@ -448,7 +448,7 @@ async function handleNeedConfirmation(
 // ── CANCEL FLOW ───────────────────────────────────────────────────────────────
 
 async function startCancelFlow(
-  conversationId: string,
+  conversationId: ConversationRef,
   conversation: Conversation,
 ): Promise<AIResponse> {
   try {
@@ -489,13 +489,14 @@ async function startCancelFlow(
 async function handleCancelConfirm(
   message: string,
   session: BookingSession,
-  conversationId: string,
+  conversationId: ConversationRef,
+  businessId: string,
 ): Promise<AIResponse> {
   if (CONFIRM_RE.test(message.trim())) {
     if (session.existingAppointmentId) {
       try {
         const { cancelAppointment } = await import("@/modules/appointments/service");
-        await cancelAppointment(session.existingAppointmentId, "customer");
+        await cancelAppointment(businessId, session.existingAppointmentId, "customer");
       } catch {
         // Proceed even if DB fails
       }
@@ -518,7 +519,7 @@ async function handleCancelConfirm(
 // ── RESCHEDULE FLOW ───────────────────────────────────────────────────────────
 
 async function startRescheduleFlow(
-  conversationId: string,
+  conversationId: ConversationRef,
   conversation: Conversation,
 ): Promise<AIResponse> {
   try {
@@ -559,7 +560,7 @@ async function startRescheduleFlow(
 async function handleRescheduleDate(
   message: string,
   session: BookingSession,
-  conversationId: string,
+  conversationId: ConversationRef,
   context: BusinessContext,
 ): Promise<AIResponse> {
   const parsed = parseUserDate(message);
@@ -601,7 +602,7 @@ async function handleRescheduleDate(
 async function handleRescheduleSlot(
   message: string,
   session: BookingSession,
-  conversationId: string,
+  conversationId: ConversationRef,
 ): Promise<AIResponse> {
   const slot = parseSlotSelection(message, session.availableSlots);
 
@@ -622,7 +623,8 @@ async function handleRescheduleSlot(
 async function handleRescheduleConfirm(
   message: string,
   session: BookingSession,
-  conversationId: string,
+  conversationId: ConversationRef,
+  businessId: string,
 ): Promise<AIResponse> {
   if (CONFIRM_RE.test(message.trim())) {
     if (!session.existingAppointmentId || !session.preferredDate || !session.selectedSlot) {
@@ -643,6 +645,7 @@ async function handleRescheduleConfirm(
     let result: Awaited<ReturnType<typeof rescheduleAppointment>> | null = null;
     try {
       result = await rescheduleAppointment({
+        businessId,
         id: session.existingAppointmentId,
         newDate: session.preferredDate,
         newStartTime: session.selectedSlot,
@@ -693,7 +696,9 @@ export async function handleBookingFlow(
   conversation: Conversation,
   context: BusinessContext,
 ): Promise<AIResponse> {
-  const id = conversation.id;
+  // Referencia (negocio + JID) que se usa para toda escritura de estado: la
+  // conversación siempre se resuelve dentro del negocio de la conexión.
+  const id: ConversationRef = { businessId: conversation.businessId, id: conversation.id };
 
   // Detect cancel / reschedule intent before starting a new booking
   const isIdle = !conversation.bookingSession ||
@@ -753,7 +758,7 @@ export async function handleBookingFlow(
       return handleBookingFlow(message, { ...conversation, bookingSession: undefined, flowState: "IDLE" }, context);
 
     case "cancel_confirm":
-      return handleCancelConfirm(message, session, id);
+      return handleCancelConfirm(message, session, id, conversation.businessId);
 
     case "reschedule_date":
       return handleRescheduleDate(message, session, id, context);
@@ -762,6 +767,6 @@ export async function handleBookingFlow(
       return handleRescheduleSlot(message, session, id);
 
     case "reschedule_confirm":
-      return handleRescheduleConfirm(message, session, id);
+      return handleRescheduleConfirm(message, session, id, conversation.businessId);
   }
 }

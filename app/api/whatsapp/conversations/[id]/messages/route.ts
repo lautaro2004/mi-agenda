@@ -28,6 +28,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  const conversation = conversationRepository.get(id);
+  const conversation = conversationRepository.get(businessId, id);
   return NextResponse.json({ conversation });
 }

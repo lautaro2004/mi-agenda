@@ -81,6 +81,10 @@ export function PublicFooter({ business, slug }: { business: Business; slug: str
         <div className="mt-10 border-t border-border pt-6 text-center">
           <p className="text-xs text-muted-foreground/70">
             Sitio creado con <Link href="/" className="hover:text-muted-foreground hover:underline">Nexo</Link>
+            {" · "}
+            <Link href="/privacidad" className="hover:text-muted-foreground hover:underline">Privacidad</Link>
+            {" · "}
+            <Link href="/terminos" className="hover:text-muted-foreground hover:underline">Términos</Link>
           </p>
         </div>
       </div>

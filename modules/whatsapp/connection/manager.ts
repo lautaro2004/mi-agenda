@@ -12,6 +12,7 @@ import QRCode from "qrcode";
 
 import type { MessageSender, WhatsAppConnection } from "@/lib/types";
 import { whatsappEvents } from "@/modules/whatsapp/events";
+import { withAiDisclosure } from "@/modules/whatsapp/ai-disclosure";
 import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
 import { extractMessageText, syncIncomingMessage } from "@/modules/whatsapp/messages/sync";
 import { syncHistoricalMessages } from "@/modules/whatsapp/messages/history-sync";
@@ -56,7 +57,7 @@ class WhatsAppConnectionManager {
   private updateConnection(businessId: string, patch: Partial<WhatsAppConnection>) {
     const updated = { ...this.getConnection(businessId), ...patch };
     this.connections.set(businessId, updated);
-    whatsappEvents.emit({ type: "connection", payload: updated });
+    whatsappEvents.emit(businessId, { type: "connection", payload: updated });
     return updated;
   }
 
@@ -265,6 +266,7 @@ class WhatsAppConnectionManager {
     await sock.sendMessage(jid, { text });
 
     conversationRepository.addMessage(
+      businessId,
       jid,
       {
         id: `out-${Date.now()}`,
@@ -286,7 +288,7 @@ class WhatsAppConnectionManager {
     const connection = this.getConnection(businessId);
     if (!connection.aiEnabled) return;
 
-    const conversation = conversationRepository.get(jid);
+    const conversation = conversationRepository.get(businessId, jid);
     if (!conversation || conversation.manualMode) return;
 
     // Comprobantes de pago se interceptan ANTES del pipeline normal de IA:
@@ -299,7 +301,7 @@ class WhatsAppConnectionManager {
       const { handleIncomingPaymentMessage } = await import("@/modules/whatsapp/payments/inbound");
       const paymentReply = await handleIncomingPaymentMessage({ businessId, jid, rawMessage, conversation });
       if (paymentReply) {
-        await this.sendMessage(businessId, jid, paymentReply.text, "ai");
+        await this.sendMessage(businessId, jid, withAiDisclosure(conversation, paymentReply.text), "ai");
         return;
       }
     } catch (error) {
@@ -314,12 +316,12 @@ class WhatsAppConnectionManager {
       const response = await processMessage({ conversationId: jid, businessId, message: text });
       if (!response) return;
 
-      await this.sendMessage(businessId, jid, response.text, "ai");
+      await this.sendMessage(businessId, jid, withAiDisclosure(conversation, response.text), "ai");
 
       if (response.escalateToHuman) {
-        conversationRepository.setManualMode(jid, true);
+        conversationRepository.setManualMode(businessId, jid, true);
         if (!conversation.labels.includes("human_required")) {
-          conversationRepository.toggleLabel(jid, "human_required");
+          conversationRepository.toggleLabel(businessId, jid, "human_required");
           // Mismo guard que evita duplicar la etiqueta: notifica al dueño
           // una sola vez por escalamiento, no en cada mensaje siguiente de
           // una conversación que ya quedó en modo manual.
@@ -327,7 +329,7 @@ class WhatsAppConnectionManager {
           void notifyHumanRequired({ businessId, jid, contactName: conversation.contactName });
         }
       } else if (response.labelHint && !conversation.labels.includes(response.labelHint)) {
-        conversationRepository.toggleLabel(jid, response.labelHint);
+        conversationRepository.toggleLabel(businessId, jid, response.labelHint);
       }
     } catch (error) {
       console.error("[AI] Error procesando mensaje:", error);

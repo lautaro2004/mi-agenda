@@ -4,6 +4,7 @@ import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { createAppointment } from "@/modules/appointments/service";
 import { computeDepositAmount } from "@/modules/business/deposit";
+import { getClientIp, isRateLimited, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 import { manualAppointmentSchema } from "@/lib/schemas";
 import { isBookableService } from "@/lib/types";
 
@@ -22,7 +23,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: "Negocio no encontrado." }, { status: 404 });
   }
 
-  const body = await request.json();
+  // Crea filas reales (y notifica al dueño): sin sesión, necesita freno propio.
+  if (isRateLimited(`book:${businessId}:${getClientIp(request)}`, 10, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+  }
+
+  const body = await request.json().catch(() => null);
   const parsed = manualAppointmentSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Revisá los datos de la reserva." }, { status: 400 });

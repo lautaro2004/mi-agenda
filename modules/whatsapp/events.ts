@@ -11,11 +11,14 @@ class WhatsAppEventBus {
     this.emitter.setMaxListeners(50);
   }
 
-  emit(event: WhatsAppEvent) {
-    this.emitter.emit(EVENT_NAME, event);
+  // El bus es global al proceso: todo evento lleva el negocio dueño para que
+  // cada suscriptor (SSE) filtre y nunca reciba eventos de otro tenant
+  // (incluye el QR de conexión y los mensajes de clientes).
+  emit(businessId: string, event: WhatsAppEvent) {
+    this.emitter.emit(EVENT_NAME, businessId, event);
   }
 
-  subscribe(listener: (event: WhatsAppEvent) => void): () => void {
+  subscribe(listener: (businessId: string, event: WhatsAppEvent) => void): () => void {
     this.emitter.on(EVENT_NAME, listener);
     return () => {
       this.emitter.off(EVENT_NAME, listener);

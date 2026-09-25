@@ -85,7 +85,7 @@ export async function processMessage(params: {
 
   const context = await buildBusinessContext(businessId, { query: message });
 
-  const conversation = conversationRepository.get(conversationId);
+  const conversation = conversationRepository.get(businessId, conversationId);
   if (!conversation) return null;
   if (conversation.manualMode || conversation.flowState === "HUMAN_HANDOFF") return null;
 
@@ -104,7 +104,7 @@ export async function processMessage(params: {
       action: "ignored",
       ignoreReason: classification.ignoreReason,
     });
-    conversationRepository.setTriage(conversationId, {
+    conversationRepository.setTriage(businessId, conversationId, {
       category: classification.category,
       confidence: classification.confidence,
       action: "ignored",
@@ -173,7 +173,7 @@ export async function processMessage(params: {
 
   // ── STATE TRANSITION + AUDIT ────────────────────────────────────────────────
   // Re-read conversation so we pick up any state changes made by handleBookingFlow
-  const updatedConversation = conversationRepository.get(conversationId);
+  const updatedConversation = conversationRepository.get(businessId, conversationId);
   const stateAfter: ConversationFlowState =
     updatedConversation?.flowState ??
     computeNextState(stateBefore, classification.category, aiResponse.text);
@@ -182,7 +182,7 @@ export async function processMessage(params: {
   if (!inStickyBooking && !inActiveBooking && classification.category !== "APPOINTMENT") {
     const computed = computeNextState(stateBefore, classification.category, aiResponse.text);
     if (computed !== stateAfter) {
-      conversationRepository.setFlowState(conversationId, computed);
+      conversationRepository.setFlowState(businessId, conversationId, computed);
     }
   }
 
@@ -196,7 +196,7 @@ export async function processMessage(params: {
     stateAfter,
     action,
   });
-  conversationRepository.setTriage(conversationId, {
+  conversationRepository.setTriage(businessId, conversationId, {
     category: classification.category,
     confidence: classification.confidence,
     action,

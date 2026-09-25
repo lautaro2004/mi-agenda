@@ -75,6 +75,7 @@ export function syncHistoricalMessages(businessId: string, messages: WAMessage[]
       if (!text) continue;
       const ts = getMsgTimestamp(msg);
       conversationRepository.addMessage(
+        businessId,
         conversation.id,
         {
           id: msg.key.id || `${jid}-${ts}`,
@@ -89,7 +90,7 @@ export function syncHistoricalMessages(businessId: string, messages: WAMessage[]
     for (const intent of detectedIntents) {
       const label = INTENT_TO_LABEL[intent];
       if (label && !conversation.labels.includes(label)) {
-        conversationRepository.toggleLabel(jid, label);
+        conversationRepository.toggleLabel(businessId, jid, label);
       }
     }
   }

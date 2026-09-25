@@ -237,8 +237,15 @@ export async function getAppointments(
 // source: mismo criterio que createAppointment — solo una cancelación
 // iniciada por el CLIENTE (WhatsApp) notifica al dueño; una cancelación que
 // el propio dueño hace desde el dashboard no.
-export async function cancelAppointment(id: string, source: "customer" | "dashboard") {
-  const appointment = await prisma.appointment.update({ where: { id }, data: { status: "cancelled" } });
+//
+// businessId es OBLIGATORIO y siempre viene de la sesión (dashboard) o de la
+// conversación (WhatsApp), nunca de un valor enviado por el cliente: un turno
+// de otro negocio se trata igual que uno inexistente (devuelve null).
+export async function cancelAppointment(businessId: string, id: string, source: "customer" | "dashboard") {
+  const existing = await prisma.appointment.findFirst({ where: { id, businessId }, select: { id: true } });
+  if (!existing) return null;
+
+  const appointment = await prisma.appointment.update({ where: { id: existing.id }, data: { status: "cancelled" } });
 
   if (source === "customer") {
     void notifyBookingCancelled({
@@ -255,6 +262,9 @@ export async function cancelAppointment(id: string, source: "customer" | "dashbo
 }
 
 export interface RescheduleAppointmentParams {
+  // Negocio dueño del turno (de la sesión/conversación, nunca del cliente).
+  // Un turno de otro negocio se reporta como "not_found".
+  businessId: string;
   id: string;
   newDate: string;
   newStartTime: string;
@@ -272,7 +282,7 @@ export interface RescheduleAppointmentParams {
 export async function rescheduleAppointment(params: RescheduleAppointmentParams) {
   try {
     const appointment = await prisma.$transaction(async (tx) => {
-      const current = await tx.appointment.findUnique({ where: { id: params.id } });
+      const current = await tx.appointment.findFirst({ where: { id: params.id, businessId: params.businessId } });
       if (!current) throw new AppointmentNotFoundError();
 
       const preferredResourceId = params.resourceId !== undefined ? params.resourceId : current.resourceId;

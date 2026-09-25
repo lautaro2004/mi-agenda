@@ -25,3 +25,12 @@ export function isRateLimited(key: string, limit: number, windowMs: number): boo
   bucket.count += 1;
   return bucket.count > limit;
 }
+
+// IP del cliente para armar la key del límite. x-forwarded-for lo setea el
+// proxy/CDN del hosting; sin él (dev local) todos comparten "unknown".
+export function getClientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  return forwarded?.split(",")[0]?.trim() || "unknown";
+}
+
+export const RATE_LIMIT_MESSAGE = "Recibimos muchas solicitudes. Probá de nuevo en un rato.";

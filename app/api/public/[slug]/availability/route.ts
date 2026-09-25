@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
+import { getClientIp, isRateLimited, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 import { getBusinessState } from "@/modules/business/service";
 import { getAvailableSlots } from "@/modules/appointments/service";
 
@@ -13,6 +14,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) {
     return NextResponse.json({ error: "Negocio no encontrado." }, { status: 404 });
+  }
+
+  if (isRateLimited(`availability:${businessId}:${getClientIp(request)}`, 60, 60 * 1000)) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
   }
 
   const { searchParams } = new URL(request.url);

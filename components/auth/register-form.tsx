@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 
+import { ConsentNotice } from "@/components/legal/consent-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -173,6 +174,8 @@ export function RegisterForm() {
             />
             <FieldError errors={[errors.confirmPassword]} />
           </Field>
+
+          <ConsentNotice variant="account" />
 
           <Field>
             <Button type="submit" size="lg" disabled={submitting}>
