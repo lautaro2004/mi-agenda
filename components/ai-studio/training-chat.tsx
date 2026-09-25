@@ -111,7 +111,7 @@ export function TrainingChat({
   // falta que el dueño escriba un mensaje para enterarse — se corta apenas
   // se conoce el plan, con el mismo layout que el corte por mensajes.
   React.useEffect(() => {
-    if (mode === "continuous" && subscriptionData?.subscription && !subscriptionData.subscription.plan.customTrainingEnabled) {
+    if (subscriptionData?.subscription && !subscriptionData.subscription.plan.customTrainingEnabled) {
       setLimitReached(true);
       setUpgradeRequired(true);
     }

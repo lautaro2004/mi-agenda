@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { getBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
 import { getResourceAvailabilityForSlot } from "@/modules/appointments/service";
 
 // Contraparte pública de /api/appointments/resources — mismo motor,
 // resolviendo el negocio por slug.
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const businessId = await getBusinessIdBySlug(slug);
+  const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) {
     return NextResponse.json({ error: "Negocio no encontrado." }, { status: 404 });
   }

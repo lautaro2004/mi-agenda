@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
 import { PaymentProofValidationError, submitProofForAppointment } from "@/modules/payments/service";
 
 // Subida de comprobante desde el sitio público (ver sección 6/7 de la
@@ -14,7 +14,7 @@ import { PaymentProofValidationError, submitProofForAppointment } from "@/module
 // el teléfono cumple ese rol.
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const businessId = await getBusinessIdBySlug(slug);
+  const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) {
     return NextResponse.json({ error: "Negocio no encontrado." }, { status: 404 });
   }

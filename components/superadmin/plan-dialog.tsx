@@ -28,6 +28,7 @@ interface PlanLike {
   currency: string;
   aiCredits: number;
   maxServices: number | null;
+  publicWebEnabled: boolean;
   whatsappEnabled: boolean;
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
@@ -54,8 +55,9 @@ export function PlanDialog({ trigger, plan, onSubmit }: PlanDialogProps) {
     description: plan?.description ?? "",
     monthlyPrice: plan?.monthlyPrice ?? 0,
     currency: plan?.currency ?? "ARS",
-    aiCredits: plan?.aiCredits ?? 40,
+    aiCredits: plan?.aiCredits ?? 0,
     maxServices: plan?.maxServices ?? null,
+    publicWebEnabled: plan?.publicWebEnabled ?? true,
     whatsappEnabled: plan?.whatsappEnabled ?? true,
     depositsEnabled: plan?.depositsEnabled ?? true,
     customTrainingEnabled: plan?.customTrainingEnabled ?? true,
@@ -144,7 +146,7 @@ export function PlanDialog({ trigger, plan, onSubmit }: PlanDialogProps) {
                 <Input
                   id="plan-credits"
                   type="number"
-                  min="1"
+                  min="0"
                   aria-invalid={!!errors.aiCredits}
                   {...register("aiCredits")}
                 />
@@ -175,6 +177,14 @@ export function PlanDialog({ trigger, plan, onSubmit }: PlanDialogProps) {
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs font-medium text-muted-foreground">Funcionalidades incluidas</p>
               <div className="mt-2 space-y-2.5">
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-web">Web pública</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="publicWebEnabled"
+                    render={({ field }) => <Switch id="plan-web" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
                 <Field orientation="horizontal">
                   <FieldLabel htmlFor="plan-whatsapp">WhatsApp</FieldLabel>
                   <Controller

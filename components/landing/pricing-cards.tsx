@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PLAN_SUBTITLE_BY_SLUG, buildPlanFeatureLines, type PublicPlan } from "@/lib/subscription-client";
 
 function formatPrice(amount: number, currency: string): string {
-  if (amount <= 0) return "Gratis";
+  if (amount <= 0) return "Sin costo";
   try {
     return new Intl.NumberFormat("es-AR", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
   } catch {
@@ -26,7 +26,7 @@ export function PricingCards({ plans }: { plans: PublicPlan[] }) {
     return (
       <div className="mx-auto mt-14 max-w-md rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
         Estamos terminando de definir los planes. Mientras tanto, podés crear tu cuenta y empezar
-        gratis.
+        con la agenda.
       </div>
     );
   }

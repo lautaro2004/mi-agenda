@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { getBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { buildFallbackSeoConfig, getSeoConfig } from "@/modules/business/seo";
 import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
@@ -23,7 +23,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const businessId = await getBusinessIdBySlug(slug);
+  const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) return {};
 
   const [{ business, services }, seoConfig] = await Promise.all([
@@ -47,7 +47,7 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
   const { slug } = await params;
   const { servicio } = await searchParams;
 
-  const businessId = await getBusinessIdBySlug(slug);
+  const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) notFound();
 
   const { business, services, faqs, schedule } = await getBusinessState(businessId);

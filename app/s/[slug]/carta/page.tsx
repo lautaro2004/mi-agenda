@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { getBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 
 interface PageProps {
@@ -13,7 +13,7 @@ interface PageProps {
 // tarea: nunca mostrar la carta si no está activa Y con PDF real): negocio
 // inexistente, carta desactivada, o activa pero sin PDF cargado todavía.
 async function loadMenu(slug: string) {
-  const businessId = await getBusinessIdBySlug(slug);
+  const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) return null;
 
   const { business } = await getBusinessState(businessId);

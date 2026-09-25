@@ -59,7 +59,7 @@ interface LeadDetail {
   convertedBusiness: { id: string; name: string; slug: string | null } | null;
 }
 
-const SUGGESTED_PLAN_LABEL: Record<string, string> = { gratis: "Gratis", esencial: "Esencial", profesional: "Profesional" };
+const SUGGESTED_PLAN_LABEL: Record<string, string> = { gratis: "Agenda interna (histórico)", "agenda-interna": "Agenda interna", esencial: "Esencial", profesional: "Profesional", empresa: "Empresa" };
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "long", year: "numeric" });
 const dateTimeFormatter = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });

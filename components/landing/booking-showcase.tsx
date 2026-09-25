@@ -23,11 +23,11 @@ export function LandingBookingShowcase() {
     <section className="px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
       <div className="mx-auto max-w-5xl">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-medium text-primary">Incluido en el plan Gratis</p>
+          <p className="text-sm font-medium text-primary">Incluido desde el plan Esencial</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-balance text-foreground sm:text-4xl">
             Recibí reservas reales
             <br />
-            desde tu sitio web, sin pagar nada.
+            desde tu sitio web.
           </h2>
           <p className="mt-4 text-muted-foreground">
             Nexo consulta la disponibilidad real de tu negocio y confirma el turno en la misma

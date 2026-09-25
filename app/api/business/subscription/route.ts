@@ -22,7 +22,7 @@ export async function GET() {
 
   return NextResponse.json({
     // null solo en el caso legacy de un negocio sin Subscription todavía
-    // (no debería pasar tras el backfill/ensureTrialSubscription, pero la
+    // (no debería pasar tras el backfill/ensureBaseSubscription, pero la
     // UI lo contempla como empty state en vez de asumir que siempre existe).
     subscription: sub
       ? {

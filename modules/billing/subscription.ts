@@ -1,14 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { TrainingMode } from "@/modules/ai/prompt/training";
-import { BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus } from "@/lib/types";
+import { BASE_PLAN_SLUG, BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus } from "@/lib/types";
 
 // ── Planes y suscripciones ───────────────────────────────────────────────
 // Única capa que entiende Subscription/Plan: lib/ai-limits.ts (hot path, un
 // negocio a la vez) y lib/superadmin/queries.ts (listas, batch) pasan
 // siempre por acá — ninguno de los dos reimplementa "¿está vencido el
 // trial?" ni "¿cuál es el límite efectivo?" por su cuenta. Ver también
-// ensureTrialSubscription(), usada por modules/business/membership.ts al
+// ensureBaseSubscription(), usada por modules/business/membership.ts al
 // crear un negocio nuevo.
 //
 // BILLING_SUBSCRIPTION_STATUSES/BillingSubscriptionStatus viven en lib/types.ts (no acá) a
@@ -24,13 +24,19 @@ export { BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus };
 // benefitExpiresAt/previousPlanId más abajo).
 export const SUBSCRIPTION_PROVIDERS = ["manual", "mercadopago", "promo_code", "benefit"] as const;
 
-// Plan que se asigna a negocios nuevos (ver ensureTrialSubscription) y al
-// que se backfillean los negocios que existían antes de este sistema (ver
-// la migración prisma/migrations/*_add_plans_and_subscriptions). Si cambia,
-// hay que actualizar el slug también en esa migración — no se leen uno del
-// otro porque SQL no puede importar esta constante.
-export const DEFAULT_PLAN_SLUG = "gratis";
-const DEFAULT_TRIAL_DAYS = 14;
+// Nivel base "Agenda interna": NO es un plan comercial (sin precio, sin web
+// pública, sin WhatsApp/IA, sin créditos de IA). Es el plan inicial de todo
+// negocio nuevo (ver ensureBaseSubscription), al que vuelve quien cancela un
+// plan pago o termina una bonificación, y el que conservan los negocios que
+// venían del viejo plan "Gratis" (la fila se renombró en la migración
+// prisma/migrations/*_agenda_interna_and_plan_tiers, sin borrarla, para no
+// romper Subscription.planId). Si cambia el slug hay que actualizarlo
+// también en esa migración — SQL no puede importar esta constante.
+//
+// Nunca se ofrece para contratar: listActivePlans() lo excluye y el checkout
+// lo rechaza (ver createSubscriptionCheckout).
+export { BASE_PLAN_SLUG };
+export const DEFAULT_PLAN_SLUG = BASE_PLAN_SLUG;
 
 export interface PlanSummary {
   id: string;
@@ -40,6 +46,7 @@ export interface PlanSummary {
   currency: string;
   aiCredits: number;
   maxServices: number | null;
+  publicWebEnabled: boolean;
   whatsappEnabled: boolean;
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
@@ -47,7 +54,7 @@ export interface PlanSummary {
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
   active: boolean;
-  // Ver modules/billing/mercadopago/sync-plan.ts — null = Gratis (nunca
+  // Ver modules/billing/mercadopago/sync-plan.ts — null = Agenda interna (nunca
   // sincroniza) o un plan pago que todavía no se sincronizó ni una vez.
   mercadoPagoPlanId: string | null;
   mercadoPagoSyncStatus: string | null;
@@ -206,6 +213,7 @@ export async function resolveAiResponseLimit(businessId: string, mode: TrainingM
 // bloquear negocios preexistentes por una migración que no les asignó plan.
 export interface PlanFeatures {
   maxServices: number | null;
+  publicWebEnabled: boolean;
   whatsappEnabled: boolean;
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
@@ -216,6 +224,7 @@ export interface PlanFeatures {
 
 const UNGATED_FEATURES: PlanFeatures = {
   maxServices: null,
+  publicWebEnabled: true,
   whatsappEnabled: true,
   depositsEnabled: true,
   customTrainingEnabled: true,
@@ -228,6 +237,7 @@ export function resolvePlanFeatures(sub: BusinessSubscription | null): PlanFeatu
   if (!sub) return UNGATED_FEATURES;
   return {
     maxServices: sub.plan.maxServices,
+    publicWebEnabled: sub.plan.publicWebEnabled,
     whatsappEnabled: sub.plan.whatsappEnabled,
     depositsEnabled: sub.plan.depositsEnabled,
     customTrainingEnabled: sub.plan.customTrainingEnabled,
@@ -245,6 +255,14 @@ export async function resolveBusinessPlanFeatures(businessId: string): Promise<P
   return resolvePlanFeatures(sub);
 }
 
+// ¿Este negocio tiene sitio público? (plan con publicWebEnabled). Usado por
+// /s/[slug] y las rutas /api/public/[slug]/* — un negocio en "Agenda interna"
+// sigue existiendo y administrando turnos desde el dashboard, pero su slug
+// público responde 404.
+export async function isPublicWebEnabled(businessId: string): Promise<boolean> {
+  return (await resolveBusinessPlanFeatures(businessId)).publicWebEnabled;
+}
+
 // Versión batch — usada por lib/superadmin/queries.ts para listas/overview.
 // Una sola query para todos los negocios pedidos (no una por negocio), y
 // limitFromAccess() es pura, así que el resto del cálculo no toca la base.
@@ -260,11 +278,15 @@ export async function resolveAiResponseLimitsForBusinesses(
   return result;
 }
 
-// Se llama al crear un Business nuevo (ver modules/business/membership.ts).
-// Nunca lanza: si el plan por defecto no existe todavía (ej. la migración de
-// seed no corrió), el negocio queda sin Subscription y cae en el fallback
-// legacy de arriba — no bloquea el registro por esto.
-export async function ensureTrialSubscription(businessId: string): Promise<void> {
+// Se llama al crear un Business nuevo (ver modules/business/membership.ts):
+// todo negocio arranca en el nivel base "Agenda interna", "active" y sin fin
+// de período — no hay prueba que vencer porque el nivel base no incluye nada
+// de pago. Pasar a Esencial o superior es siempre una contratación (Mercado
+// Pago) o una asignación desde Superadmin.
+// Nunca lanza: si el plan base no existe todavía (ej. la migración no
+// corrió), el negocio queda sin Subscription y cae en el fallback legacy de
+// arriba — no bloquea el registro por esto.
+export async function ensureBaseSubscription(businessId: string): Promise<void> {
   const existing = await prisma.subscription.findUnique({ where: { businessId }, select: { id: true } });
   if (existing) return;
 
@@ -276,16 +298,13 @@ export async function ensureTrialSubscription(businessId: string): Promise<void>
     return;
   }
 
-  const now = new Date();
-  const currentPeriodEnd = new Date(now.getTime() + DEFAULT_TRIAL_DAYS * 24 * 60 * 60 * 1000);
-
   await prisma.subscription.create({
     data: {
       businessId,
       planId: plan.id,
-      status: "trialing",
-      currentPeriodStart: now,
-      currentPeriodEnd,
+      status: "active",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: null,
       provider: "manual",
     },
   });
@@ -302,7 +321,11 @@ export interface PublicPlan extends PlanSummary {
 }
 
 export async function listActivePlans(): Promise<PublicPlan[]> {
-  const plans = await prisma.plan.findMany({ where: { active: true }, orderBy: { monthlyPrice: "asc" } });
+  // El nivel base no es una opción comercial: nunca se lista para contratar.
+  const plans = await prisma.plan.findMany({
+    where: { active: true, slug: { not: BASE_PLAN_SLUG } },
+    orderBy: { monthlyPrice: "asc" },
+  });
   return plans.map((p) => ({ ...planToSummary(p), description: p.description }));
 }
 
@@ -317,8 +340,8 @@ export async function getPlanById(planId: string): Promise<PlanSummary | null> {
 }
 
 // Usado por modules/billing/mercadopago/cancel.ts (Fase 5): al cancelar una
-// suscripción paga, el negocio vuelve a Gratis de inmediato — mismo plan por
-// defecto que ensureTrialSubscription()/revertExpiredBenefits() resuelven
+// suscripción paga, el negocio vuelve a Agenda interna de inmediato — mismo plan por
+// defecto que ensureBaseSubscription()/revertExpiredBenefits() resuelven
 // por slug, expuesto acá como PlanSummary completo (no solo el id) para que
 // cancel.ts no tenga que hacer una segunda query.
 export async function getDefaultPlan(): Promise<PlanSummary | null> {
@@ -361,6 +384,7 @@ export interface PlanInput {
   aiCredits: number;
   // null/ausente = sin límite. Ver comentario en schema.prisma.
   maxServices?: number | null;
+  publicWebEnabled?: boolean;
   whatsappEnabled?: boolean;
   depositsEnabled?: boolean;
   customTrainingEnabled?: boolean;
@@ -380,6 +404,7 @@ export async function createPlan(data: PlanInput): Promise<PlanWithUsage> {
       currency: data.currency,
       aiCredits: data.aiCredits,
       maxServices: data.maxServices ?? null,
+      publicWebEnabled: data.publicWebEnabled ?? true,
       whatsappEnabled: data.whatsappEnabled ?? true,
       depositsEnabled: data.depositsEnabled ?? true,
       customTrainingEnabled: data.customTrainingEnabled ?? true,
@@ -400,12 +425,15 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
     where: { id },
     data: {
       ...(data.name !== undefined ? { name: data.name } : {}),
-      ...(data.slug !== undefined ? { slug: data.slug } : {}),
+      // El slug del nivel base es una constante del código (BASE_PLAN_SLUG):
+      // renombrarlo dejaría a los negocios nuevos sin plan inicial.
+      ...(data.slug !== undefined && existing.slug !== BASE_PLAN_SLUG ? { slug: data.slug } : {}),
       ...(data.description !== undefined ? { description: data.description || null } : {}),
       ...(data.monthlyPrice !== undefined ? { monthlyPrice: data.monthlyPrice } : {}),
       ...(data.currency !== undefined ? { currency: data.currency } : {}),
       ...(data.aiCredits !== undefined ? { aiCredits: data.aiCredits } : {}),
       ...(data.maxServices !== undefined ? { maxServices: data.maxServices } : {}),
+      ...(data.publicWebEnabled !== undefined ? { publicWebEnabled: data.publicWebEnabled } : {}),
       ...(data.whatsappEnabled !== undefined ? { whatsappEnabled: data.whatsappEnabled } : {}),
       ...(data.depositsEnabled !== undefined ? { depositsEnabled: data.depositsEnabled } : {}),
       ...(data.customTrainingEnabled !== undefined ? { customTrainingEnabled: data.customTrainingEnabled } : {}),
@@ -466,6 +494,7 @@ function planToSummary(plan: {
   currency: string;
   aiCredits: number;
   maxServices: number | null;
+  publicWebEnabled: boolean;
   whatsappEnabled: boolean;
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
@@ -486,6 +515,7 @@ function planToSummary(plan: {
     currency: plan.currency,
     aiCredits: plan.aiCredits,
     maxServices: plan.maxServices,
+    publicWebEnabled: plan.publicWebEnabled,
     whatsappEnabled: plan.whatsappEnabled,
     depositsEnabled: plan.depositsEnabled,
     customTrainingEnabled: plan.customTrainingEnabled,
@@ -575,8 +605,8 @@ export async function assignSubscription(
 }
 
 // Snapshot de "a qué plan volver" al otorgar una bonificación — el plan
-// ACTUAL del negocio en este momento, o el plan por defecto (Gratis) si
-// todavía no tiene Subscription (no debería pasar, ver ensureTrialSubscription,
+// ACTUAL del negocio en este momento, o el plan por defecto (Agenda interna) si
+// todavía no tiene Subscription (no debería pasar, ver ensureBaseSubscription,
 // pero cubre el caso defensivamente en vez de fallar).
 export async function resolveCurrentPlanId(businessId: string): Promise<string | null> {
   const sub = await prisma.subscription.findUnique({ where: { businessId }, select: { planId: true } });
@@ -623,7 +653,7 @@ export async function revertExpiredBenefits(now: Date = new Date()): Promise<{ r
   for (const sub of expired) {
     const previousPlan = sub.previousPlanId ? await prisma.plan.findUnique({ where: { id: sub.previousPlanId } }) : null;
     // Si el plan al que había que volver ya no existe o fue desactivado
-    // después de otorgar la bonificación, cae al plan Gratis por defecto —
+    // después de otorgar la bonificación, cae al plan base (Agenda interna) —
     // nunca deja un negocio sin ningún plan asignable.
     const targetPlanId = previousPlan?.active ? previousPlan.id : defaultPlan?.id;
 

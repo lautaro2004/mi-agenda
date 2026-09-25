@@ -92,7 +92,7 @@ function PlanBlock({
   const canCancel = subscription.provider === "mercadopago" && subscription.status !== "canceled" && subscription.status !== "expired";
 
   async function handleCancel() {
-    if (!confirm(`¿Cancelar tu suscripción a ${subscription.plan.name}? Dejará de cobrarse y volvés al plan Gratis.`)) return;
+    if (!confirm(`¿Cancelar tu suscripción a ${subscription.plan.name}? Dejará de cobrarse y volvés a Agenda interna.`)) return;
 
     setCanceling(true);
     try {
@@ -102,7 +102,7 @@ function PlanBlock({
         toast.error(body.message ?? "No pudimos cancelar la suscripción.");
         return;
       }
-      toast.success("Suscripción cancelada — volviste al plan Gratis.");
+      toast.success("Suscripción cancelada — volviste a Agenda interna.");
       onCanceled();
     } finally {
       setCanceling(false);
@@ -173,6 +173,21 @@ function PlanBlock({
 }
 
 function AiUsageBlock({ aiUsage, aiCredits }: { aiUsage: AiUsageTotals; aiCredits: number }) {
+  // Agenda interna y Esencial no incluyen IA (0 créditos): no hay consumo que mostrar.
+  if (aiCredits === 0) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="flex items-center gap-2">
+          <Bot className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Uso de IA</h2>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Tu plan no incluye IA ni créditos de IA. Pasate a Profesional para sumar WhatsApp con IA.
+        </p>
+      </div>
+    );
+  }
+
   const percent = aiCredits > 0 ? Math.min(100, Math.round((aiUsage.requests / aiCredits) * 100)) : 0;
 
   return (

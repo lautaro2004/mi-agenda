@@ -35,7 +35,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     // Fase 2: cualquier edición de un plan pago vuelve a sincronizar con
     // Mercado Pago (metadata in-place, o una versión nueva del preapproval_plan
     // si cambió el precio — ver syncPlanWithMercadoPago). Si el plan pasó a
-    // ser Gratis o ya era Gratis, esto es un no-op.
+    // ser de precio 0 (Agenda interna) o ya serlo, esto es un no-op.
     const synced = await syncPlanWithMercadoPago(plan);
     return NextResponse.json({ plan: synced ?? plan });
   } catch (error) {

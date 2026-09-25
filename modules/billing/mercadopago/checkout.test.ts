@@ -10,6 +10,7 @@ const createPreapproval = vi.fn();
 const getPreapprovalPlan = vi.fn();
 
 vi.mock("@/modules/billing/subscription", () => ({
+  BASE_PLAN_SLUG: "agenda-interna",
   getPlanById: (...args: unknown[]) => getPlanById(...args),
   getSubscriptionWithPlan: (...args: unknown[]) => getSubscriptionWithPlan(...args),
   assignSubscription: (...args: unknown[]) => assignSubscription(...args),
@@ -90,6 +91,15 @@ describe("createSubscriptionCheckout — validaciones de Nexo", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected failure");
     expect(result.error.code).toBe("PLAN_INACTIVE");
+  });
+
+  it("el nivel base Agenda interna nunca se contrata, aunque tuviera un mercadoPagoPlanId", async () => {
+    getPlanById.mockResolvedValue({ ...PLAN_ESENCIAL, slug: "agenda-interna", mercadoPagoPlanId: "mp_plan_x" });
+    const result = await createSubscriptionCheckout(INPUT);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error.code).toBe("PLAN_NOT_FOUND");
+    expect(createPreapproval).not.toHaveBeenCalled();
   });
 
   it("PLAN_NOT_SYNCED si el plan todavía no tiene mercadoPagoPlanId", async () => {

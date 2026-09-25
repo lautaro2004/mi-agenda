@@ -459,9 +459,11 @@ export const planSchema = z.object({
   currency: z.string().min(3, "Ej: ARS").max(6),
   // Cantidad de respuestas de IA, no tokens — ver comentario en el modelo
   // Plan (prisma/schema.prisma) y modules/billing/subscription.ts.
-  aiCredits: z.coerce.number().int().min(1, "Necesita al menos 1 crédito"),
+  // 0 = el plan no incluye IA (Agenda interna, Esencial).
+  aiCredits: z.coerce.number().int().min(0, "No puede ser negativo"),
   // vacío/null = sin límite — ver comentario en el modelo Plan.
   maxServices: z.coerce.number().int().min(1).nullable(),
+  publicWebEnabled: z.boolean().default(true),
   whatsappEnabled: z.boolean().default(true),
   depositsEnabled: z.boolean().default(true),
   customTrainingEnabled: z.boolean().default(true),

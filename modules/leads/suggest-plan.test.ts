@@ -3,24 +3,24 @@ import { describe, expect, it } from "vitest";
 import { suggestPlanSlug } from "./suggest-plan";
 
 describe("suggestPlanSlug", () => {
-  it("reservas + necesidades básicas → gratis", () => {
-    expect(suggestPlanSlug(["more_bookings", "organize_business"])).toBe("gratis");
+  it("reservas + necesidades básicas → esencial", () => {
+    expect(suggestPlanSlug(["more_bookings", "organize_business"])).toBe("esencial");
   });
 
-  it("sin ninguna selección → gratis (nunca undefined/crash)", () => {
-    expect(suggestPlanSlug([])).toBe("gratis");
+  it("sin ninguna selección → esencial (nunca undefined/crash)", () => {
+    expect(suggestPlanSlug([])).toBe("esencial");
   });
 
-  it("presencia web + organización, sin automatización → gratis", () => {
-    expect(suggestPlanSlug(["better_web_presence", "organize_business", "other"])).toBe("gratis");
+  it("presencia web + organización, sin automatización → esencial", () => {
+    expect(suggestPlanSlug(["better_web_presence", "organize_business", "other"])).toBe("esencial");
   });
 
-  it("whatsapp + automatización + reservas → esencial", () => {
-    expect(suggestPlanSlug(["more_bookings", "automate_whatsapp", "automate_inquiries"])).toBe("esencial");
+  it("whatsapp + automatización + reservas → profesional", () => {
+    expect(suggestPlanSlug(["more_bookings", "automate_whatsapp", "automate_inquiries"])).toBe("profesional");
   });
 
-  it("solo automatizar consultas (sin whatsapp explícito) → esencial", () => {
-    expect(suggestPlanSlug(["automate_inquiries"])).toBe("esencial");
+  it("solo automatizar consultas (sin whatsapp explícito) → profesional", () => {
+    expect(suggestPlanSlug(["automate_inquiries"])).toBe("profesional");
   });
 
   it("carta digital/QR + whatsapp + automatización → profesional", () => {

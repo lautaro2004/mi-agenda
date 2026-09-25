@@ -35,7 +35,7 @@ interface LeadMetrics {
   convertedCount: number;
 }
 
-const SUGGESTED_PLAN_LABEL: Record<string, string> = { gratis: "Gratis", esencial: "Esencial", profesional: "Profesional" };
+const SUGGESTED_PLAN_LABEL: Record<string, string> = { gratis: "Agenda interna (histórico)", "agenda-interna": "Agenda interna", esencial: "Esencial", profesional: "Profesional", empresa: "Empresa" };
 const ALL = "all";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });

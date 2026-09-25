@@ -22,6 +22,7 @@ interface PlanWithUsage {
   currency: string;
   aiCredits: number;
   maxServices: number | null;
+  publicWebEnabled: boolean;
   whatsappEnabled: boolean;
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
@@ -92,10 +93,11 @@ function MercadoPagoStatusCell({ plan }: { plan: PlanWithUsage }) {
 }
 
 const FEATURE_LABEL: Record<
-  "whatsappEnabled" | "depositsEnabled" | "customTrainingEnabled" | "statsEnabled" | "galleryEnabled" | "digitalMenuEnabled",
+  "publicWebEnabled" | "whatsappEnabled" | "depositsEnabled" | "customTrainingEnabled" | "statsEnabled" | "galleryEnabled" | "digitalMenuEnabled",
   string
 > = {
-  whatsappEnabled: "WhatsApp",
+  publicWebEnabled: "Web pública",
+  whatsappEnabled: "WhatsApp + IA",
   depositsEnabled: "Señas",
   customTrainingEnabled: "Entrenamiento",
   statsEnabled: "Estadísticas",
@@ -225,9 +227,9 @@ export default function SuperadminPlanesPage() {
                     <p className="text-xs text-muted-foreground">{plan.slug}</p>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {plan.monthlyPrice > 0 ? `${formatPrice(plan.monthlyPrice, plan.currency)} / mes` : "Gratis"}
+                    {plan.monthlyPrice > 0 ? `${formatPrice(plan.monthlyPrice, plan.currency)} / mes` : "Nivel base"}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{numberFormatter.format(plan.aiCredits)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{plan.aiCredits > 0 ? numberFormatter.format(plan.aiCredits) : "No incluye"}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {(Object.keys(FEATURE_LABEL) as (keyof typeof FEATURE_LABEL)[])

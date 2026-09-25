@@ -23,6 +23,7 @@ export interface SubscriptionPlanInfo {
   // modules/billing/subscription.ts (resolvePlanFeatures). null en
   // maxServices = sin límite.
   maxServices: number | null;
+  publicWebEnabled: boolean;
   whatsappEnabled: boolean;
   depositsEnabled: boolean;
   customTrainingEnabled: boolean;
@@ -30,7 +31,7 @@ export interface SubscriptionPlanInfo {
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
   active: boolean;
-  // null = Gratis, o un plan pago que Superadmin todavía no sincronizó con
+  // null = Agenda interna, o un plan pago que Superadmin todavía no sincronizó con
   // Mercado Pago (ver modules/billing/mercadopago/sync-plan.ts) — en ambos
   // casos no se puede contratar todavía, ver subscription-checkout-dialog.tsx.
   mercadoPagoPlanId: string | null;
@@ -56,7 +57,7 @@ export interface AiUsageTotals {
 
 export interface BusinessSubscriptionResponse {
   // null solo en el caso legacy de un negocio sin fila en Subscription
-  // todavía (no debería pasar tras ensureTrialSubscription/backfill).
+  // todavía (no debería pasar tras ensureBaseSubscription/backfill).
   subscription: BusinessSubscriptionInfo | null;
   access: { allowed: boolean };
   aiUsage: AiUsageTotals;
@@ -92,28 +93,37 @@ export interface PublicPlan extends SubscriptionPlanInfo {
 // entre esas dos vistas. Mapeado por slug porque es puro copy, no una regla
 // de negocio: un plan nuevo sin entrada acá simplemente no tiene subtítulo.
 export const PLAN_SUBTITLE_BY_SLUG: Record<string, string> = {
-  gratis: "Probalo",
-  esencial: "Automatizá",
-  profesional: "Centralizá",
+  esencial: "Tu negocio online",
+  profesional: "Automatizá con IA",
+  empresa: "Mayor volumen",
 };
 
 // Bullets generados a partir de datos REALES del Plan — nunca el mismo
-// texto fijo para los 4 planes (ver resolvePlanFeatures en
+// texto fijo para todos (ver resolvePlanFeatures en
 // modules/billing/subscription.ts, mismo criterio que usan los gates).
 // Orden a propósito "comercial primero, técnico después": lo que el cliente
-// recibe (reservas, atención, WhatsApp, carta, fotos) antes que cómo está
-// limitado por dentro (créditos de IA, siempre al final — ver sección 2 del
-// pedido: los créditos NO son el argumento de venta principal).
+// recibe (agenda, web, WhatsApp, carta, fotos) antes que cómo está limitado
+// por dentro (créditos de IA, siempre al final). Los créditos solo aparecen
+// en planes con IA; el resto muestra "No incluye".
+export function formatAiCredits(aiCredits: number): string {
+  return aiCredits > 0 ? new Intl.NumberFormat("es-AR").format(aiCredits) : "No incluye";
+}
+
 export function buildPlanFeatureLines(plan: SubscriptionPlanInfo): string[] {
-  const lines = ["Sitio web y reservas online"];
-  lines.push(plan.whatsappEnabled ? "WhatsApp con IA" : "Asistente IA básico (sin WhatsApp)");
-  if (plan.depositsEnabled) lines.push("Señas y comprobantes de pago");
+  const lines = ["Agenda, servicios y horarios"];
+  if (plan.publicWebEnabled) lines.push("Web pública con reservas online");
   if (plan.galleryEnabled) lines.push("Galería de fotos");
-  if (plan.digitalMenuEnabled) lines.push("Carta digital + QR");
-  if (plan.customTrainingEnabled) lines.push("Entrenamiento continuo del asistente");
   if (plan.statsEnabled) lines.push("Estadísticas de tu negocio");
+  if (plan.whatsappEnabled) lines.push("WhatsApp con IA: atención automática y toma de turnos");
+  if (plan.customTrainingEnabled) lines.push("Entrenamiento y memoria del asistente");
+  if (plan.depositsEnabled) lines.push("Señas y comprobantes de pago");
+  if (plan.digitalMenuEnabled) lines.push("Carta digital + QR");
   lines.push(plan.maxServices !== null ? `Hasta ${plan.maxServices} servicios` : "Servicios ilimitados");
-  lines.push(`${new Intl.NumberFormat("es-AR").format(plan.aiCredits)} respuestas de IA / mes`);
+  lines.push(
+    plan.aiCredits > 0
+      ? `${formatAiCredits(plan.aiCredits)} respuestas de IA / mes`
+      : "Créditos de IA: No incluye"
+  );
   return lines;
 }
 

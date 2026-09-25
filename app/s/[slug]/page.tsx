@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 import { notFound } from "next/navigation";
 
-import { getBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { getActiveServiceResources } from "@/modules/business/resource";
 import { listActiveGalleryBlocks } from "@/modules/business/gallery";
@@ -50,7 +50,7 @@ interface PageProps {
 // libre) los resuelve el BookingWidget en el momento, vía las APIs públicas
 // — no hace falta traerlos acá para renderizar la página.
 async function loadSite(slug: string) {
-  const businessId = await getBusinessIdBySlug(slug);
+  const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) return null;
 
   const [state, seo, galleryBlocks] = await Promise.all([

@@ -13,7 +13,7 @@ import { useOnboarding } from "@/lib/onboarding-store";
 import { daysRemaining, useActivePlans, useBusinessSubscription } from "@/lib/subscription-client";
 
 // Ya no crea ninguna Subscription: solo LEE la que ya existe (todo negocio
-// tiene una desde que se crea — ver ensureTrialSubscription en
+// tiene una desde que se crea — ver ensureBaseSubscription en
 // modules/billing/subscription.ts). La única escritura que sí puede pasar
 // acá es aplicar un código promocional (sección 6 del pedido) — reusa el
 // mismo endpoint/lógica que /dashboard/suscripcion, nunca una segunda.
@@ -29,6 +29,9 @@ export default function SubscriptionStepPage() {
   }
 
   const subscription = data?.subscription ?? null;
+  // Agenda interna y Esencial no incluyen IA (0 créditos): el paso sirve para
+  // mostrar cómo pasar a un plan con web y/o IA, no para "tener acceso a la IA".
+  const noAi = subscription?.plan.aiCredits === 0;
   const remaining = subscription?.status === "trialing" ? daysRemaining(subscription.currentPeriodEnd) : null;
 
   return (
@@ -64,6 +67,11 @@ export default function SubscriptionStepPage() {
                   Ya tenés acceso — prueba gratuita activa, te quedan <strong>{remaining}</strong>{" "}
                   {remaining === 1 ? "día" : "días"}.
                 </span>
+              ) : noAi ? (
+                <span>
+                  Tu negocio ya puede gestionar agenda, servicios y horarios. Elegí un plan para sumar web pública,
+                  WhatsApp e IA.
+                </span>
               ) : (
                 <span>Ya tenés acceso a tu asistente de IA.</span>
               )}
@@ -83,7 +91,7 @@ export default function SubscriptionStepPage() {
         </div>
       )}
 
-      {!loading && !data?.access.allowed && (
+      {!loading && (!data?.access.allowed || noAi) && (
         <div className="mt-8">
           <h3 className="text-sm font-semibold text-foreground">Planes disponibles</h3>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">

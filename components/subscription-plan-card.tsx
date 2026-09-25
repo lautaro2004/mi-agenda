@@ -39,7 +39,7 @@ export function PlanCard({
 
       <div className="mt-3 flex items-baseline gap-1">
         <span className="text-2xl font-semibold tracking-tight text-foreground">
-          {plan.monthlyPrice > 0 ? formatPriceInCurrency(plan.monthlyPrice, plan.currency) : "Gratis"}
+          {plan.monthlyPrice > 0 ? formatPriceInCurrency(plan.monthlyPrice, plan.currency) : "Sin costo"}
         </span>
         {plan.monthlyPrice > 0 && <span className="text-sm text-muted-foreground">/ mes</span>}
       </div>

@@ -9,7 +9,7 @@ import { MAX_MESSAGE_LENGTH } from "@/lib/ai-limits";
 import type { TrainingMode } from "@/modules/ai/prompt/training";
 
 const CUSTOM_TRAINING_BLOCKED_REPLY =
-  "El re-entrenamiento libre del asistente está disponible desde el plan Esencial. La configuración inicial (onboarding) siempre queda disponible — para entrenarlo con más detalle después, mejorá tu plan desde /dashboard/suscripcion.";
+  "El asistente de IA y su entrenamiento están disponibles desde el plan Profesional. Mejorá tu plan desde /dashboard/suscripcion para activarlos.";
 
 interface ChatRequestBody {
   mode?: string;
@@ -60,18 +60,15 @@ export async function POST(request: Request) {
 
   const mode = parseMode(body.mode ?? null);
 
-  // Onboarding SIEMPRE queda disponible (toda cuenta nueva, sin importar el
-  // plan, tiene que poder terminar de configurar su negocio) — el gate es
-  // solo sobre "continuous" (re-entrenamiento libre post-onboarding, ver
-  // /dashboard/ai-studio/training). Reusa el mismo contrato que el corte por
-  // límite de mensajes (limitReached) para que el chat existente lo
-  // muestre sin lógica nueva — upgradeRequired solo cambia el copy/CTA.
-  if (mode === "continuous") {
-    const features = await resolveBusinessPlanFeatures(businessId);
-    if (!features.customTrainingEnabled) {
-      const plan = await getTrainingPlan(businessId);
-      return NextResponse.json({ reply: CUSTOM_TRAINING_BLOCKED_REPLY, proposal: null, limitReached: true, upgradeRequired: true, plan });
-    }
+  // El entrenamiento de IA (onboarding y continuo) es parte de la IA de
+  // WhatsApp: solo lo incluyen Profesional y Empresa. Agenda interna y
+  // Esencial no tienen IA ni créditos de IA. Reusa el mismo contrato que el
+  // corte por límite de mensajes (limitReached) para que el chat existente
+  // lo muestre sin lógica nueva — upgradeRequired solo cambia el copy/CTA.
+  const features = await resolveBusinessPlanFeatures(businessId);
+  if (!features.customTrainingEnabled) {
+    const plan = await getTrainingPlan(businessId);
+    return NextResponse.json({ reply: CUSTOM_TRAINING_BLOCKED_REPLY, proposal: null, limitReached: true, upgradeRequired: true, plan });
   }
 
   try {

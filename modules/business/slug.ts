@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
+import { isPublicWebEnabled } from "@/modules/billing/subscription";
 
 // Ej: "Mango IT" -> "mango-it". Determinístico, sin dependencias externas.
 function slugify(name: string): string {
@@ -55,4 +56,15 @@ export async function getOrCreateSlug(businessId: string): Promise<string> {
 export const getBusinessIdBySlug = cache(async (slug: string): Promise<string | null> => {
   const business = await prisma.business.findUnique({ where: { slug }, select: { id: true } });
   return business?.id ?? null;
+});
+
+// Igual que getBusinessIdBySlug, pero solo resuelve negocios cuyo plan
+// incluye web pública (Plan.publicWebEnabled — Esencial en adelante). Un
+// negocio en "Agenda interna" sigue teniendo slug pero /s/[slug] y
+// /api/public/[slug]/* responden como "no encontrado". Es el único lector
+// que usan las páginas y rutas públicas — ninguna reimplementa el chequeo.
+export const getPublicBusinessIdBySlug = cache(async (slug: string): Promise<string | null> => {
+  const businessId = await getBusinessIdBySlug(slug);
+  if (!businessId) return null;
+  return (await isPublicWebEnabled(businessId)) ? businessId : null;
 });

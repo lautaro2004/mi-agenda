@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const getBusinessIdBySlug = vi.fn();
+const getPublicBusinessIdBySlug = vi.fn();
 vi.mock("@/modules/business/slug", () => ({
-  getBusinessIdBySlug: (...a: unknown[]) => getBusinessIdBySlug(...a),
+  getPublicBusinessIdBySlug: (...a: unknown[]) => getPublicBusinessIdBySlug(...a),
 }));
 
 const createInquiry = vi.fn();
@@ -31,14 +31,14 @@ function call(body: unknown) {
 }
 
 beforeEach(() => {
-  getBusinessIdBySlug.mockReset().mockResolvedValue("biz_1");
+  getPublicBusinessIdBySlug.mockReset().mockResolvedValue("biz_1");
   createInquiry.mockReset().mockResolvedValue({ id: "inq_1" });
   isRateLimited.mockReset().mockReturnValue(false);
 });
 
 describe("POST /api/public/[slug]/inquiry", () => {
   it("404 si el slug no existe, sin crear nada", async () => {
-    getBusinessIdBySlug.mockResolvedValue(null);
+    getPublicBusinessIdBySlug.mockResolvedValue(null);
     expect((await call(VALID_BODY)).status).toBe(404);
     expect(createInquiry).not.toHaveBeenCalled();
   });

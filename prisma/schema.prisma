@@ -721,6 +721,10 @@ model Plan {
   //
   // null = sin límite (Profesional). No confundir con 0.
   maxServices           Int?
+  // Sitio público del negocio (/s/[slug]) y su API de reservas/consultas.
+  // false = nivel "Agenda interna": el negocio administra turnos desde el
+  // dashboard pero no tiene web pública. Ver isPublicWebEnabled().
+  publicWebEnabled      Boolean @default(true)
   whatsappEnabled       Boolean @default(true)
   depositsEnabled       Boolean @default(true)
   customTrainingEnabled Boolean @default(true)
@@ -732,8 +736,8 @@ model Plan {
   digitalMenuEnabled    Boolean @default(true)
 
   // ── Mercado Pago (ver modules/billing/mercadopago/) ─────────────────────
-  // Gratis (monthlyPrice = 0) nunca tiene estos campos poblados — no necesita
-  // preapproval_plan. mercadoPagoPlanId es el id del preapproval_plan VIGENTE
+  // Agenda interna (monthlyPrice = 0) nunca tiene estos campos poblados — no
+  // necesita preapproval_plan. mercadoPagoPlanId es el id del preapproval_plan VIGENTE
   // para nuevas contrataciones: si el precio cambia, se crea un
   // preapproval_plan nuevo en MP y este campo pasa a apuntar a ese id nuevo
   // (la documentación de MP no confirma que transaction_amount se pueda

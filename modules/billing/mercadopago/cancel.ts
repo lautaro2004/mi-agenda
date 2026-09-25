@@ -7,7 +7,7 @@ import { describeMercadoPagoError } from "@/modules/billing/mercadopago/errors";
 // criterio que checkout.ts: reutiliza assignSubscription() para el efecto
 // sobre Nexo, nunca escribe prisma.subscription directamente.
 //
-// Al cancelar, el negocio vuelve a Gratis de inmediato (no queda un
+// Al cancelar, el negocio vuelve a Agenda interna de inmediato (no queda un
 // "Esencial cancelado" con las features del plan pago todavía visibles —
 // resolvePlanFeatures() lee SOLO del Plan, nunca del status, así que dejar
 // planId=Esencial con status="canceled" seguiría mostrando WhatsApp/señas/etc.
@@ -72,8 +72,8 @@ async function runCancel(businessId: string): Promise<CancelResult> {
   const now = new Date();
   const result = await assignSubscription(businessId, defaultPlan
     ? { planId: defaultPlan.id, status: "active", currentPeriodStart: now, currentPeriodEnd: null, provider: "manual" }
-    // No debería pasar (mismo fallback que ensureTrialSubscription si el
-    // plan Gratis no existiera), pero no dejamos el cobro ya cancelado sin
+    // No debería pasar (mismo fallback que ensureBaseSubscription si el
+    // plan base no existiera), pero no dejamos el cobro ya cancelado sin
     // reflejar: al menos se apaga el vínculo con Mercado Pago sobre el plan
     // que tenía.
     : { planId: existing.planId, status: "canceled", currentPeriodStart: existing.currentPeriodStart, currentPeriodEnd: existing.currentPeriodEnd, provider: "manual" }

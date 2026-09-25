@@ -45,7 +45,7 @@ describe("createLead", () => {
 
     expect(leadCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ wantsMeeting: false, suggestedPlan: "gratis" }),
+        data: expect.objectContaining({ wantsMeeting: false, suggestedPlan: "esencial" }),
       })
     );
     // status nunca se pasa desde el input — el default "NEW" del schema
@@ -61,7 +61,7 @@ describe("createLead", () => {
 
     expect(leadCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ wantsMeeting: true, suggestedPlan: "esencial" }),
+        data: expect.objectContaining({ wantsMeeting: true, suggestedPlan: "profesional" }),
       })
     );
   });

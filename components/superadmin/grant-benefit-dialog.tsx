@@ -19,6 +19,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { requestJson } from "@/lib/api-client";
 import { grantBenefitSchema, type GrantBenefitValues } from "@/lib/schemas";
+import { BASE_PLAN_SLUG } from "@/lib/types";
 
 interface PlanOption {
   id: string;
@@ -47,8 +48,8 @@ interface GrantBenefitDialogProps {
   onGranted: () => void;
 }
 
-// Bonificación temporal (sección 1 del pedido): solo Esencial/Profesional —
-// nunca Gratis, "regalar" el plan gratuito no es una bonificación. Reutiliza
+// Bonificación temporal (sección 1 del pedido): solo planes comerciales —
+// nunca Agenda interna, "regalar" el nivel base no es una bonificación. Reutiliza
 // el mismo endpoint de planes que assign-plan-dialog.tsx (GET
 // /api/superadmin/planes), un solo fetch de planes para todo Superadmin.
 export function GrantBenefitDialog({ trigger, businessId, businessName, onGranted }: GrantBenefitDialogProps) {
@@ -80,7 +81,7 @@ export function GrantBenefitDialog({ trigger, businessId, businessName, onGrante
       reset(defaults);
       setDurationMode("1");
       requestJson<{ plans: PlanOption[] }>("/api/superadmin/planes")
-        .then(({ plans }) => setPlans(plans.filter((p) => p.active && p.slug !== "gratis")))
+        .then(({ plans }) => setPlans(plans.filter((p) => p.active && p.slug !== BASE_PLAN_SLUG)))
         .catch(() => setPlans([]));
     }
   }

@@ -1,5 +1,5 @@
 import type { BusinessSubscription } from "@/modules/billing/subscription";
-import { assignSubscription, getPlanById, getSubscriptionWithPlan } from "@/modules/billing/subscription";
+import { BASE_PLAN_SLUG, assignSubscription, getPlanById, getSubscriptionWithPlan } from "@/modules/billing/subscription";
 import { createPreapproval } from "@/modules/billing/mercadopago/subscriptions";
 import { getPreapprovalPlan } from "@/modules/billing/mercadopago/plans";
 import { mapMercadoPagoStatus } from "@/modules/billing/mercadopago/status-map";
@@ -117,9 +117,10 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   const plan = await getPlanById(input.planId);
   if (!plan) return simpleError("PLAN_NOT_FOUND");
   if (!plan.active) return simpleError("PLAN_INACTIVE");
-  // Gratis (monthlyPrice=0) tampoco tiene mercadoPagoPlanId — este chequeo
-  // ya lo cubre, no hace falta un caso especial aparte: no tiene sentido
-  // "contratar" Gratis vía Mercado Pago.
+  // Agenda interna (nivel base, monthlyPrice=0) nunca se contrata: no es un
+  // plan comercial. Se rechaza por slug además del chequeo de abajo, así
+  // que no depende de que nadie le sincronice un preapproval_plan por error.
+  if (plan.slug === BASE_PLAN_SLUG) return simpleError("PLAN_NOT_FOUND");
   if (!plan.mercadoPagoPlanId) return simpleError("PLAN_NOT_SYNCED");
 
   const existing = await getSubscriptionWithPlan(input.businessId);

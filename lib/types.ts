@@ -752,3 +752,8 @@ export interface Inquiry {
   status: "NEW" | "IN_PROGRESS" | "RESOLVED";
   createdAt: string;
 }
+
+// Slug del nivel base "Agenda interna" (no es un plan comercial). Vive acá y no
+// en modules/billing/subscription.ts para poder usarse desde componentes
+// cliente sin arrastrar Prisma — mismo motivo que BILLING_SUBSCRIPTION_STATUSES.
+export const BASE_PLAN_SLUG = "agenda-interna";

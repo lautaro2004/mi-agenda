@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   try {
     const plan = await createPlan(parsed.data);
     // Fase 2: un plan pago recién creado se sincroniza con Mercado Pago de
-    // inmediato — Gratis nunca dispara nada (ver syncPlanWithMercadoPago).
+    // inmediato — un plan de precio 0 (Agenda interna) nunca dispara nada (ver syncPlanWithMercadoPago).
     // Un error acá NUNCA revierte la creación del Plan en Nexo (ya se
     // guardó bien): queda reflejado en mercadoPagoSyncStatus/SyncError para
     // que Superadmin lo vea y reintente, en vez de perder el plan recién

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { createAppointment } from "@/modules/appointments/service";
 import { computeDepositAmount } from "@/modules/business/deposit";
@@ -17,7 +17,7 @@ import { isBookableService } from "@/lib/types";
 // siempre confirmaba directo, algo que WhatsApp ya no hacía.
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const businessId = await getBusinessIdBySlug(slug);
+  const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) {
     return NextResponse.json({ error: "Negocio no encontrado." }, { status: 404 });
   }

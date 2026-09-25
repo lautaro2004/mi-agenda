@@ -12,6 +12,7 @@ import { TrainingPlanStatus } from "@/components/ai-studio/training-plan-status"
 import { DocumentUploader } from "@/components/ai-studio/document-uploader";
 import { Button } from "@/components/ui/button";
 import { requestJson } from "@/lib/api-client";
+import { useBusinessSubscription } from "@/lib/subscription-client";
 import type { BusinessSchedule, MemoryEntry, TrainingPlan } from "@/lib/types";
 
 // Solo para el mensaje de aliento, no para bloquear la navegación: el
@@ -26,6 +27,7 @@ function isMinimumTrainingComplete(plan: TrainingPlan | null): boolean {
 
 export default function OnboardingIndexPage() {
   const router = useRouter();
+  const { data: subscriptionData } = useBusinessSubscription();
   const [plan, setPlan] = React.useState<TrainingPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = React.useState(true);
   const [skipping, setSkipping] = React.useState(false);
@@ -48,6 +50,14 @@ export default function OnboardingIndexPage() {
       .then(({ schedule }) => setScheduleConfigured(schedule.some((day) => day.enabled)))
       .catch(() => setScheduleConfigured(null));
   }, []);
+
+  // El entrenamiento por chat es la IA de WhatsApp: solo lo incluyen
+  // Profesional y Empresa. Un negocio en Agenda interna o Esencial configura
+  // todo con el formulario, sin pasar por acá.
+  const aiIncluded = subscriptionData?.subscription?.plan.customTrainingEnabled ?? true;
+  React.useEffect(() => {
+    if (!aiIncluded) router.replace("/onboarding/negocio");
+  }, [aiIncluded, router]);
 
   const readyToContinue = isMinimumTrainingComplete(plan);
   const pendingSections = plan?.sections.filter((s) => s.status === "pending" || s.status === "in_progress") ?? [];

@@ -3,10 +3,10 @@
 import { motion } from "framer-motion";
 import { Bot, Boxes, Globe, Images, MessageSquareText, QrCode, ScrollText, CalendarCheck2 } from "lucide-react";
 
-// Ecosistema completo — a propósito NO todas las cards dicen "Gratis": la
-// sección muestra qué puede llegar a tener un negocio con Nexo, y el tag
-// aclara desde qué plan (ver sección 3 del pedido, "Todo en un solo lugar").
-// Los tags reflejan los gates reales de Plan (whatsappEnabled, galleryEnabled,
+// Ecosistema completo — la sección muestra qué puede llegar a tener un negocio
+// con Nexo, y el tag aclara desde qué plan comercial (Esencial: agenda + web;
+// Profesional: + WhatsApp/IA). Los tags reflejan los gates reales de Plan
+// (publicWebEnabled, whatsappEnabled, galleryEnabled,
 // digitalMenuEnabled — ver modules/billing/subscription.ts), no una promesa
 // aparte del pricing.
 const MODULES = [
@@ -14,19 +14,19 @@ const MODULES = [
     icon: Globe,
     title: "Sitio web",
     description: "Tu propio sitio público con la información de tu negocio.",
-    tag: "Plan Gratis",
+    tag: "Desde Esencial",
   },
   {
     icon: CalendarCheck2,
     title: "Reservas",
     description: "Tus clientes consultan disponibilidad y reservan desde tu sitio.",
-    tag: "Plan Gratis",
+    tag: "Desde Esencial",
   },
   {
     icon: Bot,
     title: "Asistente IA",
     description: "Conoce tus servicios, horarios y la información de tu negocio.",
-    tag: "Plan Gratis",
+    tag: "Desde Profesional",
   },
   {
     icon: MessageSquareText,
@@ -56,7 +56,7 @@ const MODULES = [
     icon: Boxes,
     title: "Recursos y conocimiento",
     description: "Centralizá documentos e información para que Nexo pueda utilizarlos.",
-    tag: "Plan Gratis",
+    tag: "Desde Profesional",
   },
 ];
 

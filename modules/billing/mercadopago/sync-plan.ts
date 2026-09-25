@@ -34,7 +34,7 @@ interface PlanForSync {
   mercadoPagoPlanId: string | null;
 }
 
-// Devuelve null cuando no hace falta sincronizar (Gratis) — el caller
+// Devuelve null cuando no hace falta sincronizar (Agenda interna / precio 0) — el caller
 // simplemente sigue usando el PlanWithUsage que ya tenía de createPlan()/
 // updatePlan(), sin tocar sus campos mercadoPago* (quedan en null, la UI los
 // interpreta como "no aplica"). Cuando SÍ intenta sincronizar, siempre
