@@ -64,6 +64,7 @@ export function NewAppointmentDialog({ trigger, services, onCreated }: NewAppoin
       serviceId: "",
       customerName: "",
       customerPhone: "",
+      customerEmail: "",
       date: todayIso(),
       startTime: "",
       notes: "",
@@ -139,6 +140,7 @@ export function NewAppointmentDialog({ trigger, services, onCreated }: NewAppoin
         serviceId: "",
         customerName: "",
         customerPhone: "",
+        customerEmail: "",
         date: todayIso(),
         startTime: "",
         notes: "",
@@ -310,6 +312,18 @@ export function NewAppointmentDialog({ trigger, services, onCreated }: NewAppoin
                 {...register("customerPhone")}
               />
               <FieldError errors={[errors.customerPhone]} />
+            </Field>
+
+            <Field data-invalid={!!errors.customerEmail}>
+              <FieldLabel htmlFor="appointment-customer-email">Email (opcional)</FieldLabel>
+              <Input
+                id="appointment-customer-email"
+                type="email"
+                placeholder="Para enviarle confirmación y recordatorio"
+                aria-invalid={!!errors.customerEmail}
+                {...register("customerEmail")}
+              />
+              <FieldError errors={[errors.customerEmail]} />
             </Field>
 
             <Field data-invalid={!!errors.notes}>

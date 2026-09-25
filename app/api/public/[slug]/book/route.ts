@@ -49,6 +49,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     serviceName: service.name,
     customerName: parsed.data.customerName,
     customerPhone: parsed.data.customerPhone,
+    customerEmail: parsed.data.customerEmail || null,
     date: parsed.data.date,
     startTime: parsed.data.startTime,
     durationMinutes: service.durationMinutes,

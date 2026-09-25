@@ -98,6 +98,7 @@ model Business {
   subscription          Subscription?
   notifications         BusinessNotification[]
   inquiries             Inquiry[]
+  emailSettings         EmailNotificationSettings?
   promoCodeRedemptions  PromoCodeRedemption[]
   convertedFromLeads    Lead[]
 
@@ -450,6 +451,17 @@ model Appointment {
   resourceId      String?
   customerName    String
   customerPhone   String
+  // Opcional: los turnos de WhatsApp/dashboard sin email no reciben mails.
+  // Se usa solo para confirmación y recordatorio (modules/email/).
+  customerEmail   String?
+  // Marcas de idempotencia de los emails automáticos: se "reclaman" con un
+  // UPDATE condicional antes de enviar, así un reintento o dos corridas
+  // simultáneas del cron nunca mandan el mismo email dos veces. Reprogramar
+  // un turno limpia reminderEmailSentAt para que el nuevo horario tenga su
+  // propio recordatorio.
+  confirmationEmailSentAt DateTime?
+  reminderEmailSentAt     DateTime?
+
   date            String
   startTime       String
   endTime         String
@@ -642,6 +654,29 @@ model EmployeeRestriction {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
+  @@schema("nexo")
+}
+
+// Configuración de emails automáticos del negocio (modules/email/). 1:1 con
+// Business, en nexo (Business es compartida con el CRM). Sin fila = defaults
+// de EMAIL_SETTINGS_DEFAULTS (modules/email/settings.ts): confirmación
+// activada, recordatorio y resumen diario apagados.
+model EmailNotificationSettings {
+  businessId                 String   @id
+  bookingConfirmationEnabled Boolean  @default(true)
+  reminderEnabled            Boolean  @default(false)
+  // 30 | 60 — validado en el borde (lib/schemas.ts).
+  reminderLeadMinutes        Int      @default(60)
+  dailySummaryEnabled        Boolean  @default(false)
+  // Hora local de Argentina (0-23) a la que se envía el resumen al dueño.
+  dailySummaryHour           Int      @default(8)
+  // YYYY-MM-DD del último resumen enviado (zona Argentina): idempotencia.
+  lastDailySummaryDate       String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
   @@schema("nexo")
 }
 

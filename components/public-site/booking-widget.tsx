@@ -109,6 +109,7 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
       serviceId: defaultServiceId,
       customerName: "",
       customerPhone: "",
+      customerEmail: "",
       date: todayIso(),
       startTime: "",
       notes: "",
@@ -177,6 +178,7 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
       serviceId: defaultServiceId,
       customerName: "",
       customerPhone: "",
+      customerEmail: "",
       date: todayIso(),
       startTime: "",
       notes: "",
@@ -366,6 +368,12 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
           <FieldLabel htmlFor="booking-phone">Tu WhatsApp</FieldLabel>
           <Input id="booking-phone" placeholder="Ej: +54 9 11 5555-5555" {...register("customerPhone")} />
           <FieldError errors={[errors.customerPhone]} />
+        </Field>
+
+        <Field data-invalid={!!errors.customerEmail}>
+          <FieldLabel htmlFor="booking-email">Tu email (opcional)</FieldLabel>
+          <Input id="booking-email" type="email" placeholder="Para recibir la confirmación y el recordatorio" {...register("customerEmail")} />
+          <FieldError errors={[errors.customerEmail]} />
         </Field>
       </FieldGroup>
 

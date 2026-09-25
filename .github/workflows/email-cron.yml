@@ -1,0 +1,41 @@
+# Dispara los emails automáticos de Nexo (recordatorios de turno y resumen
+# diario): llama a POST /api/cron/email-notifications, que es idempotente.
+#
+# Requiere dos secrets del repo (Settings → Secrets and variables → Actions):
+#   NEXO_APP_URL → URL pública de Nexo, sin barra final (ej: https://app.ejemplo.com)
+#   CRON_SECRET  → el mismo valor que CRON_SECRET en el servidor de Nexo
+#
+# Sin esos secrets el workflow no falla: avisa y termina (así no rompe hasta
+# que se configure). GitHub puede demorar unos minutos las corridas
+# programadas; por eso los recordatorios se calculan contra la hora real y el
+# resumen diario tiene una ventana de una hora.
+
+name: Email notifications
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call cron endpoint
+        env:
+          APP_URL: ${{ secrets.NEXO_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "NEXO_APP_URL / CRON_SECRET no configurados: se omite."
+            exit 0
+          fi
+          status=$(curl -sS -o response.txt -w "%{http_code}" --max-time 60 -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/email-notifications")
+          echo "HTTP $status"
+          cat response.txt
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            exit 1
+          fi

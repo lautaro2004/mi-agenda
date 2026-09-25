@@ -56,6 +56,8 @@ export function RegisterForm() {
       name: values.ownerName,
       email: values.email,
       password: values.password,
+      // A dónde lleva el enlace del email de verificación una vez confirmado.
+      callbackURL: "/dashboard",
     });
 
     if (error) {

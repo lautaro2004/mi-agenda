@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Datos de turno inválidos." }, { status: 400 });
   }
 
-  const { serviceId, customerName, customerPhone, date, startTime, notes, resourceId } = parsed.data;
+  const { serviceId, customerName, customerPhone, customerEmail, date, startTime, notes, resourceId } = parsed.data;
 
   try {
     const { business, services, schedule } = await getBusinessState(businessId);
@@ -80,6 +80,7 @@ export async function POST(request: Request) {
       serviceName: service.name,
       customerName,
       customerPhone,
+      customerEmail: customerEmail || null,
       date,
       startTime,
       durationMinutes: service.durationMinutes > 0 ? service.durationMinutes : 60,

@@ -94,6 +94,9 @@ export function LoginForm() {
               {...register("password")}
             />
             <FieldError errors={[errors.password]} />
+            <Link href="/recuperar-contrasena" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+              ¿Olvidaste tu contraseña?
+            </Link>
           </Field>
 
           <Field>

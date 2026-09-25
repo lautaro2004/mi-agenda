@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import type { BusinessSchedule } from "@/lib/types";
 import { getSlotsForDate } from "@/modules/ai/booking/flow";
 import { getActiveServiceResources } from "@/modules/business/resource";
+import { sendBookingConfirmation } from "@/modules/email/booking-emails";
 import { notifyBookingCancelled, notifyBookingCreated, notifyBookingPending } from "@/modules/notifications/service";
 
 // Único punto de entrada de disponibilidad/reserva del sistema — lo usan
@@ -132,6 +133,8 @@ export interface CreateAppointmentParams {
   serviceName: string;
   customerName: string;
   customerPhone: string;
+  // Opcional: habilita confirmación/recordatorio por email (modules/email/).
+  customerEmail?: string | null;
   date: string;
   startTime: string;
   durationMinutes: number;
@@ -179,6 +182,7 @@ export async function createAppointment(params: CreateAppointmentParams) {
           resourceId,
           customerName: params.customerName,
           customerPhone: params.customerPhone,
+          customerEmail: params.customerEmail || null,
           date: params.date,
           startTime: params.startTime,
           endTime: computeEndTime(params.startTime, params.durationMinutes),
@@ -202,6 +206,10 @@ export async function createAppointment(params: CreateAppointmentParams) {
       };
       void (appointment.status === "pending_payment" ? notifyBookingPending(notifyInput) : notifyBookingCreated(notifyInput));
     }
+
+    // Nunca lanza; se espera para que en serverless el envío no se corte al
+    // devolver la respuesta.
+    await sendBookingConfirmation(appointment.id);
 
     return { appointment };
   } catch (error) {
@@ -304,6 +312,8 @@ export async function rescheduleAppointment(params: RescheduleAppointmentParams)
           endTime: computeEndTime(params.newStartTime, params.durationMinutes),
           durationMinutes: params.durationMinutes,
           resourceId,
+          // Nuevo horario = nuevo recordatorio (ver modules/email/booking-emails.ts).
+          reminderEmailSentAt: null,
         },
       });
     });

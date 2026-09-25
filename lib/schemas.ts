@@ -369,6 +369,8 @@ export const manualAppointmentSchema = z.object({
   serviceId: z.string().min(1, "Seleccioná un servicio"),
   customerName: z.string().min(2, "Ingresá el nombre del cliente"),
   customerPhone: z.string().min(6, "Ingresá un teléfono válido"),
+  // Opcional: con email el cliente recibe confirmación y recordatorio.
+  customerEmail: z.union([z.literal(""), z.string().trim().email("Ingresá un email válido").max(200)]).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
   startTime: z.string().regex(timeRegex, "Hora inválida"),
   notes: z.string().max(500, "Las notas son demasiado largas").optional(),
@@ -425,6 +427,16 @@ export type GalleryBlockUpdateValues = z.infer<typeof galleryBlockUpdateSchema>;
 export const serviceResourcesSchema = z.object({
   resourceIds: z.array(z.string().min(1)),
 });
+
+// Emails automáticos del negocio (modules/email/settings.ts).
+export const emailNotificationSettingsSchema = z.object({
+  bookingConfirmationEnabled: z.boolean(),
+  reminderEnabled: z.boolean(),
+  reminderLeadMinutes: z.union([z.literal(30), z.literal(60)]),
+  dailySummaryEnabled: z.boolean(),
+  dailySummaryHour: z.number().int().min(0).max(23),
+});
+export type EmailNotificationSettingsValues = z.infer<typeof emailNotificationSettingsSchema>;
 
 export type ManualAppointmentValues = z.infer<typeof manualAppointmentSchema>;
 
@@ -618,3 +630,21 @@ export const subscriptionCheckoutSchema = z.object({
 });
 
 export type SubscriptionCheckoutValues = z.infer<typeof subscriptionCheckoutSchema>;
+
+// ── Recuperación de contraseña ───────────────────────────────────────────
+export const forgotPasswordSchema = z.object({
+  email: z.string().email("Ingresá un email válido"),
+});
+export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+
+// Mismo mínimo de 8 caracteres que registerSchema/changePasswordSchema.
+export const resetPasswordSchema = z
+  .object({
+    newPassword: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirmPassword"],
+  });
+export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
