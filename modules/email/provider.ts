@@ -17,7 +17,11 @@ export interface OutgoingEmail {
   idempotencyKey?: string;
 }
 
-export type SendResult = { ok: true; simulated: boolean; messageId?: string } | { ok: false; error: string };
+// provider: qué canal entregó el email (Resend de la plataforma o el Gmail
+// conectado del negocio) — informativo, los llamadores no dependen de él.
+export type SendResult =
+  | { ok: true; simulated: boolean; messageId?: string; provider?: "resend" | "gmail" }
+  | { ok: false; error: string };
 
 const DEFAULT_FROM = "Nexo <contacto@kodexa.ar>";
 
@@ -43,7 +47,7 @@ export async function sendViaResend(message: OutgoingEmail): Promise<SendResult>
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn("[email] RESEND_API_KEY no configurada: envío simulado (no se entregó nada).");
-    return { ok: true, simulated: true };
+    return { ok: true, simulated: true, provider: "resend" };
   }
 
   try {
@@ -65,7 +69,7 @@ export async function sendViaResend(message: OutgoingEmail): Promise<SendResult>
     });
     const data = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
     if (!res.ok) return { ok: false, error: data.message ?? `http_${res.status}` };
-    return { ok: true, simulated: false, messageId: data.id };
+    return { ok: true, simulated: false, messageId: data.id, provider: "resend" };
   } catch {
     return { ok: false, error: "network_error" };
   }

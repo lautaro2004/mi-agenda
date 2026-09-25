@@ -99,6 +99,7 @@ model Business {
   notifications         BusinessNotification[]
   inquiries             Inquiry[]
   emailSettings         EmailNotificationSettings?
+  googleConnections     GoogleConnection[]
   promoCodeRedemptions  PromoCodeRedemption[]
   convertedFromLeads    Lead[]
 
@@ -555,6 +556,7 @@ model User {
   memberships   Membership[]
   accounts      Account[]
   sessions      Session[]
+  googleConnections GoogleConnection[]
 
   @@map("user")
   @@schema("public")
@@ -1014,6 +1016,39 @@ model Lead {
   @@index([status])
   @@index([createdAt])
   @@index([convertedBusinessId])
+  @@schema("public")
+}
+
+// Conexión Google (Gmail / Calendar) de un usuario dentro de un negocio.
+// Vive en public porque la usan Nexo y Nodo (CRM) sobre el mismo Business —
+// Nexo es el dueño de la migración; el CRM la declara como espejo.
+// Deliberadamente NO se reutiliza la tabla `account` de Better Auth: eso es
+// identidad de login; esto es una integración de negocio con sus propios
+// scopes y ciclo de vida. Un solo cliente OAuth de Kodexa; cada usuario
+// autoriza su cuenta. El refresh token se guarda CIFRADO (AES-256-GCM, ver
+// lib/google/crypto.ts) y nunca sale del servidor; el access token no se
+// persiste (se pide con el refresh token cuando hace falta).
+model GoogleConnection {
+  id              String   @id @default(cuid())
+  businessId      String
+  userId          String
+  googleEmail     String
+  // null cuando la conexión fue revocada (se borra el token, se conserva la
+  // fila para poder mostrar "reconectar").
+  refreshTokenEnc String?
+  // Scopes otorgados (URLs completas, ver lib/google/scopes.ts). Crece con la
+  // autorización incremental (gmail → calendar).
+  scopes          String[]
+  // active | revoked
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, userId])
+  @@index([businessId])
   @@schema("public")
 }
 

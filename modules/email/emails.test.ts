@@ -64,11 +64,12 @@ vi.mock("@/lib/prisma", () => ({
       ...table(() => state.settings),
       findUnique: async ({ where }: { where: { businessId: string } }) => state.settings.find((s) => s.businessId === where.businessId) ?? null,
     },
+    googleConnection: { findFirst: async () => null },
     business: { findUnique: async ({ where }: { where: { id: string } }) => state.businesses.find((b) => b.id === where.id) ?? null },
     membership: {
       findFirst: async ({ where }: { where: { businessId: string } }) => {
         const m = state.memberships.find((x) => x.businessId === where.businessId);
-        return m ? { user: { email: m.email } } : null;
+        return m ? { userId: `owner-${m.businessId}`, user: { email: m.email } } : null;
       },
     },
   },

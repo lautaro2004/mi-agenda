@@ -28,6 +28,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { BusinessPreviewCard } from "@/components/dashboard/business-preview-card";
 import { DepositSettingsCard } from "@/components/dashboard/deposit-settings-card";
 import { EmailNotificationsCard } from "@/components/dashboard/email-notifications-card";
+import { GoogleIntegrationCard } from "@/components/dashboard/google-integration-card";
 import { LogoUploader } from "@/components/onboarding/logo-uploader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { businessInfoSchema, type BusinessInfoValues } from "@/lib/schemas";
@@ -298,6 +299,8 @@ export default function BusinessSettingsPage() {
         <DepositSettingsCard business={state.business} onSaved={() => void refresh()} />
 
         <EmailNotificationsCard />
+
+        <GoogleIntegrationCard />
 
         <div className="rounded-2xl border border-border bg-card p-6">
           <h3 className="text-base font-semibold text-foreground">Presencia pública</h3>

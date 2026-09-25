@@ -21,7 +21,7 @@ describe("sendViaResend", () => {
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    expect(await sendViaResend(message)).toEqual({ ok: true, simulated: true });
+    expect(await sendViaResend(message)).toEqual({ ok: true, simulated: true, provider: "resend" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -36,7 +36,7 @@ describe("sendViaResend", () => {
       idempotencyKey: "booking-confirmation/abc",
     });
 
-    expect(result).toEqual({ ok: true, simulated: false, messageId: "msg_1" });
+    expect(result).toEqual({ ok: true, simulated: false, messageId: "msg_1", provider: "resend" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.resend.com/emails");
     expect(init.headers["Idempotency-Key"]).toBe("booking-confirmation/abc");
