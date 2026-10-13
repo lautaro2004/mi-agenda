@@ -15,8 +15,27 @@
 # cada proyecto vía la REST API (PostgREST) — "select=id&limit=1" trae como
 # mucho una sola columna de una sola fila, la consulta más chica posible que
 # igual toca Postgres de verdad (no un simple health-check estático):
-#   Nexo:  GET /rest/v1/Plan?select=id&limit=1
+#   Nexo:  GET /rest/v1/Business?select=id&limit=1
 #   Waste: GET /rest/v1/services?select=id&limit=1
+#
+# ── POR QUÉ "Business" Y NO "Plan" (diagnóstico del HTTP 404) ───────────
+# Hasta ahora Nexo consultaba /rest/v1/Plan, y devolvía 404. La causa está
+# en prisma/schema.prisma: la migración 20260916000000_move_nexo_tables_to_
+# schemas movió "Plan" (y el resto de las tablas propias de producto) del
+# schema `public` al schema `nexo` — y la Data API de Supabase (PostgREST)
+# solo expone el schema `public` por defecto, nunca `nexo`. Por eso la URL
+# dejó de encontrar la tabla. "Business" en cambio sigue viviendo en
+# `public` (es la entidad raíz del tenant, compartida con el CRM — ver
+# "Business como entidad compartida" en
+# docs/architecture/migracion-schemas-fase3.md) y no tiene previsto
+# moverse, así que es un target estable para este workflow.
+#
+# Si en el futuro se habilita RLS con policies restrictivas sobre
+# `public."Business"` (hoy tiene RLS deny-all sin policies — ver
+# docs/security/supabase-hardening/), la respuesta sigue siendo HTTP 200
+# con un array vacío `[]`, no un error: deny-all bloquea las FILAS, no la
+# consulta en sí, así que este keep-alive no se rompe con eso.
+#
 # Si el nombre de la tabla de alguno de los dos proyectos cambia alguna vez,
 # hay que actualizar la URL correspondiente acá abajo (ver los dos pasos
 # "Ping Nexo"/"Ping Waste").
@@ -35,21 +54,23 @@
 # alcanza y es preferible a la "service_role"/"secret": esta petición solo
 # lee como mucho el id de una fila de una tabla que ya es de lectura pública
 # vía la API — no hace falta una key con privilegios elevados dando vueltas
-# en un secret más. Nunca usar acá la service_role/secret key.
+# en un secret más. Nunca usar acá la service_role/secret key. Ninguna key
+# se imprime en los logs en ningún paso (va solo en headers, nunca en la
+# URL ni en un echo).
 #
 # ── CÓMO CAMBIAR LA FRECUENCIA ───────────────────────────────────────────
 # Editar la expresión cron de "on.schedule" más abajo (sintaxis estándar:
 # minuto hora día-del-mes mes día-de-semana — siempre en UTC).
 #
 # Ejemplos:
-#   "0 6 */5 * *"  → como está ahora: día-del-mes de a saltos de 5, 06:00 UTC.
+#   "0 6 */3 * *"  → como está ahora: día-del-mes de a saltos de 3, 06:00 UTC.
 #   "0 6 * * 1"    → todos los lunes a las 06:00 UTC.
 #   "0 */12 * * *" → cada 12 horas.
 #
-# Ojo: "*/5" en el campo día-del-mes NO es un intervalo continuo de 5 días
-# — cron reinicia el conteo en cada mes (corre los días 1, 6, 11, 16, 21, 26
-# y 31; entre el 31 y el 1 del mes siguiente puede pasar apenas 1 día en vez
-# de 5). Para un keep-alive esto no es un problema real (alcanza con
+# Ojo: "*/3" en el campo día-del-mes NO es un intervalo continuo de 3 días
+# — cron reinicia el conteo en cada mes (corre los días 1, 4, 7, ..., 28,
+# 31; entre el 31 y el 1 del mes siguiente puede pasar apenas 1 día en vez
+# de 3). Para un keep-alive esto no es un problema real (alcanza con
 # "como mucho cada X días"), pero no es un temporizador exacto — si alguna
 # vez necesitás una periodicidad exacta, cron no es la herramienta.
 #
@@ -58,13 +79,26 @@
 # los workflows programados de un repo sin ningún commit/actividad en 60
 # días (correr este workflow a mano una vez — con el botón "Run workflow",
 # habilitado acá abajo vía workflow_dispatch — lo reactiva).
+#
+# ── CÓMO LEER EL RESULTADO ───────────────────────────────────────────────
+# Cada ping es independiente (si uno falla, el otro igual se ejecuta y se
+# reporta) y distingue dos tipos de fallo:
+#   - error de conexión/timeout (curl no pudo ni completar el pedido:
+#     DNS, timeout, conexión rechazada, proyecto pausado sin responder)
+#   - HTTP no exitoso (el servidor respondió, pero con un código fuera de
+#     2xx — ej. el 404 del diagnóstico de arriba)
+# El resumen final (pestaña "Summary" de la corrida, y el log del último
+# paso) siempre muestra el estado de AMBOS proyectos con su código HTTP,
+# nunca dice "fallaron los dos" si solo uno falló. El job queda marcado
+# como fallido si al menos uno de los dos no respondió 2xx, pero sin perder
+# la info del que sí respondió bien.
 # ─────────────────────────────────────────────────────────────────────────
 
 name: Supabase Keep-Alive
 
 on:
   schedule:
-    - cron: "0 6 */5 * *"
+    - cron: "0 6 */3 * *"
   # Permite dispararlo a mano desde la pestaña "Actions" del repo, para
   # probarlo sin esperar al cron o para reactivar el scheduler si GitHub lo
   # desactivó por inactividad.
@@ -82,39 +116,110 @@ jobs:
       - name: Ping Nexo (mi-agenda)
         id: nexo
         continue-on-error: true
+        env:
+          PROJECT_URL: ${{ secrets.NEXO_SUPABASE_URL }}
+          PROJECT_KEY: ${{ secrets.NEXO_SUPABASE_KEY }}
         run: |
-          status=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 \
-            -H "apikey: ${{ secrets.NEXO_SUPABASE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.NEXO_SUPABASE_KEY }}" \
-            "${{ secrets.NEXO_SUPABASE_URL }}/rest/v1/Plan?select=id&limit=1")
+          # set +e alrededor del curl: así un error de conexión (DNS, timeout,
+          # conexión rechazada) se puede distinguir de un HTTP no-2xx, en vez
+          # de que "set -e" (default de los pasos de Actions) corte el script
+          # de golpe y se pierda esa distinción en el log.
+          set +e
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 --max-time 15 \
+            -H "apikey: $PROJECT_KEY" \
+            -H "Authorization: Bearer $PROJECT_KEY" \
+            "$PROJECT_URL/rest/v1/Business?select=id&limit=1")
+          curl_exit=$?
+          set -e
+
+          echo "status=${status:-000}" >> "$GITHUB_OUTPUT"
+
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "result=connection_error" >> "$GITHUB_OUTPUT"
+            echo "::error::Nexo: no se pudo completar la conexión a Supabase (curl exit $curl_exit — DNS/timeout/rechazada)."
+            exit 1
+          fi
+
           echo "Nexo respondió HTTP $status"
           if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "result=http_error" >> "$GITHUB_OUTPUT"
             echo "::error::Nexo: la petición a Supabase devolvió HTTP $status"
             exit 1
           fi
+          echo "result=ok" >> "$GITHUB_OUTPUT"
 
       - name: Ping Waste
         id: waste
         continue-on-error: true
+        env:
+          PROJECT_URL: ${{ secrets.WASTE_SUPABASE_URL }}
+          PROJECT_KEY: ${{ secrets.WASTE_SUPABASE_KEY }}
         run: |
-          status=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 \
-            -H "apikey: ${{ secrets.WASTE_SUPABASE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.WASTE_SUPABASE_KEY }}" \
-            "${{ secrets.WASTE_SUPABASE_URL }}/rest/v1/services?select=id&limit=1")
-          echo "Waste respondió HTTP $status"
-          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
-            echo "::error::Waste: la petición a Supabase devolvió HTTP $status"
+          set +e
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 --max-time 15 \
+            -H "apikey: $PROJECT_KEY" \
+            -H "Authorization: Bearer $PROJECT_KEY" \
+            "$PROJECT_URL/rest/v1/services?select=id&limit=1")
+          curl_exit=$?
+          set -e
+
+          echo "status=${status:-000}" >> "$GITHUB_OUTPUT"
+
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "result=connection_error" >> "$GITHUB_OUTPUT"
+            echo "::error::Waste: no se pudo completar la conexión a Supabase (curl exit $curl_exit — DNS/timeout/rechazada)."
             exit 1
           fi
 
-      # Punto único de verdad de si el workflow como un todo salió bien —
-      # falla claramente (y falla el job/workflow completo) si CUALQUIERA
-      # de los dos pings de arriba falló, aunque el otro haya salido bien.
-      - name: Verificar que ambos proyectos respondieron bien
+          echo "Waste respondió HTTP $status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "result=http_error" >> "$GITHUB_OUTPUT"
+            echo "::error::Waste: la petición a Supabase devolvió HTTP $status"
+            exit 1
+          fi
+          echo "result=ok" >> "$GITHUB_OUTPUT"
+
+      # Punto único de verdad de si el workflow como un todo salió bien.
+      # "if: always()" es clave: corre tanto si los dos pasos de arriba
+      # salieron bien como si alguno falló (continue-on-error ya evitó que
+      # el job se cortara antes de llegar acá). Nunca confunde "falló uno"
+      # con "fallaron los dos" — el resumen siempre lista el estado real de
+      # CADA proyecto por separado, con su propio código HTTP.
+      - name: Resumen
         if: always()
+        env:
+          NEXO_OUTCOME: ${{ steps.nexo.outcome }}
+          NEXO_STATUS: ${{ steps.nexo.outputs.status }}
+          NEXO_RESULT: ${{ steps.nexo.outputs.result }}
+          WASTE_OUTCOME: ${{ steps.waste.outcome }}
+          WASTE_STATUS: ${{ steps.waste.outputs.status }}
+          WASTE_RESULT: ${{ steps.waste.outputs.result }}
         run: |
-          if [ "${{ steps.nexo.outcome }}" != "success" ] || [ "${{ steps.waste.outcome }}" != "success" ]; then
-            echo "::error::Keep-alive fallido — Nexo: ${{ steps.nexo.outcome }}, Waste: ${{ steps.waste.outcome }}"
+          describe() {
+            case "$2" in
+              ok) echo "✅ OK" ;;
+              http_error) echo "❌ HTTP no exitoso (código $1)" ;;
+              connection_error) echo "❌ Error de conexión (sin código HTTP)" ;;
+              *) echo "❌ Sin ejecutar" ;;
+            esac
+          }
+
+          {
+            echo "## Supabase Keep-Alive"
+            echo ""
+            echo "| Proyecto | HTTP | Resultado |"
+            echo "|---|---|---|"
+            echo "| Nexo (mi-agenda) | ${NEXO_STATUS:-—} | $(describe "$NEXO_STATUS" "$NEXO_RESULT") |"
+            echo "| Waste | ${WASTE_STATUS:-—} | $(describe "$WASTE_STATUS" "$WASTE_RESULT") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Nexo  — HTTP ${NEXO_STATUS:-?} — $(describe "$NEXO_STATUS" "$NEXO_RESULT")"
+          echo "Waste — HTTP ${WASTE_STATUS:-?} — $(describe "$WASTE_STATUS" "$WASTE_RESULT")"
+
+          if [ "$NEXO_OUTCOME" != "success" ] || [ "$WASTE_OUTCOME" != "success" ]; then
+            echo "::error::Keep-alive fallido — Nexo: $NEXO_OUTCOME (HTTP ${NEXO_STATUS:-?}), Waste: $WASTE_OUTCOME (HTTP ${WASTE_STATUS:-?})"
             exit 1
           fi
           echo "Ambos proyectos de Supabase respondieron correctamente."
