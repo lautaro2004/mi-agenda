@@ -21,22 +21,25 @@ import {
   UserCog,
 } from "lucide-react";
 
+// minRole (opcional): rol mínimo para VER la entrada — owner > admin >
+// member (ver modules/business/current.ts). Las rutas de API aplican el
+// mismo criterio del lado del servidor; esto solo ordena la navegación.
 export const DASHBOARD_NAV = [
   { href: "/dashboard", label: "Resumen", icon: LayoutDashboard },
-  { href: "/dashboard/negocio", label: "Negocio", icon: Store },
-  { href: "/dashboard/horarios", label: "Horarios", icon: CalendarClock },
-  { href: "/dashboard/servicios", label: "Servicios", icon: ListChecks },
-  { href: "/dashboard/recursos", label: "Recursos", icon: Boxes },
-  { href: "/dashboard/preguntas-frecuentes", label: "Preguntas frecuentes", icon: MessageCircleQuestion },
+  { href: "/dashboard/negocio", label: "Negocio", icon: Store, minRole: "admin" },
+  { href: "/dashboard/horarios", label: "Horarios", icon: CalendarClock, minRole: "admin" },
+  { href: "/dashboard/servicios", label: "Servicios", icon: ListChecks, minRole: "admin" },
+  { href: "/dashboard/recursos", label: "Recursos", icon: Boxes, minRole: "admin" },
+  { href: "/dashboard/preguntas-frecuentes", label: "Preguntas frecuentes", icon: MessageCircleQuestion, minRole: "admin" },
   { href: "/dashboard/turnos", label: "Turnos", icon: CalendarCheck2 },
   { href: "/dashboard/consultas", label: "Consultas", icon: MessageSquareText },
-  { href: "/dashboard/estadisticas", label: "Estadísticas", icon: BarChart3 },
+  { href: "/dashboard/estadisticas", label: "Estadísticas", icon: BarChart3, minRole: "admin" },
   {
     href: "/dashboard/whatsapp",
     label: "WhatsApp",
     icon: MessageSquare,
     children: [
-      { href: "/dashboard/whatsapp/conexion", label: "Conexión", icon: Plug },
+      { href: "/dashboard/whatsapp/conexion", label: "Conexión", icon: Plug, minRole: "admin" },
       { href: "/dashboard/whatsapp/conversaciones", label: "Conversaciones", icon: MessageSquare },
     ],
   },
@@ -44,6 +47,7 @@ export const DASHBOARD_NAV = [
     href: "/dashboard/ai-studio",
     label: "AI Studio",
     icon: Bot,
+    minRole: "admin",
     children: [
       { href: "/dashboard/ai-studio/training", label: "Entrenamiento", icon: GraduationCap },
       { href: "/dashboard/ai-studio/employee", label: "Empleado", icon: UserCog },
@@ -55,11 +59,12 @@ export const DASHBOARD_NAV = [
     href: "/dashboard/sitio",
     label: "Sitio web",
     icon: Globe,
+    minRole: "admin",
     children: [
       { href: "/dashboard/sitio", label: "Apariencia y SEO", icon: Globe },
       { href: "/dashboard/sitio/galeria", label: "Contenido visual", icon: Images },
       { href: "/dashboard/sitio/carta", label: "Carta digital", icon: ScrollText },
     ],
   },
-  { href: "/dashboard/suscripcion", label: "Suscripción", icon: CreditCard },
+  { href: "/dashboard/suscripcion", label: "Suscripción", icon: CreditCard, minRole: "owner" },
 ] as const;

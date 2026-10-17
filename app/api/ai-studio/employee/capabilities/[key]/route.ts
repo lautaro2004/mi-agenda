@@ -8,7 +8,7 @@ import { EMPLOYEE_CAPABILITIES, type EmployeeCapabilityKey } from "@/lib/types";
 const CAPABILITY_KEYS = new Set<string>(EMPLOYEE_CAPABILITIES.map((c) => c.id));
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ key: string }> }) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

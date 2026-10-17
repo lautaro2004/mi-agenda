@@ -27,7 +27,7 @@ const OUR_FAULT_CODES: ReadonlySet<CheckoutErrorCode> = new Set([
 // mostrar, acá `error` es un código y `message` es el texto).
 export async function POST(request: Request) {
   const [businessId, session] = await Promise.all([
-    getCurrentBusinessId(),
+    getCurrentBusinessId({ minRole: "owner" }),
     auth.api.getSession({ headers: await headers() }),
   ]);
   if (!businessId || !session) {

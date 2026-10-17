@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 
 import { DASHBOARD_NAV } from "@/lib/dashboard-nav";
 import { cn } from "@/lib/utils";
+import { roleAllows, useBusinessRole } from "@/lib/business-role";
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const role = useBusinessRole();
 
   return (
     <div className="flex h-full flex-col">
@@ -18,10 +20,13 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
 
       <nav className="flex flex-1 flex-col gap-1 py-2">
-        {DASHBOARD_NAV.map((item) => {
+        {DASHBOARD_NAV.filter((item) => roleAllows(role, "minRole" in item ? item.minRole : undefined)).map((item) => {
           const isActive =
             item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
-          const children = "children" in item ? item.children : undefined;
+          const children =
+            "children" in item
+              ? item.children.filter((child) => roleAllows(role, "minRole" in child ? child.minRole : undefined))
+              : undefined;
 
           return (
             <div key={item.href}>

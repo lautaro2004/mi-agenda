@@ -6,7 +6,7 @@ import { getTrainingPlan, ignoreRemainingSections } from "@/modules/employee/tra
 // Escape hatch determinístico: el dueño puede terminar el onboarding sin
 // depender de que la IA proponga "ignored" para cada sección restante.
 export async function POST() {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

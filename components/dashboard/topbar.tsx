@@ -23,10 +23,12 @@ import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { DASHBOARD_NAV } from "@/lib/dashboard-nav";
 import { useOnboarding } from "@/lib/onboarding-store";
 import { authClient } from "@/lib/auth/auth-client";
+import { useBusinessRole } from "@/lib/business-role";
 
 export function DashboardTopbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const role = useBusinessRole();
   const { data: session } = authClient.useSession();
   const { state } = useOnboarding();
   const { business } = state;
@@ -113,10 +115,12 @@ export function DashboardTopbar() {
             <User className="size-4" data-icon="inline-start" />
             Mi perfil
           </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href="/dashboard/suscripcion" />}>
-            <CreditCard className="size-4" data-icon="inline-start" />
-            Suscripción
-          </DropdownMenuItem>
+          {role === "owner" && (
+            <DropdownMenuItem render={<Link href="/dashboard/suscripcion" />}>
+              <CreditCard className="size-4" data-icon="inline-start" />
+              Suscripción
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem render={<Link href="/dashboard/ayuda" />}>
             <HelpCircle className="size-4" data-icon="inline-start" />
             Ayuda / Soporte
