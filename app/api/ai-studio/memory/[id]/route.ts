@@ -6,7 +6,7 @@ import { deleteDocument } from "@/lib/knowledge-documents";
 import { memoryEntrySchema } from "@/lib/schemas";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
@@ -28,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

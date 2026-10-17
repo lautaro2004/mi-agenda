@@ -5,7 +5,7 @@ import { updateBusinessInfo } from "@/modules/business/service";
 import { siteTemplateSchema } from "@/lib/schemas";
 
 export async function PATCH(request: Request) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

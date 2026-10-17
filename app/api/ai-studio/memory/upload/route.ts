@@ -16,7 +16,7 @@ import {
 // extracción de texto), igual queda la entrada con el archivo adjunto y
 // processingStatus "error", nunca se pierde el upload.
 export async function POST(request: Request) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

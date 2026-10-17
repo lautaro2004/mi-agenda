@@ -15,7 +15,7 @@ function parseKind(value: string): BusinessAssetKind | null {
 // body/query — así un negocio no puede tocar assets de otro cambiando un id
 // desde el cliente (ver sección 24 de la tarea).
 export async function POST(request: Request, { params }: RouteParams) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
@@ -51,7 +51,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(_request: Request, { params }: RouteParams) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

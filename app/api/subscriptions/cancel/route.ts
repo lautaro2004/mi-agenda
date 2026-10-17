@@ -11,7 +11,7 @@ const OUR_FAULT_CODES: ReadonlySet<CancelSubscriptionError> = new Set(["unexpect
 
 export async function POST() {
   const [businessId, session] = await Promise.all([
-    getCurrentBusinessId(),
+    getCurrentBusinessId({ minRole: "owner" }),
     auth.api.getSession({ headers: await headers() }),
   ]);
   if (!businessId || !session) {

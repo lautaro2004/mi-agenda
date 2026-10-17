@@ -87,6 +87,7 @@ model Business {
   faqs                  FAQ[]
   galleryBlocks         GalleryBlock[]
   memberships           Membership[]
+  invitations           Invitation[]
   memoryEntries         MemoryEntry[]
   paymentProofs         PaymentProof[]
   resources             Resource[]
@@ -557,6 +558,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   googleConnections GoogleConnection[]
+  invitationsSent Invitation[] @relation("InvitationInvitedBy")
 
   @@map("user")
   @@schema("public")
@@ -1052,11 +1054,21 @@ model GoogleConnection {
   @@schema("public")
 }
 
+// Membresía de un usuario en un negocio — COMPARTIDA por Nexo y Nodo (CRM).
+// - role: "owner" | "admin" | "member" (ver modules/business/current.ts).
+//   owner = todo (incluida la facturación); admin = configuración y equipo,
+//   sin facturación; member = operación diaria (turnos, consultas, chats).
+// - products: a qué productos del ecosistema accede ESTE miembro ("nexo",
+//   "crm"). Default ambos: los dueños existentes y los que se registran
+//   siguen accediendo a todo. El dueño lo ajusta por empleado desde
+//   Nodo → Configuración → Equipo. Que el negocio tenga el producto es otra
+//   condición (Nexo: Subscription; Nodo: crm.Workspace).
 model Membership {
   id         String   @id @default(cuid())
   userId     String
   businessId String
   role       String   @default("owner")
+  products   String[] @default(["nexo", "crm"])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -1065,5 +1077,34 @@ model Membership {
   @@unique([userId, businessId])
   @@index([userId])
   @@index([businessId])
+  @@schema("public")
+}
+
+// Invitación de un empleado a un negocio (compartida por Nexo y Nodo; hoy
+// se emite desde Nodo → Configuración → Equipo). Solo se guarda el HASH
+// SHA-256 del token: el link completo existe únicamente en el email / el
+// portapapeles del dueño. Una invitación pendiente por (negocio, email):
+// reinvitar revoca la anterior. Aceptarla crea la Membership con el rol y
+// los productos elegidos.
+model Invitation {
+  id           String    @id @default(cuid())
+  businessId   String
+  email        String
+  role         String    @default("member")
+  products     String[]  @default(["crm"])
+  tokenHash    String    @unique
+  invitedById  String?
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedById String?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invitedBy User?    @relation("InvitationInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([email])
   @@schema("public")
 }

@@ -12,7 +12,7 @@ import { redeemPromoCode } from "@/modules/promo-codes/service";
 // responde. businessId/userId salen SIEMPRE de la sesión, nunca del body.
 export async function POST(request: Request) {
   const [businessId, session] = await Promise.all([
-    getCurrentBusinessId(),
+    getCurrentBusinessId({ minRole: "owner" }),
     auth.api.getSession({ headers: await headers() }),
   ]);
   if (!businessId || !session) {

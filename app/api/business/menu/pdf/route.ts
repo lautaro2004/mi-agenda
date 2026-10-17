@@ -4,7 +4,7 @@ import { getCurrentBusinessId } from "@/modules/business/current";
 import { MenuValidationError, removeMenuPdf, replaceMenuPdf } from "@/modules/business/menu";
 
 export async function POST(request: Request) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

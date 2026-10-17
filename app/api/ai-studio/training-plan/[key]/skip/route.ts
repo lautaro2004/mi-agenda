@@ -20,7 +20,7 @@ interface SkipRequestBody {
 // a la IA que presente la siguiente (runTrainingTurn ya activa la próxima
 // pending sola, ver activateNextPendingSection).
 export async function POST(request: Request, { params }: RouteParams) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

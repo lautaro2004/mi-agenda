@@ -27,6 +27,7 @@ import { useOnboarding } from "@/lib/onboarding-store";
 import { useBusinessSubscription } from "@/lib/subscription-client";
 import { useWhatsApp } from "@/lib/whatsapp-store";
 import { authClient } from "@/lib/auth/auth-client";
+import { useBusinessRole } from "@/lib/business-role";
 import type { BillingSubscriptionStatus, WhatsAppConnectionStatus } from "@/lib/types";
 
 const WHATSAPP_STATUS_LABEL: Record<WhatsAppConnectionStatus, string> = {
@@ -73,6 +74,11 @@ export default function DashboardPage() {
   const { business, services, faqs, schedule } = state;
   const { todayCount, nextTime, pendingPaymentReview } = useTurnoStats();
   const { data: subscriptionData } = useBusinessSubscription();
+  // Un miembro (empleado) no configura el negocio: el resumen le muestra solo
+  // lo operativo (turnos de hoy, comprobantes, WhatsApp), sin las tarjetas
+  // de configuración/plan/sitio que lo llevarían a pantallas de admin.
+  const role = useBusinessRole();
+  const isAdmin = role !== "member";
 
   const configIncomplete = !business.name || !business.category || services.length === 0;
   const scheduledDays = schedule.filter((day) => day.enabled).length;
@@ -115,10 +121,12 @@ export default function DashboardPage() {
           Hola{firstName ? `, ${firstName}` : ""} 👋
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Este es el resumen de la configuración de tu negocio.
+          {isAdmin ? "Este es el resumen de la configuración de tu negocio." : `Lo de hoy en ${business.name || "el negocio"}.`}
         </p>
       </div>
 
+      {isAdmin && (
+        <>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <AccountStatusCard
           business={business}
@@ -202,6 +210,9 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
+        </>
+      )}
+
       {business.depositRequired && pendingPaymentReview > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -231,24 +242,30 @@ export default function DashboardPage() {
         transition={{ duration: 0.4, delay: 0.1 }}
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
       >
-        <StatCard
-          icon={ListChecks}
-          label="Servicios configurados"
-          value={String(services.length)}
-          href="/dashboard/servicios"
-        />
-        <StatCard
-          icon={MessageCircleQuestion}
-          label="Preguntas frecuentes"
-          value={String(faqs.length)}
-          href="/dashboard/preguntas-frecuentes"
-        />
-        <StatCard
-          icon={CalendarClock}
-          label="Días con horario activo"
-          value={`${scheduledDays} / 7`}
-          href="/dashboard/horarios"
-        />
+        {isAdmin && (
+          <StatCard
+            icon={ListChecks}
+            label="Servicios configurados"
+            value={String(services.length)}
+            href="/dashboard/servicios"
+          />
+        )}
+        {isAdmin && (
+          <StatCard
+            icon={MessageCircleQuestion}
+            label="Preguntas frecuentes"
+            value={String(faqs.length)}
+            href="/dashboard/preguntas-frecuentes"
+          />
+        )}
+        {isAdmin && (
+          <StatCard
+            icon={CalendarClock}
+            label="Días con horario activo"
+            value={`${scheduledDays} / 7`}
+            href="/dashboard/horarios"
+          />
+        )}
         <StatCard
           icon={CalendarCheck2}
           label="Turnos hoy"
@@ -261,7 +278,7 @@ export default function DashboardPage() {
           label="WhatsApp"
           value={whatsappLoading || !whatsapp.connection ? "…" : WHATSAPP_STATUS_LABEL[whatsapp.connection.status]}
           description={whatsapp.connection?.phoneNumber ?? undefined}
-          href="/dashboard/whatsapp/conexion"
+          href={isAdmin ? "/dashboard/whatsapp/conexion" : "/dashboard/whatsapp/conversaciones"}
         />
       </motion.div>
     </div>

@@ -1,7 +1,4 @@
-import { headers } from "next/headers";
-
-import { auth } from "@/lib/auth/auth";
-import { prisma } from "@/lib/prisma";
+import { getCurrentMembership } from "@/modules/business/current";
 import type { GoogleScope } from "./connection";
 
 // ESPECÍFICO DE NEXO (el CRM tiene su propia versión basada en
@@ -12,11 +9,9 @@ import type { GoogleScope } from "./connection";
 export const GOOGLE_RETURN_TO = "/dashboard/negocio";
 
 export async function resolveGoogleContext(): Promise<GoogleScope | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return null;
-
-  const membership = await prisma.membership.findFirst({ where: { userId: session.user.id } });
+  // Mismo criterio que el resto de Nexo: solo membresías con acceso a Nexo.
+  const membership = await getCurrentMembership();
   if (!membership) return null;
 
-  return { userId: session.user.id, businessId: membership.businessId };
+  return { userId: membership.userId, businessId: membership.businessId };
 }

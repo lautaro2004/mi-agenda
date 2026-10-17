@@ -7,7 +7,7 @@ import { scheduleSchema } from "@/lib/schemas";
 import type { BusinessSchedule } from "@/lib/types";
 
 export async function PUT(request: Request) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

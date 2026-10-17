@@ -11,7 +11,7 @@ interface RouteParams {
 // Completar {sección} → ]" en TrainingPlanStatus. Solo cambia cuál es la
 // sección activa; el dueño sigue la charla desde el chat como siempre.
 export async function POST(_request: Request, { params }: RouteParams) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

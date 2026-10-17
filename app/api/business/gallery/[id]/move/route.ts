@@ -4,7 +4,7 @@ import { getCurrentBusinessId } from "@/modules/business/current";
 import { moveGalleryBlock } from "@/modules/business/gallery";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }

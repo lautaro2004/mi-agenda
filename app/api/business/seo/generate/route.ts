@@ -8,7 +8,7 @@ import { generateSeoConfig } from "@/modules/business/seo";
 // el disparo automático). Si falla, generateSeoConfig() nunca toca la
 // configuración anterior — el dueño se queda con la última que funcionó.
 export async function POST() {
-  const businessId = await getCurrentBusinessId();
+  const businessId = await getCurrentBusinessId({ minRole: "admin" });
   if (!businessId) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
