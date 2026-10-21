@@ -66,7 +66,7 @@ Un `Schedule` por día de la semana: habilitado/deshabilitado, horario de apertu
 
 - **Conexión**: emparejamiento por código QR (vía `baileys`), estado de conexión (desconectado/conectando/conectado/reconectando/error), reconexión automática con demora fija de 3 segundos, desconexión manual, toggle global de "respuestas automáticas".
 - **Conversaciones**: lista con búsqueda, filtro por estado y por etiqueta; detalle con historial completo, respuesta manual, cambio de estado, etiquetas, modo manual por conversación (pausa la IA solo para esa charla), y un panel de "análisis de IA" (clasificación, confianza, última acción).
-- **Respuesta automática**: un mensaje entrante pasa primero por un motor de reglas simple; si ninguna regla aplica, recién ahí se llama a Gemini. Si Gemini detecta que hace falta un humano (o si directamente no hay `GEMINI_API_KEY` configurada), la conversación pasa a modo manual y se genera una notificación para el dueño.
+- **Respuesta automática**: un mensaje entrante pasa primero por un motor de reglas simple; si ninguna regla aplica, recién ahí se llama a la IA (Claude; Gemini como respaldo). Si la IA detecta que hace falta un humano (o si directamente no hay ninguna clave de IA configurada), la conversación pasa a modo manual y se genera una notificación para el dueño.
 - **Importante**: las conversaciones y mensajes de WhatsApp **no se guardan en la base de datos** — viven en memoria del proceso y se pierden en cada reinicio/deploy. Solo las credenciales de sesión de WhatsApp persisten (en el sistema de archivos del servidor, no en la base).
 
 ### 1.10 Notificaciones
@@ -136,7 +136,7 @@ Integración real y funcional, construida e íntegramente verificada en esta mis
 
 ### 3.3 IA — Google Gemini
 
-Vía `@google/generative-ai`. Modelo configurable por variable de entorno `GEMINI_MODEL` (hoy: `gemini-3.5-flash-lite`). Se usa para: clasificación/triage de mensajes de WhatsApp, generación de respuestas (WhatsApp, Simulador, Entrenamiento), generación de configuración SEO. No se usa para decisiones de negocio "duras" (la disponibilidad de turnos, por ejemplo, la calcula código determinístico, no la IA).
+Proveedor principal: Claude (Anthropic Messages API, `modules/ai/providers/anthropic.ts`), con `ANTHROPIC_API_KEY`. Modelos: `claude-haiku-5-5` para responder a clientes y el simulador; `claude-sonnet-5-5` para el entrenamiento/onboarding y el SEO (configurables con `ANTHROPIC_MODEL` y `ANTHROPIC_MODEL_SMART`). Gemini (`@google/generative-ai`, `GEMINI_API_KEY`) queda como respaldo si no hay clave de Claude, o forzado con `AI_PROVIDER=gemini`. La selección vive en `modules/ai/providers/index.ts`. Se usa para: clasificación/triage de mensajes de WhatsApp, generación de respuestas (WhatsApp, Simulador, Entrenamiento), generación de configuración SEO. No se usa para decisiones de negocio "duras" (la disponibilidad de turnos, por ejemplo, la calcula código determinístico, no la IA).
 
 ### 3.4 WhatsApp — Baileys
 

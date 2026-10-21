@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { Loader2, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ProposalPreview } from "@/components/ai-studio/proposal-preview";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api-client";
@@ -61,7 +62,7 @@ export function TrainingChat({
   // plan en vez de por cantidad de mensajes — ver
   // app/api/ai-studio/training/chat/route.ts. Solo cambia el copy/CTA.
   const [upgradeRequired, setUpgradeRequired] = React.useState(false);
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
   const activeSection = plan?.sections.find((s) => s.status === "in_progress") ?? null;
@@ -150,6 +151,16 @@ export function TrainingChat({
     setRepliedInActiveSection(true);
     void sendTurn(text);
   }
+
+  // Textarea que crece con el contenido (hasta ~6 líneas): las respuestas
+  // del dueño suelen ser largas (servicios, precios, políticas) y un input de
+  // una sola línea las escondía mientras las escribía.
+  React.useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -257,7 +268,7 @@ export function TrainingChat({
   }
 
   return (
-    <div className="flex h-[32rem] flex-col">
+    <div className="flex h-[min(72vh,42rem)] min-h-[26rem] flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto pr-1">
         {loadingHistory ? (
           <div className="space-y-3">
@@ -270,7 +281,7 @@ export function TrainingChat({
               <div key={i} className={cn("flex", m.role === "owner" ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
-                    "max-w-[80%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap",
+                    "max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-relaxed whitespace-pre-wrap",
                     m.role === "owner" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
                   )}
                 >
@@ -280,12 +291,14 @@ export function TrainingChat({
             ))}
 
             {proposal && (
-              <div className="ml-1 max-w-[80%] rounded-2xl border border-primary/30 bg-primary/5 p-4">
-                <Badge variant="secondary">Propuesta</Badge>
+              <div className="ml-1 max-w-[92%] animate-in fade-in slide-in-from-bottom-1 rounded-2xl border border-primary/30 bg-primary/5 p-4 duration-300 motion-reduce:animate-none">
+                <Badge variant="secondary">Para confirmar</Badge>
                 <p className="mt-2 text-sm text-foreground">{proposal.summary}</p>
-                <div className="mt-3 flex gap-2">
+                <ProposalPreview proposal={proposal} />
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Button type="button" size="sm" onClick={() => void saveProposal()} disabled={sending}>
-                    Guardar
+                    {sending && <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />}
+                    {sending ? "Guardando…" : "Guardar"}
                   </Button>
                   <Button type="button" size="sm" variant="outline" onClick={handleEdit} disabled={sending}>
                     Editar
@@ -303,12 +316,12 @@ export function TrainingChat({
                   <>
                     <span className="text-xs text-muted-foreground">Tema actual: {activeSection.title}</span>
                     <Button type="button" size="sm" onClick={handleContinueSection}>
-                      Continuar
+                      Sí, empecemos
                     </Button>
                   </>
                 )}
                 <Button type="button" size="sm" variant="ghost" onClick={() => void skipSection()}>
-                  Completar después
+                  Saltear este tema
                 </Button>
               </div>
             )}
@@ -349,10 +362,14 @@ export function TrainingChat({
             )}
 
             {sending && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-2 rounded-2xl bg-muted px-4 py-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Pensando...
+              <div className="flex justify-start" role="status" aria-live="polite">
+                <div className="flex items-center gap-2 rounded-2xl bg-muted px-4 py-2.5 text-sm text-muted-foreground">
+                  <span className="flex gap-1" aria-hidden>
+                    <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s] motion-reduce:animate-none" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s] motion-reduce:animate-none" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 motion-reduce:animate-none" />
+                  </span>
+                  <span className="sr-only sm:not-sr-only">Escribiendo…</span>
                 </div>
               </div>
             )}
@@ -362,12 +379,28 @@ export function TrainingChat({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-4 flex gap-2 border-t border-border pt-4">
-        <Input
+      <form onSubmit={handleSubmit} className="mt-4 flex items-end gap-2 border-t border-border pt-4">
+        <Textarea
           ref={inputRef}
+          rows={1}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={limitReached ? "Esta charla ya se cerró — seguí desde el panel." : "Escribí tu respuesta..."}
+          onKeyDown={(e) => {
+            // Enter envía; Shift+Enter agrega un salto de línea.
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+          aria-label="Tu respuesta"
+          className="max-h-40 min-h-10 resize-none py-2"
+          placeholder={
+            limitReached
+              ? "Esta charla ya se cerró — seguí desde el panel."
+              : messages.length <= 1 && mode === "onboarding"
+                ? "Ej: Tengo una peluquería en Palermo que se llama Estilo…"
+                : "Escribí tu respuesta…"
+          }
           disabled={sending || loadingHistory || limitReached}
         />
         <Button
@@ -379,6 +412,7 @@ export function TrainingChat({
           <Send className="size-4" />
         </Button>
       </form>
+      {!limitReached && <p className="mt-1.5 hidden text-[11px] text-muted-foreground sm:block">Enter para enviar · Shift + Enter para un salto de línea</p>}
     </div>
   );
 }

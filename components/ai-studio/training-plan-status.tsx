@@ -36,13 +36,29 @@ export function TrainingPlanStatus({ plan, loading, onResume, resumingKey }: Tra
   const completed = plan.sections.filter((s) => s.status === "completed");
   const pending = plan.sections.filter((s) => s.status === "pending");
   const ignored = plan.sections.filter((s) => s.status === "ignored");
+  const total = plan.sections.length;
+  const resolved = completed.length + ignored.length;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
-      <h3 className="text-sm font-semibold text-foreground">Plan de entrenamiento</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Para tu rubro: {plan.category}. Nunca está &ldquo;completo&rdquo; del todo — siempre podés enseñarle algo
-        nuevo.
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Plan de entrenamiento</h3>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {resolved} de {total} temas
+        </span>
+      </div>
+      <div
+        className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label="Avance del entrenamiento"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={resolved}
+      >
+        <div className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${total ? (resolved / total) * 100 : 0}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Para tu rubro: {plan.category}. Siempre vas a poder enseñarle algo nuevo desde AI Studio.
       </p>
 
       {inProgress.length > 0 && (

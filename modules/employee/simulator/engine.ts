@@ -1,4 +1,4 @@
-import { GeminiProvider } from "@/modules/ai/providers/gemini";
+import { getAIProvider } from "@/modules/ai/providers";
 import { buildPrompt } from "@/modules/ai/prompt/builder";
 import { buildBusinessContext } from "@/modules/employee/context";
 import { resolveStrategy } from "@/modules/employee/strategy/resolve";
@@ -17,12 +17,6 @@ export interface SimulatorMessage {
   text: string;
 }
 
-function geminiProvider(): GeminiProvider | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GeminiProvider(apiKey);
-}
-
 export async function runSimulatorTurn(params: {
   businessId: string;
   history: SimulatorMessage[];
@@ -30,7 +24,7 @@ export async function runSimulatorTurn(params: {
 }): Promise<{ reply: string }> {
   const { businessId, history, message } = params;
 
-  const provider = geminiProvider();
+  const provider = getAIProvider("simulator");
   if (!provider) {
     return { reply: ESCALATION_RESPONSE };
   }
