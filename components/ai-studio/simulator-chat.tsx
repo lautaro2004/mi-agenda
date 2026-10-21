@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, Pencil, Send, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Loader2, Pencil, Send, ThumbsDown, ThumbsUp, UserCheck, UserRoundPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { requestJson } from "@/lib/api-client";
 
+interface SimAction {
+  action: "register_lead" | "handoff";
+  ok: boolean;
+  detail?: string;
+}
+
+// En el simulador las acciones no se ejecutan: se muestra qué pasaría en
+// una conversación real de WhatsApp.
+function describeSimAction(a: SimAction): string {
+  if (a.action === "handoff") return `En WhatsApp, acá la conversación pasaría a una persona del equipo${a.detail ? `: ${a.detail}` : "."}`;
+  if (!a.ok) return `Intentó registrar al interesado, pero faltaban datos (${a.detail?.replace(/^Faltan datos: /, "") ?? "datos"}).`;
+  return `En WhatsApp, acá quedaría registrado el interesado en Consultas${a.detail ? `: ${a.detail}` : "."}`;
+}
+
 interface SimMessage {
   role: "customer" | "ai";
   text: string;
+  action?: SimAction;
   feedback?: "correct" | "incorrect";
   edited?: boolean;
   originalText?: string;
@@ -41,11 +56,11 @@ export function SimulatorChat() {
     setSending(true);
 
     try {
-      const { reply } = await requestJson<{ reply: string }>("/api/ai-studio/simulator/chat", {
+      const { reply, action } = await requestJson<{ reply: string; action?: SimAction }>("/api/ai-studio/simulator/chat", {
         method: "POST",
         body: JSON.stringify({ message: text, history: historySnapshot }),
       });
-      setMessages((prev) => [...prev, { role: "ai", text: reply }]);
+      setMessages((prev) => [...prev, { role: "ai", text: reply, action }]);
     } catch {
       toast.error("No pudimos enviar el mensaje. Intentá de nuevo.");
     } finally {
@@ -128,6 +143,20 @@ export function SimulatorChat() {
               {m.text}
               {m.edited && <span className="ml-2 text-xs opacity-70">(editada)</span>}
             </div>
+
+            {m.action && (
+              <p className="mt-1 flex max-w-[80%] items-start gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground">
+                {m.action.action === "handoff" ? (
+                  <UserCheck className="mt-0.5 size-3.5 shrink-0" />
+                ) : (
+                  <UserRoundPlus className="mt-0.5 size-3.5 shrink-0" />
+                )}
+                <span>
+                  <span className="font-medium text-foreground">Simulación · </span>
+                  {describeSimAction(m.action)}
+                </span>
+              </p>
+            )}
 
             {m.role === "ai" && editingIndex !== i && (
               <div className="mt-1 flex items-center gap-1">

@@ -751,6 +751,14 @@ export interface Inquiry {
   message: string;
   status: "NEW" | "IN_PROGRESS" | "RESOLVED";
   createdAt: string;
+  updatedAt?: string;
+  /** "web" (formulario del sitio) | "whatsapp" (registrado por el asistente). */
+  channel?: string;
+  need?: string | null;
+  summary?: string | null;
+  nodoLeadId?: string | null;
+  nodoSyncedAt?: string | null;
+  nodoSyncError?: string | null;
 }
 
 // Slug del nivel base "Agenda interna" (no es un plan comercial). Vive acá y no
