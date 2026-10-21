@@ -41,6 +41,13 @@ export type AILogEntry =
       timestamp: string;
     }
   | {
+      type: "action_executed";
+      conversationId: string;
+      action: "register_lead" | "handoff";
+      ok: boolean;
+      timestamp: string;
+    }
+  | {
       type: "response_generated";
       conversationId: string;
       source: AIResponseSource;

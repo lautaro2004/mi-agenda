@@ -18,6 +18,8 @@ vi.mock("@/modules/notifications/service", () => ({
   notifyInquiryReceived: (...a: unknown[]) => notifyInquiryReceived(...a),
 }));
 
+vi.mock("@/modules/inquiries/nodo-sync", () => ({ syncInquiryToNodo: vi.fn().mockResolvedValue("not_configured") }));
+
 const { createInquiry, listInquiries, updateInquiryStatus } = await import("./service");
 
 beforeEach(() => {
