@@ -3,28 +3,29 @@ import Image from "next/image";
 
 import { StepIndicator } from "@/components/onboarding/step-indicator";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { OnboardingContainer, OnboardingHeaderContainer } from "@/components/onboarding/onboarding-container";
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-1 flex-col bg-muted/30">
       <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
+        <OnboardingHeaderContainer>
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <Image src="/logo-nexo-mark.png" alt="Nexo" width={32} height={32} className="size-8" priority />
             <span>Nexo</span>
           </Link>
           <ThemeToggle />
-        </div>
+        </OnboardingHeaderContainer>
       </header>
 
-      <main className="flex flex-1 flex-col px-4 py-10 sm:px-6">
-        <div className="mx-auto w-full max-w-3xl">
+      <main className="flex flex-1 flex-col px-4 py-6 sm:px-6 sm:py-10">
+        <OnboardingContainer>
           <StepIndicator />
 
-          <div className="mt-8 rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+          <div className="mt-8 rounded-2xl border border-border bg-card p-4 shadow-sm first:mt-0 sm:p-8">
             {children}
           </div>
-        </div>
+        </OnboardingContainer>
       </main>
     </div>
   );

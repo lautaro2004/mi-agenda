@@ -1,6 +1,6 @@
 import type { Conversation, ConversationFlowState, MessageCategory } from "@/lib/types";
 import { aiLogger } from "@/modules/ai/logger";
-import { GeminiProvider } from "@/modules/ai/providers/gemini";
+import { getAIProvider } from "@/modules/ai/providers";
 import type { BusinessContext } from "@/modules/ai/providers/base";
 import { applyRules } from "@/modules/ai/rule-engine";
 import { computeNextState, triageMessage } from "@/modules/ai/triage/engine";
@@ -36,20 +36,14 @@ const CATEGORY_TO_INTENT: Record<MessageCategory, MessageIntent> = {
   IRRELEVANT: "other",
 };
 
-function geminiProvider(): GeminiProvider | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GeminiProvider(apiKey);
-}
-
-async function callGemini(
+async function callLLM(
   conversationId: string,
   message: string,
   intent: MessageIntent,
   context: BusinessContext,
   conversation: Conversation,
 ): Promise<AIResponse> {
-  const provider = geminiProvider();
+  const provider = getAIProvider("whatsapp_reply");
   if (!provider) {
     aiLogger.log({ type: "response_generated", conversationId, source: "escalation", escalate: true });
     return { text: ESCALATION_RESPONSE, intent, source: "escalation", escalateToHuman: true };
@@ -60,7 +54,7 @@ async function callGemini(
     text: m.text,
   }));
 
-  aiLogger.log({ type: "gemini_usage", conversationId, model: provider.modelId });
+  aiLogger.log({ type: "llm_usage", conversationId, model: provider.modelId });
 
   const strategy = resolveStrategy(context);
   const strategyContext = strategy.shapeContext(context, conversation);
@@ -72,8 +66,8 @@ async function callGemini(
   });
   const escalateToHuman = text.includes("derivar con") || text.includes("nuestro equipo");
 
-  aiLogger.log({ type: "response_generated", conversationId, source: "gemini", escalate: escalateToHuman });
-  return { text, intent, source: "gemini", escalateToHuman };
+  aiLogger.log({ type: "response_generated", conversationId, source: "llm", escalate: escalateToHuman });
+  return { text, intent, source: "llm", escalateToHuman };
 }
 
 export async function processMessage(params: {
@@ -147,7 +141,7 @@ export async function processMessage(params: {
   else if (classification.category === "APPOINTMENT" || inActiveBooking) {
     aiResponse = await handleBookingFlow(message, conversation, context);
   }
-  // 5. Standard: FAQ → rule engine → Gemini
+  // 5. Standard: FAQ → rule engine → LLM (Claude / Gemini)
   else {
     aiLogger.log({ type: "intent_detected", conversationId, intent, preview: message.slice(0, 80) });
     const ruleResult = applyRules(message, intent, context);
@@ -167,7 +161,7 @@ export async function processMessage(params: {
         labelHint: ruleResult.labelHint,
       };
     } else {
-      aiResponse = await callGemini(conversationId, message, intent, context, conversation);
+      aiResponse = await callLLM(conversationId, message, intent, context, conversation);
     }
   }
 

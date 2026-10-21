@@ -87,7 +87,7 @@ export default function SuperadminIaPage() {
     <div className="space-y-8">
       <PageHeader
         title="Uso de IA"
-        description="Fuente de verdad: AiUsageEvent — cada llamada real a Gemini queda registrada acá."
+        description="Fuente de verdad: AiUsageEvent — cada llamada real a la IA (Claude o Gemini) queda registrada acá, con su modelo."
       />
 
       <div className="flex flex-wrap gap-3">

@@ -9,7 +9,7 @@ export type MessageIntent =
   | "human"
   | "other";
 
-export type AIResponseSource = "rule" | "gemini" | "escalation";
+export type AIResponseSource = "rule" | "llm" | "escalation";
 
 export interface AIResponse {
   text: string;
@@ -35,7 +35,7 @@ export type AILogEntry =
       timestamp: string;
     }
   | {
-      type: "gemini_usage";
+      type: "llm_usage";
       conversationId: string;
       model: string;
       timestamp: string;

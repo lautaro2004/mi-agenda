@@ -1,4 +1,4 @@
-import { GeminiProvider } from "@/modules/ai/providers/gemini";
+import { getAIProvider } from "@/modules/ai/providers";
 import { buildTrainingPrompt, type TrainingMode } from "@/modules/ai/prompt/training";
 import { buildBusinessContext } from "@/modules/employee/context";
 import { activateNextPendingSection, ignoreRemainingSections } from "@/modules/employee/training-plan";
@@ -53,12 +53,6 @@ export const CONTINUATION_MESSAGE =
 // tiene que presentarla, no decidir nada.
 export const SKIP_SECTION_MESSAGE =
   "(Mensaje del sistema: el dueño prefiere completar la sección activa más adelante. El sistema ya la marcó como 'ignored' y activó la siguiente sección pendiente, si existe — no vuelvas a preguntar por la que se saltó. Presentá la nueva sección activa con naturalidad y preguntá si quiere contarte sobre eso ahora o prefiere completarlo después también, o cerrá la charla si ya no queda nada pendiente.)";
-
-function geminiProvider(): GeminiProvider | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GeminiProvider(apiKey);
-}
 
 // Tolera el desvío más común de un LLM generando JSON "a mano": una coma
 // colgante antes de cerrar un objeto o array. No es un parser JSON5 completo
@@ -159,7 +153,7 @@ export async function runTrainingTurn(params: {
 }): Promise<TrainingTurnResult> {
   const { businessId, mode, message } = params;
 
-  const provider = geminiProvider();
+  const provider = getAIProvider(mode === "onboarding" ? "training_onboarding" : "training_continuous");
   if (!provider) {
     return { reply: UNAVAILABLE_REPLY, proposal: null, limitReached: false };
   }
