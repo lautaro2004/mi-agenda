@@ -38,6 +38,10 @@ import { BookingInquirySection } from "@/components/public-site/booking/booking-
 import { BookingStickyCta } from "@/components/public-site/booking/booking-sticky-cta";
 import { GallerySection } from "@/components/public-site/gallery-section";
 import { MenuCallout } from "@/components/public-site/menu-callout";
+import { LeadsHero } from "@/components/public-site/leads/leads-hero";
+import { LeadsBenefitsSection } from "@/components/public-site/leads/leads-benefits-section";
+import { LeadsStepsSection } from "@/components/public-site/leads/leads-steps-section";
+import { LeadsFinalCta } from "@/components/public-site/leads/leads-final-cta";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -164,7 +168,20 @@ export default async function PublicSitePage({ params }: PageProps) {
           whatsappHref={whatsappHref}
         />
 
-        {template === "booking" ? (
+        {template === "leads" ? (
+          // Plantilla de captación: formulario arriba de todo, beneficios,
+          // pasos y cierre. Nunca se elige sola (resolveSiteTemplate solo
+          // auto-detecta booking/institutional) — solo a mano desde
+          // Configuración > Sitio.
+          <main>
+            <LeadsHero business={business} seo={seo} services={visibleServices} slug={slug} whatsappHref={whatsappHref} />
+            <LeadsBenefitsSection services={visibleServices} />
+            <LeadsStepsSection />
+            <GallerySection blocks={galleryBlocks} />
+            <FaqSection faqs={faqs} />
+            <LeadsFinalCta whatsappHref={whatsappHref} />
+          </main>
+        ) : template === "booking" ? (
           <main>
             <BookingHero
               business={business}

@@ -50,6 +50,20 @@ model Business {
   // Sitio (ver sección 13 de la tarea) — nunca se escribe solo.
   siteTemplate String?
 
+  // Interruptor global de la IA de WhatsApp (Conexión → IA). Persistido para
+  // que un reinicio del servidor nunca vuelva a prender la IA de un negocio
+  // que eligió modo manual. La detección de leads corre igual con la IA
+  // apagada (ver modules/inquiries/whatsapp-lead.ts).
+  whatsappAiEnabled Boolean @default(true)
+
+  // Calificación de leads con IA (Consultas → Calificación). Con esto
+  // prendido, las consultas de WhatsApp nacen "pending" y la IA las califica
+  // contra leadIdealProfile analizando el chat (ver
+  // modules/inquiries/qualification.ts). Nodo solo sincroniza las
+  // "qualified" (y las sin calificar).
+  leadQualificationEnabled Boolean @default(false)
+  leadIdealProfile         String?
+
   // ── Seña / depósito (ver modules/business/deposit.ts) ──────────────────
   // Configuración global del negocio, no por servicio: cuando depositRequired
   // es true, TODA reserva por turno pasa a pending_payment en vez de
@@ -121,17 +135,27 @@ model Inquiry {
   businessId       String
   customerName     String
   customerWhatsapp String
-  customerEmail    String
+  // Opcional: las consultas detectadas en WhatsApp no tienen email. El
+  // formulario web lo sigue exigiendo (inquirySchema).
+  customerEmail    String?
   message          String
   // NEW | IN_PROGRESS | RESOLVED — ver INQUIRY_STATUSES en
   // lib/schemas.ts (única fuente de verdad del set).
   status           String   @default("NEW")
+  // "web_form" | "whatsapp" — ver INQUIRY_SOURCES en lib/types.ts.
+  source           String   @default("web_form")
+  // Calificación comercial: null = sin calificar (no aplica) | "pending"
+  // (esperando análisis de la IA) | "qualified" | "discarded". Nodo
+  // sincroniza solo null y "qualified". Ver INQUIRY_QUALIFICATION_STATUSES.
+  qualificationStatus String?
+  qualificationReason String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, createdAt])
+  @@index([businessId, customerWhatsapp])
   @@schema("nexo")
 }
 

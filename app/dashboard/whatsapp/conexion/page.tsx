@@ -199,7 +199,8 @@ export default function WhatsAppConnectionPage() {
             </div>
             {!connection.aiEnabled && (
               <p className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-                Modo manual activado: vas a tener que responder todas las conversaciones vos mismo.
+                Modo manual activado: vas a tener que responder todas las conversaciones vos mismo. Los contactos
+                nuevos se siguen guardando en Consultas (y en Nodo, si lo usás).
               </p>
             )}
           </div>

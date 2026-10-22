@@ -79,7 +79,7 @@ export interface Business {
 export const DEPOSIT_TYPES = ["fixed", "percentage"] as const;
 export type DepositType = (typeof DEPOSIT_TYPES)[number];
 
-export const SITE_TEMPLATES = ["institutional", "booking"] as const;
+export const SITE_TEMPLATES = ["institutional", "booking", "leads"] as const;
 export type SiteTemplate = (typeof SITE_TEMPLATES)[number];
 
 export interface BusinessScheduleDay {
@@ -743,13 +743,31 @@ export const ONBOARDING_STEPS = [
 ] as const;
 
 // Consulta del sitio público, tal como llega por JSON (fechas serializadas).
+export const INQUIRY_SOURCES = ["web_form", "whatsapp"] as const;
+export type InquirySource = (typeof INQUIRY_SOURCES)[number];
+
+// "pending": la IA todavía no decidió (o el chat aún no da información
+// suficiente). Nodo no la sincroniza hasta que pase a "qualified".
+export const INQUIRY_QUALIFICATION_STATUSES = ["pending", "qualified", "discarded"] as const;
+export type InquiryQualificationStatus = (typeof INQUIRY_QUALIFICATION_STATUSES)[number];
+
+export interface LeadQualificationSettings {
+  enabled: boolean;
+  idealProfile: string;
+}
+
 export interface Inquiry {
   id: string;
   customerName: string;
   customerWhatsapp: string;
-  customerEmail: string;
+  // null en las consultas detectadas en WhatsApp (no hay email ahí).
+  customerEmail: string | null;
   message: string;
   status: "NEW" | "IN_PROGRESS" | "RESOLVED";
+  source: InquirySource;
+  // Calificación comercial: null = no aplica (sin calificar).
+  qualificationStatus: InquiryQualificationStatus | null;
+  qualificationReason: string | null;
   createdAt: string;
 }
 

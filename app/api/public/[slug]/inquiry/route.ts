@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
-import { createInquiry } from "@/modules/inquiries/service";
+import { composeInquiryMessage, createInquiry } from "@/modules/inquiries/service";
 import { inquirySchema } from "@/lib/schemas";
 import { isRateLimited } from "@/lib/rate-limit";
 
@@ -38,8 +38,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ ok: true }, { status: 201 });
   }
 
-  const { website: _website, ...input } = parsed.data;
-  await createInquiry({ businessId, ...input });
+  const { website: _website, companyName, location, message, ...input } = parsed.data;
+  await createInquiry({ businessId, ...input, message: composeInquiryMessage({ message, companyName, location }) });
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

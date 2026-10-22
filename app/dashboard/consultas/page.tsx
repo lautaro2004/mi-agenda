@@ -4,6 +4,9 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Mail, MessageSquareText, Phone } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { LeadQualificationCard } from "@/components/dashboard/lead-qualification-card";
+
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,6 +26,18 @@ const STATUS_BADGE: Record<Inquiry["status"], "default" | "secondary" | "outline
   NEW: "default",
   IN_PROGRESS: "secondary",
   RESOLVED: "outline",
+};
+
+const QUALIFICATION_LABEL: Record<NonNullable<Inquiry["qualificationStatus"]>, string> = {
+  pending: "Analizando",
+  qualified: "Calificado",
+  discarded: "Descartado",
+};
+
+const QUALIFICATION_BADGE: Record<NonNullable<Inquiry["qualificationStatus"]>, "default" | "secondary" | "outline"> = {
+  pending: "outline",
+  qualified: "default",
+  discarded: "secondary",
 };
 
 export default function InquiriesPage() {
@@ -49,9 +64,31 @@ export default function InquiriesPage() {
     }
   }
 
+  async function changeQualification(id: string, qualificationStatus: "qualified" | "discarded") {
+    const previous = inquiries;
+    setInquiries(
+      (prev) =>
+        prev?.map((i) => (i.id === id ? { ...i, qualificationStatus, qualificationReason: "Marcado a mano" } : i)) ?? prev
+    );
+    try {
+      await requestJson(`/api/business/inquiries/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ qualificationStatus }),
+      });
+    } catch {
+      setInquiries(previous);
+      toast.error("No pudimos actualizar la calificación.");
+    }
+  }
+
   return (
     <div>
-      <PageHeader title="Consultas" description="Mensajes que tus clientes dejaron desde tu sitio web." />
+      <PageHeader
+        title="Consultas"
+        description="Mensajes que te dejaron desde tu sitio web y contactos nuevos que te escribieron por WhatsApp."
+      />
+
+      <LeadQualificationCard />
 
       {inquiries === null && !loadError && (
         <div className="space-y-3">
@@ -79,6 +116,12 @@ export default function InquiriesPage() {
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-foreground">{inquiry.customerName}</p>
                     <Badge variant={STATUS_BADGE[inquiry.status]}>{STATUS_LABEL[inquiry.status]}</Badge>
+                    <Badge variant="outline">{inquiry.source === "whatsapp" ? "WhatsApp" : "Formulario web"}</Badge>
+                    {inquiry.qualificationStatus && (
+                      <Badge variant={QUALIFICATION_BADGE[inquiry.qualificationStatus]}>
+                        {QUALIFICATION_LABEL[inquiry.qualificationStatus]}
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">{formatRelativeTime(inquiry.createdAt)}</p>
                 </div>
@@ -98,6 +141,27 @@ export default function InquiriesPage() {
 
               <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">{inquiry.message}</p>
 
+              {inquiry.qualificationStatus && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    {inquiry.qualificationReason ??
+                      (inquiry.qualificationStatus === "pending" ? "Esperando más mensajes para calificar." : "")}
+                  </p>
+                  <div className="flex gap-1.5">
+                    {inquiry.qualificationStatus !== "qualified" && (
+                      <Button size="xs" variant="outline" onClick={() => changeQualification(inquiry.id, "qualified")}>
+                        Marcar calificado
+                      </Button>
+                    )}
+                    {inquiry.qualificationStatus !== "discarded" && (
+                      <Button size="xs" variant="ghost" onClick={() => changeQualification(inquiry.id, "discarded")}>
+                        Descartar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <Phone className="size-4" />
@@ -109,12 +173,14 @@ export default function InquiriesPage() {
                     inquiry.customerWhatsapp
                   )}
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <Mail className="size-4" />
-                  <a href={`mailto:${inquiry.customerEmail}`} className="underline underline-offset-2">
-                    {inquiry.customerEmail}
-                  </a>
-                </span>
+                {inquiry.customerEmail && (
+                  <span className="flex items-center gap-1.5">
+                    <Mail className="size-4" />
+                    <a href={`mailto:${inquiry.customerEmail}`} className="underline underline-offset-2">
+                      {inquiry.customerEmail}
+                    </a>
+                  </span>
+                )}
               </div>
             </div>
           );

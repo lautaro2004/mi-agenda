@@ -26,11 +26,11 @@ const PATTERNS: { category: MessageCategory; re: RegExp }[] = [
 ];
 
 // Emoji-only: matches strings that contain only emoji, punctuation, or whitespace
-const EMOJI_ONLY_RE = /^[\p{Emoji}\p{Emoji_Presentation}\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\s!.]+$/u;
+export const EMOJI_ONLY_RE = /^[\p{Emoji}\p{Emoji_Presentation}\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\s!.]+$/u;
 // Unsupported media placeholders created by extractMessageText
-const MEDIA_PLACEHOLDER_RE = /^\[.+\]$/;
+export const MEDIA_PLACEHOLDER_RE = /^\[.+\]$/;
 // Short acknowledgements / greetings / reactions with no business content
-const ACK_RE =
+export const ACK_RE =
   /^(si|sí|no|ok|okay|dale|genial|perfecto|gracias|hola|buenas|buenos días|buenas tardes|buenas noches|re|re bien|joya|listo|np|ok gracias|de nada|👍|👋|❤️|😊|😂|✓)[\s!.]*$/i;
 
 const SLOT_SELECTION_RE =

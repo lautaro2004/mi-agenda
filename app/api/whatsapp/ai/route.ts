@@ -14,7 +14,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "El campo 'enabled' es requerido." }, { status: 400 });
   }
 
-  whatsappConnectionManager.setAiEnabled(businessId, body.enabled);
+  try {
+    await whatsappConnectionManager.setAiEnabled(businessId, body.enabled);
+  } catch (error) {
+    console.error("[WhatsApp AI API] Error guardando el estado de la IA:", error);
+    return NextResponse.json({ error: "No pudimos guardar el estado de la IA." }, { status: 500 });
+  }
   const connection = whatsappConnectionManager.getStatus(businessId);
   return NextResponse.json({ connection });
 }

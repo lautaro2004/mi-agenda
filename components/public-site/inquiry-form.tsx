@@ -17,13 +17,23 @@ const DEFAULT_VALUES: InquiryFormValues = {
   customerWhatsapp: "",
   customerEmail: "",
   message: "",
+  companyName: "",
+  location: "",
   website: "",
 };
+
+interface InquiryFormProps {
+  slug: string;
+  // "leads" = plantilla de captación: suma negocio + zona y cambia los
+  // textos a "solicitud" en vez de "consulta". Default: el de siempre.
+  variant?: "default" | "leads";
+}
 
 // Formulario de consultas del sitio público. Mismo patrón que
 // booking-widget.tsx (react-hook-form + zodResolver + primitivos de
 // components/ui) y mismo honeypot que components/landing/lead-form.tsx.
-export function InquiryForm({ slug }: { slug: string }) {
+export function InquiryForm({ slug, variant = "default" }: InquiryFormProps) {
+  const isLeads = variant === "leads";
   const [sent, setSent] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
 
@@ -61,9 +71,14 @@ export function InquiryForm({ slug }: { slug: string }) {
     return (
       <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center sm:p-8">
         <CheckCircle2 className="mx-auto size-10 text-emerald-600 dark:text-emerald-400" />
-        <p className="mt-4 text-lg font-semibold text-foreground">Consulta enviada correctamente.</p>
+        <p className="mt-4 text-lg font-semibold text-foreground">
+          {isLeads ? "¡Listo! Recibimos tus datos." : "Consulta enviada correctamente."}
+        </p>
+        {isLeads && (
+          <p className="mt-1.5 text-sm text-muted-foreground">Te contactamos a la brevedad por WhatsApp o email.</p>
+        )}
         <Button type="button" variant="outline" className="mt-6" onClick={() => setSent(false)}>
-          Enviar otra consulta
+          {isLeads ? "Enviar otra solicitud" : "Enviar otra consulta"}
         </Button>
       </div>
     );
@@ -83,6 +98,14 @@ export function InquiryForm({ slug }: { slug: string }) {
           <FieldError errors={[errors.customerName]} />
         </Field>
 
+        {isLeads && (
+          <Field data-invalid={!!errors.companyName}>
+            <FieldLabel htmlFor="inquiry-company">Nombre de tu negocio</FieldLabel>
+            <Input id="inquiry-company" placeholder="Ej: Pizzería Don Juan" {...register("companyName")} />
+            <FieldError errors={[errors.companyName]} />
+          </Field>
+        )}
+
         <Field data-invalid={!!errors.customerWhatsapp}>
           <FieldLabel htmlFor="inquiry-whatsapp">WhatsApp</FieldLabel>
           <Input id="inquiry-whatsapp" placeholder="Ej: +54 9 11 5555-5555" {...register("customerWhatsapp")} />
@@ -95,9 +118,22 @@ export function InquiryForm({ slug }: { slug: string }) {
           <FieldError errors={[errors.customerEmail]} />
         </Field>
 
+        {isLeads && (
+          <Field data-invalid={!!errors.location}>
+            <FieldLabel htmlFor="inquiry-location">Zona o localidad</FieldLabel>
+            <Input id="inquiry-location" placeholder="Ej: Palermo, CABA" {...register("location")} />
+            <FieldError errors={[errors.location]} />
+          </Field>
+        )}
+
         <Field data-invalid={!!errors.message}>
-          <FieldLabel htmlFor="inquiry-message">Consulta</FieldLabel>
-          <Textarea id="inquiry-message" rows={4} placeholder="Contanos en qué te podemos ayudar" {...register("message")} />
+          <FieldLabel htmlFor="inquiry-message">{isLeads ? "¿Qué necesitás?" : "Consulta"}</FieldLabel>
+          <Textarea
+            id="inquiry-message"
+            rows={isLeads ? 3 : 4}
+            placeholder={isLeads ? "Contanos brevemente sobre tu negocio" : "Contanos en qué te podemos ayudar"}
+            {...register("message")}
+          />
           <FieldError errors={[errors.message]} />
         </Field>
       </FieldGroup>
@@ -120,7 +156,7 @@ export function InquiryForm({ slug }: { slug: string }) {
         ) : (
           <>
             <Send className="size-4" data-icon="inline-start" />
-            Enviar consulta
+            {isLeads ? "Quiero que me contacten" : "Enviar consulta"}
           </>
         )}
       </Button>

@@ -57,12 +57,21 @@ describe("listInquiries", () => {
 describe("updateInquiryStatus", () => {
   it("scopea el update por businessId y devuelve true si actualizó", async () => {
     updateMany.mockResolvedValue({ count: 1 });
-    await expect(updateInquiryStatus("biz_1", "inq_1", "RESOLVED")).resolves.toBe(true);
+    await expect(updateInquiryStatus("biz_1", "inq_1", { status: "RESOLVED" })).resolves.toBe(true);
     expect(updateMany).toHaveBeenCalledWith({ where: { id: "inq_1", businessId: "biz_1" }, data: { status: "RESOLVED" } });
+  });
+
+  it("la corrección manual de la calificación reemplaza el motivo de la IA", async () => {
+    updateMany.mockResolvedValue({ count: 1 });
+    await updateInquiryStatus("biz_1", "inq_1", { qualificationStatus: "qualified" });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "inq_1", businessId: "biz_1" },
+      data: { qualificationStatus: "qualified", qualificationReason: "Marcado a mano" },
+    });
   });
 
   it("devuelve false si la consulta es de otro negocio o no existe", async () => {
     updateMany.mockResolvedValue({ count: 0 });
-    await expect(updateInquiryStatus("biz_1", "inq_ajena", "RESOLVED")).resolves.toBe(false);
+    await expect(updateInquiryStatus("biz_1", "inq_ajena", { status: "RESOLVED" })).resolves.toBe(false);
   });
 });

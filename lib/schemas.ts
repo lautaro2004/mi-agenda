@@ -560,14 +560,37 @@ export const inquirySchema = z.object({
   customerWhatsapp: z.string().trim().min(6, "Ingresá un WhatsApp válido").max(30),
   customerEmail: z.string().trim().email("Ingresá un email válido").max(200),
   message: z.string().trim().min(1, "Contanos tu consulta").max(500, "Tu consulta es demasiado larga (máx. 500 caracteres)"),
+  // Solo los muestra la plantilla "leads" (captación). Opcionales para que el
+  // formulario de las otras plantillas siga validando exactamente igual. No
+  // tienen columna propia: se anteponen al mensaje (ver
+  // composeInquiryMessage en modules/inquiries/service.ts).
+  companyName: z.string().trim().max(120, "Nombre demasiado largo").optional(),
+  location: z.string().trim().max(120, "Zona demasiado larga").optional(),
   website: z.string().max(200).optional(),
 });
 
 export type InquiryFormValues = z.infer<typeof inquirySchema>;
 
-export const inquiryStatusUpdateSchema = z.object({
-  status: z.enum(INQUIRY_STATUSES),
-});
+// status y/o qualificationStatus (corrección manual de la calificación: el
+// dueño solo puede decidir, nunca volver a "pending").
+export const inquiryStatusUpdateSchema = z
+  .object({
+    status: z.enum(INQUIRY_STATUSES).optional(),
+    qualificationStatus: z.enum(["qualified", "discarded"]).optional(),
+  })
+  .refine((v) => v.status !== undefined || v.qualificationStatus !== undefined, {
+    message: "Nada para actualizar",
+  });
+
+export const leadQualificationSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    idealProfile: z.string().trim().max(2000, "La descripción es demasiado larga (máx. 2000 caracteres)"),
+  })
+  .refine((v) => !v.enabled || v.idealProfile.length >= 20, {
+    message: "Describí el lead ideal (al menos 20 caracteres) para activar la calificación",
+    path: ["idealProfile"],
+  });
 
 // Actualización desde Superadmin (sección 7 del pedido: estado, notas,
 // reunión, conversión) — deliberadamente NO incluye ningún campo que venga

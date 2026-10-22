@@ -13,11 +13,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json().catch(() => null);
   const parsed = inquiryStatusUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Estado inválido." }, { status: 400 });
+    return NextResponse.json({ error: "Datos inválidos." }, { status: 400 });
   }
 
   const { id } = await params;
-  const updated = await updateInquiryStatus(businessId, id, parsed.data.status);
+  const updated = await updateInquiryStatus(businessId, id, parsed.data);
   if (!updated) {
     return NextResponse.json({ error: "Consulta no encontrada." }, { status: 404 });
   }

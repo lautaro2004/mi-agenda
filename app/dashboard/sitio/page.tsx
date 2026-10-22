@@ -160,6 +160,7 @@ const TEMPLATE_OPTION_LABEL: Record<"auto" | SiteTemplate, string> = {
   auto: "Automática",
   institutional: "Institucional",
   booking: "Reservas",
+  leads: "Captación de clientes",
 };
 
 // Sección 13 de la tarea: punto de selección manual, con la auto-detección
@@ -213,6 +214,10 @@ function TemplateSection() {
           </>
         )}
       </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        &ldquo;Captación de clientes&rdquo; pone un formulario de contacto arriba de todo, ideal si ofrecés un servicio y
+        querés juntar interesados desde anuncios o Instagram. Las solicitudes llegan a Consultas.
+      </p>
 
       <div className="mt-4 max-w-xs">
         <Select value={value} onValueChange={(next) => void save(next as "auto" | SiteTemplate)} disabled={saving}>
@@ -223,6 +228,7 @@ function TemplateSection() {
             <SelectItem value="auto">{TEMPLATE_OPTION_LABEL.auto}</SelectItem>
             <SelectItem value="institutional">{TEMPLATE_OPTION_LABEL.institutional}</SelectItem>
             <SelectItem value="booking">{TEMPLATE_OPTION_LABEL.booking}</SelectItem>
+            <SelectItem value="leads">{TEMPLATE_OPTION_LABEL.leads}</SelectItem>
           </SelectContent>
         </Select>
       </div>

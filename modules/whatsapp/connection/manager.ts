@@ -50,8 +50,26 @@ class WhatsAppConnectionManager {
     return this.getConnection(businessId);
   }
 
-  setAiEnabled(businessId: string, enabled: boolean) {
+  // Persistido en Business.whatsappAiEnabled: antes vivía solo en memoria y
+  // un reinicio del servidor volvía a prender la IA de un negocio que había
+  // elegido modo manual.
+  async setAiEnabled(businessId: string, enabled: boolean): Promise<void> {
+    const { prisma } = await import("@/lib/prisma");
+    await prisma.business.update({ where: { id: businessId }, data: { whatsappAiEnabled: enabled } });
     this.updateConnection(businessId, { aiEnabled: enabled });
+  }
+
+  private async loadAiEnabled(businessId: string): Promise<void> {
+    try {
+      const { prisma } = await import("@/lib/prisma");
+      const business = await prisma.business.findUnique({
+        where: { id: businessId },
+        select: { whatsappAiEnabled: true },
+      });
+      if (business) this.updateConnection(businessId, { aiEnabled: business.whatsappAiEnabled });
+    } catch (error) {
+      console.error("[WhatsApp] No se pudo leer el estado de la IA:", error);
+    }
   }
 
   private updateConnection(businessId: string, patch: Partial<WhatsAppConnection>) {
@@ -70,6 +88,9 @@ class WhatsAppConnectionManager {
     this.connecting.add(businessId);
     this.clearReconnectTimer(businessId);
     this.updateConnection(businessId, { status: "connecting", lastError: null, qr: null });
+    // Antes de escuchar mensajes: así ningún mensaje se procesa con el
+    // default en memoria (IA prendida) cuando el negocio eligió modo manual.
+    await this.loadAiEnabled(businessId);
 
     try {
       const { state, saveCreds } = await getAuthState(businessId);
@@ -285,10 +306,40 @@ class WhatsAppConnectionManager {
   ): Promise<void> {
     if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast") return;
 
+    const conversation = conversationRepository.get(businessId, jid);
+
+    // Detección de leads: ANTES de cualquier corte por IA apagada o modo
+    // manual — detectar un lead no es responder. Sin await: nunca demora la
+    // respuesta de la IA, y un error acá nunca la corta.
+    if (conversation) {
+      const leadText = extractMessageText(rawMessage);
+      void import("@/modules/inquiries/whatsapp-lead")
+        .then(({ captureWhatsappLead }) =>
+          captureWhatsappLead({
+            businessId,
+            contactName: conversation.contactName,
+            contactPhone: conversation.contactPhone,
+            text: leadText,
+          })
+        )
+        .then(() => import("@/modules/inquiries/qualification"))
+        .then(({ scheduleLeadQualification }) =>
+          // Calificación con IA (si el negocio la activó): se reprograma en
+          // cada mensaje del cliente y corre cuando el chat queda quieto. Es
+          // no-op si no hay una consulta "pending" para este número.
+          scheduleLeadQualification({
+            businessId,
+            jid,
+            contactPhone: conversation.contactPhone,
+            getMessages: () => conversationRepository.get(businessId, jid)?.messages ?? [],
+          })
+        )
+        .catch((error) => console.error("[Leads] Error detectando lead de WhatsApp:", error));
+    }
+
     const connection = this.getConnection(businessId);
     if (!connection.aiEnabled) return;
 
-    const conversation = conversationRepository.get(businessId, jid);
     if (!conversation || conversation.manualMode) return;
 
     // Comprobantes de pago se interceptan ANTES del pipeline normal de IA:
