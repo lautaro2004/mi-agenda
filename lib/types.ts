@@ -769,6 +769,14 @@ export interface Inquiry {
   qualificationStatus: InquiryQualificationStatus | null;
   qualificationReason: string | null;
   createdAt: string;
+  updatedAt?: string;
+  /** "web" (formulario del sitio) | "whatsapp" (registrado por el asistente). */
+  channel?: string;
+  need?: string | null;
+  summary?: string | null;
+  nodoLeadId?: string | null;
+  nodoSyncedAt?: string | null;
+  nodoSyncError?: string | null;
 }
 
 // Slug del nivel base "Agenda interna" (no es un plan comercial). Vive acá y no

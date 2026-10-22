@@ -162,7 +162,7 @@ export async function notifyHumanRequired(input: {
     businessId: input.businessId,
     type: "human_required",
     title: "Requiere atención humana",
-    body: `${input.contactName || "Un cliente"} pidió hablar con una persona por WhatsApp.`,
+    body: `La conversación con ${input.contactName || "un cliente"} pasó a una persona del equipo (WhatsApp).`,
     resourceHref: `/dashboard/whatsapp/conversaciones/${encodeURIComponent(input.jid)}`,
     payload: { jid: input.jid },
   });
@@ -182,12 +182,17 @@ export async function notifyInquiryReceived(input: {
   businessId: string;
   inquiryId: string;
   customerName: string;
+  /** "web" (default) o "whatsapp" (interesado registrado por el asistente). */
+  channel?: string;
 }): Promise<void> {
+  const fromWhatsapp = input.channel === "whatsapp";
   await createNotification({
     businessId: input.businessId,
     type: "inquiry_received",
-    title: "Nueva consulta",
-    body: `${input.customerName} dejó una consulta desde tu sitio web.`,
+    title: fromWhatsapp ? "Nuevo interesado por WhatsApp" : "Nueva consulta",
+    body: fromWhatsapp
+      ? `El asistente registró a ${input.customerName} como interesado.`
+      : `${input.customerName} dejó una consulta desde tu sitio web.`,
     resourceHref: "/dashboard/consultas",
     payload: { inquiryId: input.inquiryId },
   });

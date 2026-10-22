@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notifyInquiryReceived } from "@/modules/notifications/service";
+import { syncInquiryToNodo } from "@/modules/inquiries/nodo-sync";
 import type { InquiryStatus } from "@/lib/schemas";
 import type { InquiryQualificationStatus, InquirySource } from "@/lib/types";
 
@@ -15,7 +16,8 @@ export interface CreateInquiryInput {
   qualificationStatus?: Extract<InquiryQualificationStatus, "pending">;
 }
 
-// Único punto de escritura de una consulta pública. La notificación es
+// Único punto de escritura de una consulta pública (las del asistente
+// pasan por modules/inquiries/capture.ts). La notificación es
 // best-effort (createNotification nunca lanza): si falla, la consulta ya
 // quedó guardada igual.
 // Arma el texto final de la consulta. Los datos extra del formulario de
@@ -48,6 +50,10 @@ export async function createInquiry(input: CreateInquiryInput) {
     inquiryId: inquiry.id,
     customerName: inquiry.customerName,
   });
+
+  // Si el negocio tiene Nodo CRM, crea o actualiza el lead allá (nunca
+  // lanza; sin configuración es un no-op).
+  await syncInquiryToNodo(inquiry.businessId, inquiry.id);
 
   return inquiry;
 }

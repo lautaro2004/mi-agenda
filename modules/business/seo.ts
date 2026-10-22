@@ -6,7 +6,7 @@ import type { Business, BusinessSchedule, SeoConfig, Service } from "@/lib/types
 import { getBusinessState } from "@/modules/business/service";
 import { listResources } from "@/modules/business/resource";
 import { getTrainingPlan } from "@/modules/employee/training-plan";
-import { GeminiProvider } from "@/modules/ai/providers/gemini";
+import { getAIProvider } from "@/modules/ai/providers";
 import type { BuiltPrompt } from "@/modules/ai/prompt/builder";
 
 // Generación de SEO: un único llamado a Gemini, disparado por el dueño
@@ -61,12 +61,6 @@ export async function isReadyForSeoGeneration(businessId: string): Promise<boole
   return businessReady && servicesReady && scheduleReady && trainingReady;
 }
 
-function geminiProvider(): GeminiProvider | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GeminiProvider(apiKey);
-}
-
 const SEO_FENCE = /```(?:json)?\s*([\s\S]*?)```/;
 
 async function buildSeoPrompt(businessId: string): Promise<BuiltPrompt> {
@@ -117,9 +111,9 @@ interface GenerateSeoResult {
 // y si ya existía una config previa, esta función JAMÁS la toca hasta que
 // la nueva pase la validación completa (ver el guard antes del upsert).
 export async function generateSeoConfig(businessId: string): Promise<GenerateSeoResult> {
-  const provider = geminiProvider();
+  const provider = getAIProvider("seo_generate");
   if (!provider) {
-    return { success: false, error: "GEMINI_API_KEY no configurada." };
+    return { success: false, error: "No hay un proveedor de IA configurado (ANTHROPIC_API_KEY)." };
   }
 
   let raw: string;
@@ -132,7 +126,7 @@ export async function generateSeoConfig(businessId: string): Promise<GenerateSeo
       { businessId, operation: "seo_generate" }
     );
   } catch (error) {
-    console.error("[seo] Error llamando a Gemini:", error);
+    console.error("[seo] Error llamando a la IA:", error);
     return { success: false, error: "No pudimos generar el SEO en este momento." };
   }
 
@@ -143,7 +137,7 @@ export async function generateSeoConfig(businessId: string): Promise<GenerateSeo
   try {
     parsedJson = JSON.parse(jsonText);
   } catch (error) {
-    console.error("[seo] JSON inválido de Gemini:", error, "\nRaw:", raw);
+    console.error("[seo] JSON inválido de la IA:", error, "\nRaw:", raw);
     return { success: false, error: "La respuesta de la IA no fue un JSON válido." };
   }
 

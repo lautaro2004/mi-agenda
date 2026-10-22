@@ -160,7 +160,7 @@ export function applyRules(
 
     case "human": {
       return {
-        text: "¡Claro! Te comunico con alguien de nuestro equipo enseguida.",
+        text: "¡Claro! Dejo la conversación para que una persona del equipo la continúe por este mismo chat.",
         rule: "human_requested",
         escalateToHuman: true,
         labelHint: "human_required",

@@ -152,10 +152,29 @@ model Inquiry {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  // ── Interesados captados por el asistente (ver modules/inquiries/capture.ts)
+  // Todas aditivas y opcionales: las consultas del formulario web siguen
+  // igual (channel "web"). Por WhatsApp no siempre hay email: se guarda ""
+  // (columna NOT NULL existente) en vez de cambiar su nulabilidad, que
+  // rompería el espejo de solo lectura de Nodo.
+  // "web" | "whatsapp"
+  channel          String   @default("web")
+  // Qué necesita, en una línea (lo resume el asistente).
+  need             String?
+  // Resumen de la conversación hasta el momento del registro.
+  summary          String?
+  // Conversación de origen (JID de WhatsApp). Junto con businessId+channel
+  // evita registrar dos veces al mismo interesado.
+  conversationRef  String?
+  // Resultado del envío a Nodo CRM (si el negocio lo tiene).
+  nodoLeadId       String?
+  nodoSyncedAt     DateTime?
+  nodoSyncError    String?
+
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, createdAt])
-  @@index([businessId, customerWhatsapp])
+  @@index([businessId, channel, conversationRef])
   @@schema("nexo")
 }
 

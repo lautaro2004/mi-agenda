@@ -85,10 +85,8 @@ export default function InquiriesPage() {
     <div>
       <PageHeader
         title="Consultas"
-        description="Mensajes que te dejaron desde tu sitio web y contactos nuevos que te escribieron por WhatsApp."
+        description="Consultas del formulario de tu sitio web e interesados que registró tu asistente por WhatsApp."
       />
-
-      <LeadQualificationCard />
 
       {inquiries === null && !loadError && (
         <div className="space-y-3">
@@ -113,17 +111,18 @@ export default function InquiriesPage() {
             <div key={inquiry.id} className="rounded-xl border border-border bg-card p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-foreground">{inquiry.customerName}</p>
                     <Badge variant={STATUS_BADGE[inquiry.status]}>{STATUS_LABEL[inquiry.status]}</Badge>
-                    <Badge variant="outline">{inquiry.source === "whatsapp" ? "WhatsApp" : "Formulario web"}</Badge>
-                    {inquiry.qualificationStatus && (
-                      <Badge variant={QUALIFICATION_BADGE[inquiry.qualificationStatus]}>
-                        {QUALIFICATION_LABEL[inquiry.qualificationStatus]}
-                      </Badge>
-                    )}
+                    <Badge variant="outline">{inquiry.channel === "whatsapp" ? "WhatsApp · asistente" : "Sitio web"}</Badge>
+                    {inquiry.nodoLeadId && <Badge variant="outline">En Nodo CRM</Badge>}
                   </div>
-                  <p className="text-xs text-muted-foreground">{formatRelativeTime(inquiry.createdAt)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatRelativeTime(inquiry.createdAt)}
+                    {inquiry.updatedAt && inquiry.updatedAt !== inquiry.createdAt && inquiry.channel === "whatsapp"
+                      ? ` · actualizado ${formatRelativeTime(inquiry.updatedAt)}`
+                      : ""}
+                  </p>
                 </div>
                 <Select value={inquiry.status} onValueChange={(value) => changeStatus(inquiry.id, value as Inquiry["status"])}>
                   <SelectTrigger className="w-40" aria-label="Estado de la consulta">
@@ -139,27 +138,19 @@ export default function InquiriesPage() {
                 </Select>
               </div>
 
-              <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">{inquiry.message}</p>
-
-              {inquiry.qualificationStatus && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">
-                    {inquiry.qualificationReason ??
-                      (inquiry.qualificationStatus === "pending" ? "Esperando más mensajes para calificar." : "")}
-                  </p>
-                  <div className="flex gap-1.5">
-                    {inquiry.qualificationStatus !== "qualified" && (
-                      <Button size="xs" variant="outline" onClick={() => changeQualification(inquiry.id, "qualified")}>
-                        Marcar calificado
-                      </Button>
-                    )}
-                    {inquiry.qualificationStatus !== "discarded" && (
-                      <Button size="xs" variant="ghost" onClick={() => changeQualification(inquiry.id, "discarded")}>
-                        Descartar
-                      </Button>
-                    )}
-                  </div>
-                </div>
+              {inquiry.need ? (
+                <p className="mt-3 text-sm text-foreground">
+                  <span className="font-medium">Necesita: </span>
+                  {inquiry.need}
+                </p>
+              ) : (
+                <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">{inquiry.message}</p>
+              )}
+              {inquiry.summary && (
+                <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Resumen de la conversación: </span>
+                  {inquiry.summary}
+                </p>
               )}
 
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">

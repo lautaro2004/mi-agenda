@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, MessageSquare, Smartphone, XCircle } from "lucide-react";
+import { CheckCircle2, Info, Loader2, MessageSquare, Smartphone, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -203,6 +203,24 @@ export default function WhatsAppConnectionPage() {
                 nuevos se siguen guardando en Consultas (y en Nodo, si lo usás).
               </p>
             )}
+          </div>
+
+          {/* Limitación real del hosting actual: la conexión de WhatsApp (Baileys)
+              necesita un proceso siempre encendido, y en el entorno serverless se
+              corta cuando nadie usa la plataforma. Sacar este aviso cuando
+              WhatsApp pase a un servidor dedicado o a la API oficial. */}
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+            <div className="flex items-start gap-2.5">
+              <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Por ahora, responde mientras uses Nexo</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  El asistente responde por WhatsApp mientras tengas Nexo abierto. Si cerrás la plataforma, la conexión
+                  puede cortarse y los mensajes que lleguen no se responden hasta que vuelvas a entrar. Estamos
+                  trabajando para que atienda las 24 horas.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5">

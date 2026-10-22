@@ -106,18 +106,18 @@ export default function OnboardingIndexPage() {
     }
   }
 
-  async function skipRemaining() {
+  // "Continuar" con temas pendientes: se marcan para después (quedan
+  // visibles en AI Studio) y recién ahí se avanza — antes había dos salidas
+  // distintas ("Continuar →" y "Terminar configuración por ahora") que no
+  // dejaban claro qué pasaba con lo que faltaba.
+  async function continueLater() {
     setSkipping(true);
     try {
-      const { plan: updated } = await requestJson<{ plan: TrainingPlan | null }>(
-        "/api/ai-studio/training-plan/skip-remaining",
-        { method: "POST" }
-      );
-      setPlan(updated);
-      toast.success("Listo, podés continuar. Retomá lo que falte cuando quieras desde AI Studio.");
+      await requestJson<{ plan: TrainingPlan | null }>("/api/ai-studio/training-plan/skip-remaining", { method: "POST" });
+      toast.success("Listo. Lo que falta queda guardado en AI Studio para retomarlo cuando quieras.");
+      router.push("/onboarding/suscripcion");
     } catch {
       toast.error("No pudimos actualizar el plan. Intentá de nuevo.");
-    } finally {
       setSkipping(false);
     }
   }
@@ -126,13 +126,13 @@ export default function OnboardingIndexPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">Contratá y entrená a tu empleado</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Contale a la IA cómo funciona tu negocio y ella va a ir armando la configuración por vos. Podés
-          confirmar cada cambio antes de guardarlo.
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Contale a la IA cómo funciona tu negocio, como se lo contarías a alguien nuevo. Ella arma la configuración
+          y vos confirmás cada cambio antes de que se guarde.
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px] lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
         <TrainingChat mode="onboarding" plan={plan} onProposalApplied={setPlan} />
         <div className="space-y-4">
           <TrainingPlanStatus plan={plan} loading={loadingPlan} onResume={resumeSection} resumingKey={resumingKey} />
@@ -203,27 +203,28 @@ export default function OnboardingIndexPage() {
         </div>
       )}
 
-      <div className="mt-6 flex items-center justify-between border-t border-border pt-4 text-sm">
+      <div className="mt-6 flex flex-col-reverse gap-3 border-t border-border pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
         <Link href="/onboarding/negocio" className="text-muted-foreground hover:text-foreground hover:underline">
           Prefiero completar un formulario
         </Link>
 
-        <Link href="/onboarding/suscripcion" className="font-medium text-primary hover:underline">
-          Continuar →
-        </Link>
-      </div>
-
-      {!readyToContinue && pendingSections.length > 0 && (
-        <div className="mt-3 flex flex-col items-end gap-2 text-right">
-          <p className="text-xs text-muted-foreground">
-            Todavía faltan: {pendingSections.map((s) => s.title).join(", ")}. Podés seguir charlando con la IA, o
-            continuar igual y retomarlas después desde AI Studio.
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void skipRemaining()} disabled={skipping}>
-            Terminar configuración por ahora
-          </Button>
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          {!readyToContinue && pendingSections.length > 0 && (
+            <span className="text-xs text-muted-foreground sm:text-right">
+              {pendingSections.length === 1 ? "Falta 1 tema" : `Faltan ${pendingSections.length} temas`}: podés completarlos ahora o más tarde desde AI Studio.
+            </span>
+          )}
+          {!readyToContinue && pendingSections.length > 0 ? (
+            <Button type="button" variant="outline" onClick={() => void continueLater()} disabled={skipping}>
+              {skipping ? "Guardando…" : "Continuar y completar después"}
+            </Button>
+          ) : (
+            <Button render={<Link href="/onboarding/suscripcion" />} nativeButton={false}>
+              Continuar →
+            </Button>
+          )}
         </div>
-      )}
+      </div>
 
       <AnimatePresence>
         {showCompletionCelebration && (
