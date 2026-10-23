@@ -8,7 +8,7 @@ import { getBusinessState } from "@/modules/business/service";
 import { getActiveServiceResources } from "@/modules/business/resource";
 import { listActiveGalleryBlocks } from "@/modules/business/gallery";
 import { buildFallbackSeoConfig, buildLocalBusinessJsonLd, getSeoConfig } from "@/modules/business/seo";
-import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
+import { getBrandColor, readableTextOn, sanitizeHexColor } from "@/lib/brand-color";
 import { cn } from "@/lib/utils";
 import {
   getBookingIntent,
@@ -169,17 +169,31 @@ export default async function PublicSitePage({ params }: PageProps) {
         />
 
         {template === "leads" ? (
-          // Plantilla de captación: formulario arriba de todo, beneficios,
-          // pasos y cierre. Nunca se elige sola (resolveSiteTemplate solo
-          // auto-detecta booking/institutional) — solo a mano desde
-          // Configuración > Sitio.
+          // Plantilla de captación: hero en el color de marca, pasos,
+          // servicios y panel final con el formulario (#contacto). Nunca se
+          // elige sola (resolveSiteTemplate solo auto-detecta
+          // booking/institutional) — solo a mano desde Configuración > Sitio.
           <main>
-            <LeadsHero business={business} seo={seo} services={visibleServices} slug={slug} whatsappHref={whatsappHref} />
-            <LeadsBenefitsSection services={visibleServices} />
+            <LeadsHero
+              business={business}
+              seo={seo}
+              services={visibleServices}
+              imageUrl={
+                // Portada → primera foto de la galería → foto del primer
+                // servicio que tenga. Sin ninguna, el hero usa tarjetas.
+                business.heroImageUrl ??
+                galleryBlocks.find((b) => b.images.length > 0)?.images[0]?.imageUrl ??
+                visibleServices.find((s) => s.imageUrl)?.imageUrl ??
+                null
+              }
+              tone={readableTextOn(brandColor)}
+              whatsappHref={whatsappHref}
+            />
             <LeadsStepsSection />
+            <LeadsBenefitsSection services={visibleServices} />
             <GallerySection blocks={galleryBlocks} />
             <FaqSection faqs={faqs} />
-            <LeadsFinalCta whatsappHref={whatsappHref} />
+            <LeadsFinalCta businessName={business.name} slug={slug} whatsappHref={whatsappHref} />
           </main>
         ) : template === "booking" ? (
           <main>

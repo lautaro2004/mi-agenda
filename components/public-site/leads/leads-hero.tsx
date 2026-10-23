@@ -1,96 +1,220 @@
-import { CheckCircle2, MessageCircle } from "lucide-react";
+import { ArrowDown, Check, MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { InquiryForm } from "@/components/public-site/inquiry-form";
+import { cn } from "@/lib/utils";
 import type { Business, SeoConfig, Service } from "@/lib/types";
 
 interface LeadsHeroProps {
   business: Business;
   seo: Pick<SeoConfig, "h1">;
   services: Service[];
-  slug: string;
+  // Imagen principal ya resuelta por la página (portada → galería → servicio).
+  imageUrl: string | null;
+  // Contraste del texto sobre el color de marca (ver readableTextOn).
+  tone: "light" | "dark";
   whatsappHref: string | null;
 }
 
-// Plantilla de captación: el formulario ES la pieza de conversión, así que va
-// arriba de todo, al lado de la propuesta (en mobile, apilado debajo del
-// texto). Quien llega desde un anuncio o desde la bio de Instagram tiene que
-// poder dejar sus datos sin scrollear.
-export function LeadsHero({ business, seo, services, slug, whatsappHref }: LeadsHeroProps) {
-  // Hasta 3 servicios como bullets de propuesta — determinístico, en el
-  // orden ya existente.
+// Hero de la plantilla de captación: franja del color de marca del negocio
+// (no solo un acento) con la propuesta a la izquierda y una composición
+// visual a la derecha: la imagen real del negocio con sus servicios reales
+// como tarjetas flotantes. Nunca inventa datos (ni cifras, ni reseñas).
+// El botón principal baja al formulario (#contacto, panel final).
+export function LeadsHero({ business, seo, services, imageUrl, tone, whatsappHref }: LeadsHeroProps) {
   const highlights = services.slice(0, 3);
+  const light = tone === "light";
+  // "Otro" es el rubro por defecto: mostrarlo como etiqueta no aporta nada.
+  const category = business.category && business.category !== "Otro" ? business.category : null;
 
   return (
-    <section
-      id="contacto"
-      className="relative overflow-hidden border-b border-border px-4 pt-8 pb-12 sm:px-6 sm:pt-12 sm:pb-16"
-    >
+    <section className="px-3 pt-3 sm:px-4">
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[var(--brand-primary,var(--primary))]/12 via-transparent to-transparent"
-        aria-hidden
-      />
+        className={cn(
+          "relative overflow-hidden rounded-[2rem] bg-[var(--brand-primary,var(--primary))] px-5 pt-12 pb-14 sm:px-10 sm:pt-16 lg:px-14 lg:pb-20",
+          light ? "text-white" : "text-neutral-950"
+        )}
+      >
+        {/* Textura sutil: dos círculos grandes en el mismo color, apenas más
+            claros, para que la franja no sea un plano liso. */}
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute -top-40 -right-32 size-[34rem] rounded-full",
+            light ? "bg-white/[0.07]" : "bg-black/[0.05]"
+          )}
+        />
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute -bottom-56 left-1/3 size-[28rem] rounded-full",
+            light ? "bg-white/[0.05]" : "bg-black/[0.04]"
+          )}
+        />
 
-      <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-14">
-        <div className="flex flex-col lg:pt-6">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-xs font-semibold tracking-wide text-[var(--brand-primary,var(--primary))] uppercase">
-              {business.name}
-            </span>
-            {business.category && (
-              <span className="inline-flex items-center rounded-full border border-border bg-card px-3 py-0.5 text-xs font-medium text-muted-foreground">
-                {business.category}
-              </span>
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
+          <div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {business.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={business.logoUrl} alt="" className="size-8 rounded-lg bg-white object-contain p-0.5" />
+              )}
+              <span className="text-sm font-medium">{business.name}</span>
+              {category && (
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-xs",
+                    light ? "bg-white/15 text-white" : "bg-black/[0.07] text-neutral-900"
+                  )}
+                >
+                  {category}
+                </span>
+              )}
+            </div>
+
+            <h1 className="mt-6 max-w-[16ch] text-[2.6rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance sm:text-6xl">
+              {seo.h1 || business.name}
+            </h1>
+
+            {business.description && (
+              <p
+                className={cn(
+                  "mt-5 max-w-[52ch] text-base leading-relaxed text-pretty sm:text-lg",
+                  light ? "text-white/85" : "text-neutral-800"
+                )}
+              >
+                {business.description}
+              </p>
             )}
-          </div>
 
-          <h1 className="mt-3.5 text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl">
-            {seo.h1 || business.name}
-          </h1>
+            {highlights.length > 0 && (
+              <ul className="mt-7 flex flex-col gap-2.5">
+                {highlights.map((service) => (
+                  <li key={service.id} className="flex items-center gap-2.5 text-[0.95rem] font-medium">
+                    <span
+                      className={cn(
+                        "flex size-5 shrink-0 items-center justify-center rounded-full",
+                        light ? "bg-white text-[var(--brand-primary,var(--primary))]" : "bg-neutral-950 text-white"
+                      )}
+                    >
+                      <Check className="size-3" strokeWidth={3} />
+                    </span>
+                    {service.name}
+                  </li>
+                ))}
+              </ul>
+            )}
 
-          {business.description && (
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-pretty text-muted-foreground sm:text-lg">
-              {business.description}
-            </p>
-          )}
-
-          {highlights.length > 0 && (
-            <ul className="mt-6 flex flex-col gap-3">
-              {highlights.map((service) => (
-                <li key={service.id} className="flex items-start gap-2.5 text-sm text-foreground sm:text-base">
-                  <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-[var(--brand-primary,var(--primary))]" />
-                  <span>{service.name}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {whatsappHref && (
-            <div className="mt-8">
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Button
                 size="lg"
-                variant="outline"
-                className="h-11 px-6 text-base"
-                render={<a href={whatsappHref} target="_blank" rel="noopener noreferrer" />}
+                className={cn(
+                  "h-12 px-6 text-base font-semibold shadow-none",
+                  light
+                    ? "bg-white text-neutral-950 hover:bg-white/90"
+                    : "bg-neutral-950 text-white hover:bg-neutral-950/90"
+                )}
+                render={<a href="#contacto" />}
                 nativeButton={false}
               >
-                <MessageCircle className="size-4" data-icon="inline-start" />
-                Prefiero escribir por WhatsApp
+                Quiero que me contacten
+                <ArrowDown className="size-4" data-icon="inline-end" />
               </Button>
+              {whatsappHref && (
+                <Button
+                  size="lg"
+                  variant="ghost"
+                  className={cn(
+                    "h-12 px-5 text-base",
+                    light ? "text-white hover:bg-white/10 hover:text-white" : "text-neutral-950 hover:bg-black/5"
+                  )}
+                  render={<a href={whatsappHref} target="_blank" rel="noopener noreferrer" />}
+                  nativeButton={false}
+                >
+                  <MessageCircle className="size-4" data-icon="inline-start" />
+                  Escribir por WhatsApp
+                </Button>
+              )}
             </div>
-          )}
-        </div>
+          </div>
 
-        <div className="rounded-[1.75rem] border border-border bg-card/80 p-1.5 shadow-sm backdrop-blur">
-          <div className="px-5 pt-5 sm:px-6 sm:pt-6">
-            <h2 className="text-xl font-semibold tracking-tight text-foreground">Dejanos tus datos</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Te contactamos sin compromiso.</p>
-          </div>
-          <div className="[&>form]:border-0 [&>form]:bg-transparent">
-            <InquiryForm slug={slug} variant="leads" />
-          </div>
+          <HeroVisual business={business} services={services} imageUrl={imageUrl} hasWhatsapp={!!whatsappHref} />
         </div>
       </div>
     </section>
+  );
+}
+
+// Composición visual. Con imagen: la foto en un marco girado apenas, con dos
+// tarjetas flotantes (servicios + canal de respuesta). Sin imagen: las
+// tarjetas de servicio apiladas, para que el hero nunca quede con un hueco.
+function HeroVisual({
+  business,
+  services,
+  imageUrl,
+  hasWhatsapp,
+}: {
+  business: Business;
+  services: Service[];
+  imageUrl: string | null;
+  hasWhatsapp: boolean;
+}) {
+  const cardServices = services.slice(0, 3);
+
+  if (!imageUrl) {
+    if (cardServices.length === 0) return null;
+    return (
+      <div className="relative mx-auto w-full max-w-sm py-4 lg:max-w-md" aria-hidden>
+        {cardServices.map((service, index) => (
+          <div
+            key={service.id}
+            className="relative rounded-2xl bg-white p-5 text-neutral-950 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.45)]"
+            style={{
+              marginTop: index === 0 ? 0 : "-0.75rem",
+              marginLeft: `${index * 1.5}rem`,
+              marginRight: `${(cardServices.length - 1 - index) * 1.5}rem`,
+              rotate: `${(index - 1) * 2}deg`,
+              zIndex: index,
+            }}
+          >
+            <p className="font-semibold">{service.name}</p>
+            {service.description && (
+              <p className="mt-1 line-clamp-2 text-sm text-neutral-600">{service.description}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative mx-auto w-full max-w-md pb-10 sm:pb-6 lg:mr-0" aria-hidden>
+      <div className="rotate-[1.5deg] overflow-hidden rounded-[1.75rem] border-[6px] border-white bg-white shadow-[0_30px_60px_-25px_rgba(0,0,0,0.5)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={imageUrl} alt="" className="aspect-[4/5] w-full object-cover sm:aspect-[5/5]" />
+      </div>
+
+      {cardServices.length > 0 && (
+        <div className="absolute -bottom-2 -left-3 w-56 -rotate-2 rounded-2xl bg-white p-4 text-neutral-950 shadow-[0_18px_40px_-15px_rgba(0,0,0,0.45)] sm:-left-10">
+          <p className="text-xs text-neutral-500">{business.name}</p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {cardServices.map((service) => (
+              <li key={service.id} className="flex items-center gap-2 text-sm font-medium">
+                <span className="size-1.5 shrink-0 rounded-full bg-[var(--brand-primary,var(--primary))]" />
+                <span className="truncate">{service.name}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {hasWhatsapp && (
+        <div className="absolute top-6 -right-3 flex items-center gap-2 rounded-full bg-white py-2 pr-4 pl-2 text-sm font-medium text-neutral-950 shadow-[0_14px_30px_-12px_rgba(0,0,0,0.45)] sm:-right-6">
+          <span className="flex size-7 items-center justify-center rounded-full bg-[#25D366] text-white">
+            <MessageCircle className="size-3.5" />
+          </span>
+          Respondemos por WhatsApp
+        </div>
+      )}
+    </div>
   );
 }
