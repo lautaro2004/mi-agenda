@@ -317,6 +317,7 @@ class WhatsAppConnectionManager {
         .then(({ captureWhatsappLead }) =>
           captureWhatsappLead({
             businessId,
+            conversationRef: jid,
             contactName: conversation.contactName,
             contactPhone: conversation.contactPhone,
             text: leadText,

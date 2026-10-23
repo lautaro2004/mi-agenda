@@ -12,6 +12,9 @@ export interface CreateInquiryInput {
   message: string;
   // Sin valor = "web_form" (default de la columna).
   source?: InquirySource;
+  // "web" (default de la columna) | "whatsapp".
+  channel?: "web" | "whatsapp";
+  conversationRef?: string;
   // Solo "pending" al nacer (calificación activa); sin valor = sin calificar.
   qualificationStatus?: Extract<InquiryQualificationStatus, "pending">;
 }
@@ -42,6 +45,8 @@ export async function createInquiry(input: CreateInquiryInput) {
       message: input.message,
       ...(input.source ? { source: input.source } : {}),
       ...(input.qualificationStatus ? { qualificationStatus: input.qualificationStatus } : {}),
+      ...(input.channel ? { channel: input.channel } : {}),
+      ...(input.conversationRef ? { conversationRef: input.conversationRef } : {}),
     },
   });
 
@@ -49,6 +54,7 @@ export async function createInquiry(input: CreateInquiryInput) {
     businessId: inquiry.businessId,
     inquiryId: inquiry.id,
     customerName: inquiry.customerName,
+    ...(input.channel ? { channel: input.channel } : {}),
   });
 
   // Si el negocio tiene Nodo CRM, crea o actualiza el lead allá (nunca
@@ -84,5 +90,10 @@ export async function updateInquiryStatus(
         : {}),
     },
   });
+  // Marcada a mano como calificada: se envía a Nodo en el momento (estando
+  // en "pending" o "discarded", el envío inicial se había retenido).
+  if (count > 0 && update.qualificationStatus === "qualified") {
+    await syncInquiryToNodo(businessId, id);
+  }
   return count > 0;
 }

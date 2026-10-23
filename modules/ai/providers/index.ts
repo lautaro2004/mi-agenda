@@ -26,6 +26,8 @@ const MAX_TOKENS: Record<AiOperation, number> = {
   training_onboarding: 4096,
   training_continuous: 4096,
   seo_generate: 2048,
+  // Calificación de leads: devuelve un JSON chico ({decision, reason}).
+  lead_qualification: 512,
 };
 
 export type AIProviderName = "claude" | "gemini";

@@ -20,10 +20,14 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 const generateResponse = vi.fn();
-vi.mock("@/modules/ai/providers/gemini", () => ({
-  GeminiProvider: class {
-    generateResponse = (...a: unknown[]) => generateResponse(...a);
-  },
+const getAIProvider = vi.fn();
+vi.mock("@/modules/ai/providers", () => ({
+  getAIProvider: (...a: unknown[]) => getAIProvider(...a),
+}));
+
+const syncInquiryToNodo = vi.fn();
+vi.mock("@/modules/inquiries/nodo-sync", () => ({
+  syncInquiryToNodo: (...a: unknown[]) => syncInquiryToNodo(...a),
 }));
 
 const {
@@ -53,6 +57,8 @@ beforeEach(() => {
   inquiryFindFirst.mockReset();
   inquiryUpdateMany.mockReset();
   generateResponse.mockReset();
+  getAIProvider.mockReset().mockReturnValue({ generateResponse: (...a: unknown[]) => generateResponse(...a) });
+  syncInquiryToNodo.mockReset().mockResolvedValue("synced");
   businessFindUnique.mockResolvedValue({ leadQualificationEnabled: true, leadIdealProfile: PROFILE, name: "Altas Rappi" });
   // id distinto por test: el contador de intentos es por consulta.
   inquiryFindFirst.mockResolvedValue({ id: `inq_${++inquiryCounter}` });
@@ -107,12 +113,30 @@ describe("qualifyPendingInquiry", () => {
     expect(generateResponse.mock.calls[0][3]).toEqual({ businessId: "biz_1", operation: "lead_qualification" });
     // La descripción del lead ideal va en el prompt.
     expect(generateResponse.mock.calls[0][2].systemInstruction).toContain(PROFILE);
+    // Proveedor común de Nexo, con su operación propia.
+    expect(getAIProvider).toHaveBeenCalledWith("lead_qualification");
+    // Recién calificada → se envía a Nodo.
+    expect(syncInquiryToNodo).toHaveBeenCalledWith("biz_1", expect.any(String));
+  });
+
+  it("busca la consulta pending por canal whatsapp (cubre las del asistente)", async () => {
+    generateResponse.mockResolvedValue('{"decision":"unclear","reason":"x"}');
+    await qualifyPendingInquiry(input);
+    expect(inquiryFindFirst.mock.calls[0][0].where).toMatchObject({ channel: "whatsapp", qualificationStatus: "pending" });
+  });
+
+  it("si el dueño ya decidió mientras corría el análisis, no envía nada a Nodo", async () => {
+    inquiryUpdateMany.mockResolvedValue({ count: 0 });
+    generateResponse.mockResolvedValue('{"decision":"qualified","reason":"Encaja"}');
+    await qualifyPendingInquiry(input);
+    expect(syncInquiryToNodo).not.toHaveBeenCalled();
   });
 
   it("'unclear' deja la consulta pending y guarda solo el motivo", async () => {
     generateResponse.mockResolvedValue('{"decision":"unclear","reason":"Todavía no dijo la zona"}');
     expect(await qualifyPendingInquiry(input)).toBe("unclear");
     expect(inquiryUpdateMany.mock.calls[0][0].data).toEqual({ qualificationReason: "Todavía no dijo la zona" });
+    expect(syncInquiryToNodo).not.toHaveBeenCalled();
   });
 
   it("no llama a la IA si la calificación está desactivada", async () => {

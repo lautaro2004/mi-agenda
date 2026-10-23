@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const update = vi.fn().mockResolvedValue({});
-vi.mock("@/lib/prisma", () => ({ prisma: { inquiry: { update: (...a: unknown[]) => update(...a) } } }));
+const findUnique = vi.fn();
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    inquiry: { update: (...a: unknown[]) => update(...a), findUnique: (...a: unknown[]) => findUnique(...a) },
+  },
+}));
 
 const { syncInquiryToNodo } = await import("./nodo-sync");
 
@@ -11,6 +16,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   process.env.NODO_URL = "https://crm.example.com/";
   process.env.NEXO_NODO_SYNC_SECRET = "s3cret";
+  findUnique.mockResolvedValue({ qualificationStatus: null });
 });
 afterEach(() => {
   delete process.env.NODO_URL;
@@ -24,6 +30,12 @@ describe("syncInquiryToNodo", () => {
   it("sin configuración no llama a nada", async () => {
     delete process.env.NODO_URL;
     expect(await syncInquiryToNodo("biz_1", "inq_1")).toBe("not_configured");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["pending", "discarded"])("retiene una consulta %s (no llama a Nodo)", async (qualificationStatus) => {
+    findUnique.mockResolvedValue({ qualificationStatus });
+    expect(await syncInquiryToNodo("biz_1", "inq_1")).toBe("held");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

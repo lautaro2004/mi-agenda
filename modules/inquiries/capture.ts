@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notifyInquiryReceived } from "@/modules/notifications/service";
 import { syncInquiryToNodo, type NodoSyncStatus } from "@/modules/inquiries/nodo-sync";
+import { isLeadQualificationActive } from "@/modules/inquiries/qualification";
 
 // Registro de un interesado captado por el asistente (WhatsApp). Vive en
 // nexo.Inquiry — la misma tabla que las consultas del sitio web, con
@@ -106,6 +107,10 @@ export async function captureLead(input: CaptureLeadInput): Promise<CaptureLeadR
       inquiryId = existing.id;
       created = false;
     } else {
+      // Con la calificación con IA activa, el interesado nace "pending"
+      // (mismo criterio que el detector de whatsapp-lead.ts): Nodo lo
+      // recibe recién cuando quede "qualified".
+      const qualificationActive = await isLeadQualificationActive(input.businessId);
       const row = await prisma.inquiry.create({
         data: {
           businessId: input.businessId,
@@ -117,6 +122,8 @@ export async function captureLead(input: CaptureLeadInput): Promise<CaptureLeadR
           message: data.need,
           need: data.need,
           summary: data.summary,
+          source: "whatsapp",
+          ...(qualificationActive ? { qualificationStatus: "pending" } : {}),
         },
       });
       inquiryId = row.id;

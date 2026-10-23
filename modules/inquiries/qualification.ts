@@ -2,8 +2,9 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import type { ConversationMessage, LeadQualificationSettings } from "@/lib/types";
-import { GeminiProvider } from "@/modules/ai/providers/gemini";
+import { getAIProvider } from "@/modules/ai/providers";
 import type { BuiltPrompt } from "@/modules/ai/prompt/builder";
+import { syncInquiryToNodo } from "@/modules/inquiries/nodo-sync";
 import { WHATSAPP_LEAD_WINDOW_DAYS } from "@/modules/inquiries/whatsapp-lead-constants";
 
 // ── Calificación comercial de leads de WhatsApp (etapa 2) ──────────────────
@@ -47,6 +48,13 @@ export async function getLeadQualificationSettings(businessId: string): Promise<
     enabled: Boolean(business?.leadQualificationEnabled && business.leadIdealProfile?.trim()),
     idealProfile: business?.leadIdealProfile ?? "",
   };
+}
+
+// ¿Las consultas nuevas de WhatsApp de este negocio nacen "pending"? La usan
+// los dos puntos de alta: el detector (whatsapp-lead.ts, IA apagada o
+// prendida) y el asistente (capture.ts, cuando registra un interesado).
+export async function isLeadQualificationActive(businessId: string): Promise<boolean> {
+  return (await getLeadQualificationSettings(businessId)).enabled;
 }
 
 export async function updateLeadQualificationSettings(
@@ -118,12 +126,6 @@ export function parseQualificationResponse(raw: string): { decision: Qualificati
 
 // ── Análisis ──────────────────────────────────────────────────────────────
 
-function geminiProvider(): GeminiProvider | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-  return new GeminiProvider(apiKey);
-}
-
 interface QualifyInput {
   businessId: string;
   contactPhone: string;
@@ -146,7 +148,7 @@ export async function qualifyPendingInquiry(
       where: {
         businessId: input.businessId,
         customerWhatsapp: input.contactPhone,
-        source: "whatsapp",
+        channel: "whatsapp",
         qualificationStatus: "pending",
         createdAt: { gte: since },
       },
@@ -161,7 +163,8 @@ export async function qualifyPendingInquiry(
     if (used >= MAX_ATTEMPTS_PER_INQUIRY) return "max_attempts";
     attempts.set(inquiry.id, used + 1);
 
-    const provider = geminiProvider();
+    // Mismo proveedor que el resto de Nexo (Claude, con Gemini de respaldo).
+    const provider = getAIProvider("lead_qualification");
     if (!provider) return "ai_error";
 
     const business = await prisma.business.findUnique({ where: { id: input.businessId }, select: { name: true } });
@@ -184,7 +187,7 @@ export async function qualifyPendingInquiry(
     // vea en qué está ("Todavía no dijo dónde está el local").
     // where con qualificationStatus "pending": si el dueño ya decidió a mano
     // mientras corría el análisis, esto no matchea y no pisa nada.
-    await prisma.inquiry.updateMany({
+    const { count } = await prisma.inquiry.updateMany({
       where: { id: inquiry.id, businessId: input.businessId, qualificationStatus: "pending" },
       data:
         result.decision === "unclear"
@@ -193,6 +196,11 @@ export async function qualifyPendingInquiry(
     });
 
     if (result.decision !== "unclear") attempts.delete(inquiry.id);
+    // Recién calificada: se envía a Nodo en el momento (si el negocio lo
+    // tiene). Si el envío falla, el cron de Nodo la levanta igual.
+    if (result.decision === "qualified" && count > 0) {
+      await syncInquiryToNodo(input.businessId, inquiry.id);
+    }
     return result.decision;
   } catch (error) {
     console.error("[Leads] Error calificando consulta:", error);

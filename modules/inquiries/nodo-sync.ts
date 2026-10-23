@@ -15,12 +15,17 @@ import { prisma } from "@/lib/prisma";
 
 const TIMEOUT_MS = 5_000;
 
-export type NodoSyncStatus = "synced" | "no_workspace" | "not_configured" | "error";
+// "held": retenida por la calificación (pending / discarded) — se envía
+// cuando pase a "qualified" (ver modules/inquiries/qualification.ts).
+export type NodoSyncStatus = "synced" | "no_workspace" | "not_configured" | "held" | "error";
 
 export async function syncInquiryToNodo(businessId: string, inquiryId: string): Promise<NodoSyncStatus> {
   const base = process.env.NODO_URL?.replace(/\/$/, "");
   const secret = process.env.NEXO_NODO_SYNC_SECRET;
   if (!base || !secret) return "not_configured";
+
+  const current = await prisma.inquiry.findUnique({ where: { id: inquiryId }, select: { qualificationStatus: true } });
+  if (current?.qualificationStatus === "pending" || current?.qualificationStatus === "discarded") return "held";
 
   let status: NodoSyncStatus = "error";
   let leadId: string | null = null;
@@ -35,6 +40,9 @@ export async function syncInquiryToNodo(businessId: string, inquiryId: string): 
     const body = (await res.json().catch(() => null)) as { outcome?: string; leadId?: string | null; error?: string } | null;
     if (res.ok && body?.outcome === "no_workspace") {
       status = "no_workspace";
+    } else if (res.ok && body?.outcome === "held") {
+      // Nodo también retiene pending/discarded (misma regla de los dos lados).
+      return "held";
     } else if (res.ok && body?.outcome) {
       status = "synced";
       leadId = body.leadId ?? null;

@@ -8,6 +8,11 @@ vi.mock("@/modules/notifications/service", () => ({ notifyInquiryReceived: (...a
 const syncInquiryToNodo = vi.fn();
 vi.mock("@/modules/inquiries/nodo-sync", () => ({ syncInquiryToNodo: (...a: unknown[]) => syncInquiryToNodo(...a) }));
 
+const isLeadQualificationActive = vi.fn();
+vi.mock("@/modules/inquiries/qualification", () => ({
+  isLeadQualificationActive: (...a: unknown[]) => isLeadQualificationActive(...a),
+}));
+
 const { captureLead, phoneKey } = await import("./capture");
 
 const input = {
@@ -25,6 +30,16 @@ beforeEach(() => {
   inquiry.findFirst.mockResolvedValue(null);
   queryRaw.mockResolvedValue([]);
   syncInquiryToNodo.mockResolvedValue("not_configured");
+  isLeadQualificationActive.mockResolvedValue(false);
+});
+
+describe("captureLead con calificación activa", () => {
+  it("el interesado nace pending (Nodo lo recibe recién al calificarse)", async () => {
+    isLeadQualificationActive.mockResolvedValue(true);
+    inquiry.create.mockResolvedValue({ id: "inq_q" });
+    await captureLead(input);
+    expect(inquiry.create.mock.calls[0][0].data).toMatchObject({ channel: "whatsapp", qualificationStatus: "pending" });
+  });
 });
 
 describe("captureLead", () => {

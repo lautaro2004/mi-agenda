@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ACK_RE, EMOJI_ONLY_RE, MEDIA_PLACEHOLDER_RE } from "@/modules/ai/triage/classifier";
 import { createInquiry } from "@/modules/inquiries/service";
+import { isLeadQualificationActive } from "@/modules/inquiries/qualification";
 import { WHATSAPP_LEAD_WINDOW_DAYS } from "@/modules/inquiries/whatsapp-lead-constants";
 
 export { WHATSAPP_LEAD_WINDOW_DAYS };
@@ -21,6 +22,10 @@ export function isMeaningfulLeadMessage(text: string): boolean {
 
 interface CaptureInput {
   businessId: string;
+  // JID de la conversación: mismo conversationRef que usa el asistente
+  // (capture.ts), así si después el asistente registra al interesado,
+  // actualiza esta misma consulta en vez de crear otra.
+  conversationRef: string;
   contactName: string;
   contactPhone: string;
   text: string;
@@ -55,18 +60,15 @@ export async function captureWhatsappLead(input: CaptureInput): Promise<"created
       where: {
         businessId: input.businessId,
         customerWhatsapp: input.contactPhone,
-        source: "whatsapp",
+        // channel (no source): también cubre las que registró el asistente.
+        channel: "whatsapp",
         createdAt: { gte: since },
       },
       select: { id: true },
     });
     if (existing) return "skipped";
 
-    const business = await prisma.business.findUnique({
-      where: { id: input.businessId },
-      select: { leadQualificationEnabled: true, leadIdealProfile: true },
-    });
-    const qualificationActive = Boolean(business?.leadQualificationEnabled && business.leadIdealProfile?.trim());
+    const qualificationActive = await isLeadQualificationActive(input.businessId);
 
     await createInquiry({
       businessId: input.businessId,
@@ -75,6 +77,8 @@ export async function captureWhatsappLead(input: CaptureInput): Promise<"created
       customerEmail: null,
       message: input.text.trim().slice(0, 2000),
       source: "whatsapp",
+      channel: "whatsapp",
+      conversationRef: input.conversationRef,
       ...(qualificationActive ? { qualificationStatus: "pending" as const } : {}),
     });
     return "created";

@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
-const businessFindUnique = vi.fn();
 vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    inquiry: { findFirst: (...a: unknown[]) => findFirst(...a) },
-    business: { findUnique: (...a: unknown[]) => businessFindUnique(...a) },
-  },
+  prisma: { inquiry: { findFirst: (...a: unknown[]) => findFirst(...a) } },
+}));
+
+const isLeadQualificationActive = vi.fn();
+vi.mock("@/modules/inquiries/qualification", () => ({
+  isLeadQualificationActive: (...a: unknown[]) => isLeadQualificationActive(...a),
 }));
 
 const createInquiry = vi.fn();
@@ -16,14 +17,19 @@ vi.mock("@/modules/inquiries/service", () => ({
 
 const { captureWhatsappLead, isMeaningfulLeadMessage } = await import("./whatsapp-lead");
 
-const BASE = { businessId: "biz_1", contactName: "Juan", contactPhone: "+5491112345678" };
+const BASE = {
+  businessId: "biz_1",
+  conversationRef: "5491112345678@s.whatsapp.net",
+  contactName: "Juan",
+  contactPhone: "+5491112345678",
+};
 
 beforeEach(() => {
   findFirst.mockReset();
   createInquiry.mockReset();
   findFirst.mockResolvedValue(null);
   createInquiry.mockResolvedValue({ id: "inq_1" });
-  businessFindUnique.mockReset().mockResolvedValue({ leadQualificationEnabled: false, leadIdealProfile: null });
+  isLeadQualificationActive.mockReset().mockResolvedValue(false);
 });
 
 describe("isMeaningfulLeadMessage", () => {
@@ -51,17 +57,18 @@ describe("captureWhatsappLead", () => {
       customerEmail: null,
       message: "Quiero info para sumar mi local",
       source: "whatsapp",
+      channel: "whatsapp",
+      conversationRef: "5491112345678@s.whatsapp.net",
     });
   });
 
   it("con la calificación activa, la consulta nace pending (Nodo la espera)", async () => {
-    businessFindUnique.mockResolvedValue({ leadQualificationEnabled: true, leadIdealProfile: "Locales de CABA" });
+    isLeadQualificationActive.mockResolvedValue(true);
     await captureWhatsappLead({ ...BASE, text: "Quiero info" });
-    expect(createInquiry.mock.calls[0][0]).toMatchObject({ source: "whatsapp", qualificationStatus: "pending" });
+    expect(createInquiry.mock.calls[0][0]).toMatchObject({ channel: "whatsapp", qualificationStatus: "pending" });
   });
 
-  it("activada pero sin descripción del lead ideal, no califica", async () => {
-    businessFindUnique.mockResolvedValue({ leadQualificationEnabled: true, leadIdealProfile: "  " });
+  it("sin calificación activa, nace sin calificar", async () => {
     await captureWhatsappLead({ ...BASE, text: "Quiero info" });
     expect(createInquiry.mock.calls[0][0]).not.toHaveProperty("qualificationStatus");
   });
@@ -78,10 +85,10 @@ describe("captureWhatsappLead", () => {
     expect(createInquiry).not.toHaveBeenCalled();
   });
 
-  it("busca duplicados scopeado por negocio, número y origen whatsapp", async () => {
+  it("busca duplicados por negocio, número y canal whatsapp (incluye los del asistente)", async () => {
     await captureWhatsappLead({ ...BASE, text: "Quiero info" });
     const where = findFirst.mock.calls[0][0].where;
-    expect(where).toMatchObject({ businessId: "biz_1", customerWhatsapp: "+5491112345678", source: "whatsapp" });
+    expect(where).toMatchObject({ businessId: "biz_1", customerWhatsapp: "+5491112345678", channel: "whatsapp" });
     expect(where.createdAt.gte).toBeInstanceOf(Date);
   });
 
