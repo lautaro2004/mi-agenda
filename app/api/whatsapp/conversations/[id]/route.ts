@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentBusinessId } from "@/modules/business/current";
+import { isRemoteWhatsApp, proxyJson } from "@/modules/whatsapp/remote";
 import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
 import type { ConversationLabel, ConversationStatus } from "@/lib/types";
 
@@ -12,6 +13,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const { id: rawId } = await params;
   const id = decodeURIComponent(rawId);
+  if (isRemoteWhatsApp()) return proxyJson(businessId, `/conversations/${encodeURIComponent(id)}`);
+
   const conversation = conversationRepository.get(businessId, id);
   if (!conversation) {
     return NextResponse.json({ error: "Conversación no encontrada." }, { status: 404 });
@@ -32,6 +35,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     toggleLabel?: ConversationLabel;
     manualMode?: boolean;
   };
+
+  if (isRemoteWhatsApp()) {
+    return proxyJson(businessId, `/conversations/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  }
 
   let conversation = conversationRepository.get(businessId, id);
   if (!conversation) {

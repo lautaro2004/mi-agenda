@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { whatsappConnectionManager } from "@/modules/whatsapp/connection/manager";
 import { getCurrentBusinessId } from "@/modules/business/current";
+import { isRemoteWhatsApp, proxyJson } from "@/modules/whatsapp/remote";
 import { resolveBusinessPlanFeatures } from "@/modules/billing/subscription";
 
 export async function POST() {
@@ -20,6 +21,8 @@ export async function POST() {
       { status: 403 }
     );
   }
+
+  if (isRemoteWhatsApp()) return proxyJson(businessId, "/connect", { method: "POST" });
 
   await whatsappConnectionManager.connect(businessId);
   const connection = whatsappConnectionManager.getStatus(businessId);

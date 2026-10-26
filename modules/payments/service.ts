@@ -184,8 +184,18 @@ function formatAppointmentDate(dateStr: string): string {
 
 async function notifyCustomer(appointment: { businessId: string; customerPhone: string }, text: string) {
   try {
-    const { whatsappConnectionManager } = await import("@/modules/whatsapp/connection/manager");
     const { phoneToJid } = await import("@/modules/whatsapp/messages/sync");
+    const { isRemoteWhatsApp, proxyJson } = await import("@/modules/whatsapp/remote");
+    if (isRemoteWhatsApp()) {
+      const res = await proxyJson(
+        appointment.businessId,
+        `/conversations/${encodeURIComponent(phoneToJid(appointment.customerPhone))}/messages`,
+        { method: "POST", body: JSON.stringify({ text, sender: "ai" }) },
+      );
+      if (!res.ok) throw new Error(`worker ${res.status}`);
+      return;
+    }
+    const { whatsappConnectionManager } = await import("@/modules/whatsapp/connection/manager");
     await whatsappConnectionManager.sendMessage(
       appointment.businessId,
       phoneToJid(appointment.customerPhone),

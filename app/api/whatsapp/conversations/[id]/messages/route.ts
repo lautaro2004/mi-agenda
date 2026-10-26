@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { whatsappConnectionManager } from "@/modules/whatsapp/connection/manager";
 import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
 import { getCurrentBusinessId } from "@/modules/business/current";
+import { isRemoteWhatsApp, proxyJson } from "@/modules/whatsapp/remote";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const businessId = await getCurrentBusinessId();
@@ -17,6 +18,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (!text) {
     return NextResponse.json({ error: "El mensaje no puede estar vacío." }, { status: 400 });
+  }
+
+  if (isRemoteWhatsApp()) {
+    return proxyJson(businessId, `/conversations/${encodeURIComponent(id)}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
   }
 
   try {

@@ -16,10 +16,10 @@ import { withAiDisclosure } from "@/modules/whatsapp/ai-disclosure";
 import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
 import { extractMessageText, syncIncomingMessage } from "@/modules/whatsapp/messages/sync";
 import { syncHistoricalMessages } from "@/modules/whatsapp/messages/history-sync";
+import { getSessionsDir } from "@/modules/whatsapp/sessions/dir";
 import { getAuthState, sessionRepository } from "@/modules/whatsapp/sessions/store";
 
 const RECONNECT_DELAY_MS = 3000;
-const SESSIONS_DIR = path.join(process.cwd(), ".whatsapp-sessions");
 
 const logger = pino({ level: "silent" });
 
@@ -239,7 +239,7 @@ class WhatsAppConnectionManager {
   }
 
   private async clearSession(businessId: string) {
-    const dir = path.join(SESSIONS_DIR, businessId);
+    const dir = path.join(getSessionsDir(), businessId);
     await fs.rm(dir, { recursive: true, force: true });
   }
 
@@ -389,7 +389,7 @@ class WhatsAppConnectionManager {
   }
 
   async restore(businessId: string): Promise<void> {
-    const dir = path.join(SESSIONS_DIR, businessId);
+    const dir = path.join(getSessionsDir(), businessId);
     try {
       const files = await fs.readdir(dir);
       if (files.length === 0) return;

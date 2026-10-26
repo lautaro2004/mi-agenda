@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "whatsapp:worker": "tsx whatsapp-worker/server.ts",
     "lint": "eslint",
     "test": "vitest run",
     "postinstall": "prisma generate"

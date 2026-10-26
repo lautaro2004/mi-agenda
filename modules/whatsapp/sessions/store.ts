@@ -2,12 +2,12 @@ import path from "node:path";
 
 import { useMultiFileAuthState as loadMultiFileAuthState } from "baileys";
 
+import { getSessionsDir } from "./dir";
 import type { WhatsAppSession, WhatsAppConnectionStatus } from "@/lib/types";
 
-const SESSIONS_DIR = path.join(process.cwd(), ".whatsapp-sessions");
 
 export function getAuthState(businessId: string) {
-  const dir = path.join(SESSIONS_DIR, businessId);
+  const dir = path.join(getSessionsDir(), businessId);
   return loadMultiFileAuthState(dir);
 }
 

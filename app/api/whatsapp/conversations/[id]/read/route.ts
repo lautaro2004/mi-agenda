@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentBusinessId } from "@/modules/business/current";
+import { isRemoteWhatsApp, proxyJson } from "@/modules/whatsapp/remote";
 import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,6 +12,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const { id: rawId } = await params;
   const id = decodeURIComponent(rawId);
+  if (isRemoteWhatsApp()) {
+    return proxyJson(businessId, `/conversations/${encodeURIComponent(id)}/read`, { method: "POST" });
+  }
   const conversation = conversationRepository.markRead(businessId, id);
 
   if (!conversation) {

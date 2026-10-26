@@ -9,6 +9,8 @@ type BusinessIdOnly = Prisma.BusinessGetPayload<{ select: { id: true } }>;
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  // Con worker remoto las sesiones se restauran allá, no en esta app.
+  if (process.env.WHATSAPP_WORKER_URL?.trim()) return;
 
   const { whatsappConnectionManager } = await import("@/modules/whatsapp/connection/manager");
   const { prisma } = await import("@/lib/prisma");
