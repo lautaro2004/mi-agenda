@@ -111,6 +111,7 @@ model Business {
   trainingConversations TrainingConversation[]
   seoConfig             SeoConfig?
   landingCopy           LandingCopy?
+  leadForm              LeadForm?
   subscription          Subscription?
   notifications         BusinessNotification[]
   inquiries             Inquiry[]
@@ -294,6 +295,22 @@ model LandingCopy {
   generatedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@schema("nexo")
+}
+
+// Campos del formulario de la plantilla de captación (qué pide, qué es
+// obligatorio, preguntas propias). `fields` sigue leadFormConfigSchema
+// (lib/lead-form.ts); se valida al guardar y al leer. Sin fila (o con un
+// JSON inválido) el formulario usa DEFAULT_LEAD_FORM.
+model LeadForm {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  fields     Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 

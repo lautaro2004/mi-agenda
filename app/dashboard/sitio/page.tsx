@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { AssetUploader } from "@/components/dashboard/asset-uploader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LandingCopyEditor } from "@/components/dashboard/landing-copy-editor";
+import { LeadFormEditor } from "@/components/dashboard/lead-form-editor";
 import { requestJson } from "@/lib/api-client";
 import { ASSET_LIMITS } from "@/lib/asset-limits";
 import { HEX_COLOR_RE } from "@/lib/brand-color";
@@ -234,7 +235,12 @@ function TemplateSection() {
         </Select>
       </div>
 
-      {value === "leads" && <LandingCopyEditor />}
+      {value === "leads" && (
+        <>
+          <LandingCopyEditor />
+          <LeadFormEditor />
+        </>
+      )}
     </div>
   );
 }

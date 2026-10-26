@@ -11,6 +11,9 @@ import { buildFallbackSeoConfig, buildLocalBusinessJsonLd, getSeoConfig } from "
 import { getBrandColor, readableTextOn, sanitizeHexColor } from "@/lib/brand-color";
 import { resolveLeadsCopy } from "@/lib/landing-copy";
 import { getLandingCopy } from "@/modules/business/landing-copy";
+import { getLeadFormConfig } from "@/modules/business/lead-form";
+import { DEFAULT_LEAD_FORM } from "@/lib/lead-form";
+import { LeadsMobileCta } from "@/components/public-site/leads/leads-mobile-cta";
 import { cn } from "@/lib/utils";
 import {
   getBookingIntent,
@@ -127,6 +130,9 @@ export default async function PublicSitePage({ params }: PageProps) {
   // lib/booking-intent.ts) salvo que el dueño haya elegido una plantilla a
   // mano desde Configuración > Sitio.
   const template = resolveSiteTemplate(business.siteTemplate, intent);
+  // Solo la plantilla de captación usa el formulario configurable. Lectura
+  // resiliente (getLeadFormConfig nunca lanza: cae en el estándar).
+  const leadFormConfig = template === "leads" ? await getLeadFormConfig(business.id) : null;
   // En intent "meeting" el servicio reservable (ej. "Reunión inicial") no se
   // muestra como card comercial — se ofrece como CTA de conversión en su
   // lugar (ver getVisibleServices), preseleccionado al abrir el modal.
@@ -152,6 +158,8 @@ export default async function PublicSitePage({ params }: PageProps) {
   // da null y "--brand-primary" nunca se define — todo el acento de marca
   // cae en el --primary del tema, sin ningún cambio visual.
   const brandColor = sanitizeHexColor(getBrandColor(business));
+  // Contraste del texto sobre el color de marca (plantilla de captación).
+  const leadsTone = readableTextOn(brandColor);
   const modalTitle = intent === "meeting" ? "Agendar reunión" : "Reservar turno";
   // Textos de la plantilla de captación: los del negocio (generados con IA o
   // escritos a mano en Sitio web) o los fijos — ver lib/landing-copy.ts.
@@ -162,7 +170,7 @@ export default async function PublicSitePage({ params }: PageProps) {
 
   return (
     <div
-      className={cn("min-h-screen bg-background", template === "booking" && "pb-16 sm:pb-0")}
+      className={cn("min-h-screen bg-background", (template === "booking" || template === "leads") && "pb-16 sm:pb-0")}
       style={brandColor ? ({ "--brand-primary": brandColor } as CSSProperties) : undefined}
     >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
@@ -204,10 +212,10 @@ export default async function PublicSitePage({ params }: PageProps) {
                 visibleServices.find((s) => s.imageUrl)?.imageUrl ??
                 null
               }
-              tone={readableTextOn(brandColor)}
+              tone={leadsTone}
               whatsappHref={whatsappHref}
             />
-            <LeadsStepsSection steps={leadsCopy.steps} />
+            <LeadsStepsSection steps={leadsCopy.steps} tone={leadsTone} />
             <LeadsBenefitsSection services={visibleServices} title={leadsCopy.servicesTitle} description={leadsCopy.servicesIntro} />
             <GallerySection blocks={galleryBlocks} />
             <FaqSection faqs={faqs} />
@@ -217,9 +225,13 @@ export default async function PublicSitePage({ params }: PageProps) {
               reasons={leadsCopy.reasons}
               formTitle={leadsCopy.formTitle}
               formSubtitle={leadsCopy.formSubtitle}
+              ctaLabel={leadsCopy.ctaLabel}
+              formConfig={leadFormConfig ?? DEFAULT_LEAD_FORM}
+              tone={leadsTone}
               slug={slug}
               whatsappHref={whatsappHref}
             />
+            <LeadsMobileCta label={leadsCopy.ctaLabel} tone={leadsTone} />
           </main>
         ) : template === "booking" ? (
           <main>
@@ -261,7 +273,7 @@ export default async function PublicSitePage({ params }: PageProps) {
         )}
 
         <PublicFooter business={business} slug={slug} />
-        <FloatingWhatsapp href={floatingWhatsappHref} liftedOnMobile={template === "booking"} />
+        <FloatingWhatsapp href={floatingWhatsappHref} liftedOnMobile={template === "booking" || template === "leads"} />
         {template === "booking" && <BookingStickyCta />}
       </BookingModalProvider>
     </div>

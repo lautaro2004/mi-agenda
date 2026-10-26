@@ -55,7 +55,7 @@ export function LeadsHero({ business, title, subtitle, ctaLabel, services, image
         />
 
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
-          <div>
+          <div className="leads-rise">
             <div className="flex flex-wrap items-center gap-2.5">
               {business.logoUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -166,7 +166,7 @@ function HeroVisual({
   if (!imageUrl) {
     if (cardServices.length === 0) return null;
     return (
-      <div className="relative mx-auto w-full max-w-sm py-4 lg:max-w-md" aria-hidden>
+      <div className="leads-rise relative mx-auto w-full max-w-sm py-4 [animation-delay:150ms] lg:max-w-md" aria-hidden>
         {cardServices.map((service, index) => (
           <div
             key={service.id}
@@ -191,13 +191,13 @@ function HeroVisual({
 
   return (
     <div className="relative mx-auto w-full max-w-md pb-10 sm:pb-6 lg:mr-0" aria-hidden>
-      <div className="rotate-[1.5deg] overflow-hidden rounded-[1.75rem] border-[6px] border-white bg-white shadow-[0_30px_60px_-25px_rgba(0,0,0,0.5)]">
+      <div className="leads-rise rotate-[1.5deg] overflow-hidden [animation-delay:150ms] rounded-[1.75rem] border-[6px] border-white bg-white shadow-[0_30px_60px_-25px_rgba(0,0,0,0.5)]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={imageUrl} alt="" className="aspect-[4/5] w-full object-cover sm:aspect-[5/5]" />
       </div>
 
       {cardServices.length > 0 && (
-        <div className="absolute -bottom-2 -left-3 w-56 -rotate-2 rounded-2xl bg-white p-4 text-neutral-950 shadow-[0_18px_40px_-15px_rgba(0,0,0,0.45)] sm:-left-10">
+        <div className="leads-float absolute -bottom-2 -left-3 w-56 -rotate-2 rounded-2xl bg-white p-4 text-neutral-950 shadow-[0_18px_40px_-15px_rgba(0,0,0,0.45)] sm:-left-10">
           <p className="text-xs text-neutral-500">{business.name}</p>
           <ul className="mt-2 flex flex-col gap-1.5">
             {cardServices.map((service) => (
@@ -211,7 +211,7 @@ function HeroVisual({
       )}
 
       {hasWhatsapp && (
-        <div className="absolute top-6 -right-3 flex items-center gap-2 rounded-full bg-white py-2 pr-4 pl-2 text-sm font-medium text-neutral-950 shadow-[0_14px_30px_-12px_rgba(0,0,0,0.45)] sm:-right-6">
+        <div className="leads-float absolute top-6 -right-3 flex [animation-delay:-2.5s] items-center gap-2 rounded-full bg-white py-2 pr-4 pl-2 text-sm font-medium text-neutral-950 shadow-[0_14px_30px_-12px_rgba(0,0,0,0.45)] sm:-right-6">
           <span className="flex size-7 items-center justify-center rounded-full bg-[#25D366] text-white">
             <MessageCircle className="size-3.5" />
           </span>
