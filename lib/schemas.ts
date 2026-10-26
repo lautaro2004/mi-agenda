@@ -457,6 +457,30 @@ export const seoConfigGenerationSchema = z.object({
 
 export type SeoConfigGenerationValues = z.infer<typeof seoConfigGenerationSchema>;
 
+// Textos de la plantilla de captación. Mismo schema para lo que genera la IA
+// y para lo que edita el dueño: los límites mantienen el diseño en su lugar
+// (un título de 200 caracteres rompería el hero).
+const copyText = (min: number, max: number) =>
+  z.string().trim().min(min, `Muy corto (mín. ${min})`).max(max, `Muy largo (máx. ${max})`);
+
+export const landingCopySchema = z.object({
+  heroTitle: copyText(8, 80),
+  heroSubtitle: copyText(20, 240),
+  ctaLabel: copyText(3, 32),
+  steps: z
+    .array(z.object({ title: copyText(3, 40), body: copyText(8, 120) }))
+    .length(3, "Tienen que ser 3 pasos"),
+  servicesTitle: copyText(3, 50),
+  servicesIntro: z.string().trim().max(200, "Muy largo (máx. 200)").optional().default(""),
+  closingTitle: copyText(3, 50),
+  closingBody: copyText(10, 180),
+  reasons: z.array(copyText(3, 50)).length(3, "Tienen que ser 3 motivos"),
+  formTitle: copyText(3, 40),
+  formSubtitle: z.string().trim().max(80, "Muy largo (máx. 80)").optional().default(""),
+});
+
+export type LandingCopyValues = z.infer<typeof landingCopySchema>;
+
 export type SimulatorCorrectionValues = z.infer<typeof simulatorCorrectionSchema>;
 
 // ── Superadmin: Planes y suscripciones ───────────────────────────────────

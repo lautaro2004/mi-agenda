@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { AssetUploader } from "@/components/dashboard/asset-uploader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LandingCopyEditor } from "@/components/dashboard/landing-copy-editor";
 import { requestJson } from "@/lib/api-client";
 import { ASSET_LIMITS } from "@/lib/asset-limits";
 import { HEX_COLOR_RE } from "@/lib/brand-color";
@@ -215,8 +216,8 @@ function TemplateSection() {
         )}
       </p>
       <p className="mt-2 text-xs text-muted-foreground">
-        &ldquo;Captación de clientes&rdquo; pone un formulario de contacto arriba de todo, ideal si ofrecés un servicio y
-        querés juntar interesados desde anuncios o Instagram. Las solicitudes llegan a Consultas.
+        &ldquo;Captación de clientes&rdquo; es una página pensada para juntar interesados (por ejemplo desde anuncios o
+        Instagram): todo lleva a un formulario de contacto y las solicitudes llegan a Consultas.
       </p>
 
       <div className="mt-4 max-w-xs">
@@ -232,6 +233,8 @@ function TemplateSection() {
           </SelectContent>
         </Select>
       </div>
+
+      {value === "leads" && <LandingCopyEditor />}
     </div>
   );
 }

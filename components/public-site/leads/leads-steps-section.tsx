@@ -1,15 +1,13 @@
 import { ClipboardList, MessageCircle, Rocket } from "lucide-react";
 
-const STEPS = [
-  { icon: ClipboardList, title: "Dejás tus datos", body: "Completás el formulario en menos de un minuto." },
-  { icon: MessageCircle, title: "Te contactamos", body: "Te escribimos para entender tu negocio y lo que necesitás." },
-  { icon: Rocket, title: "Nos ocupamos", body: "Coordinamos todo para que empieces sin complicaciones." },
-] as const;
+// Íconos por posición: el paso 1 siempre es dejar los datos (así lo pide el
+// prompt de generación), el 2 el contacto y el 3 el resultado.
+const ICONS = [ClipboardList, MessageCircle, Rocket] as const;
 
 // Recorrido en fila (en mobile, en columna) unido por una línea punteada: es
-// una secuencia real, por eso lleva número. Genérico a propósito — no
-// depende del rubro.
-export function LeadsStepsSection() {
+// una secuencia real, por eso lleva número. Los textos vienen del negocio
+// (generados con IA para su rubro) o son los fijos de LEADS_DEFAULT_COPY.
+export function LeadsStepsSection({ steps }: { steps: { title: string; body: string }[] }) {
   return (
     <section className="px-4 py-20 sm:px-6 sm:py-24">
       <div className="mx-auto max-w-5xl">
@@ -27,10 +25,12 @@ export function LeadsStepsSection() {
             aria-hidden
             className="absolute top-7 bottom-7 left-7 border-l-2 border-dashed border-[var(--brand-primary,var(--primary))]/30 sm:hidden"
           />
-          {STEPS.map((step, index) => (
-            <li key={step.title} className="relative flex gap-5 sm:flex-col sm:items-center sm:gap-0 sm:text-center">
+          {steps.slice(0, 3).map((step, index) => {
+            const Icon = ICONS[index];
+            return (
+            <li key={index} className="relative flex gap-5 sm:flex-col sm:items-center sm:gap-0 sm:text-center">
               <span className="relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-primary,var(--primary))] text-white shadow-lg">
-                <step.icon className="size-6" />
+                <Icon className="size-6" />
                 <span className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border-2 border-background bg-foreground text-xs font-semibold text-background">
                   {index + 1}
                 </span>
@@ -40,7 +40,8 @@ export function LeadsStepsSection() {
                 <p className="mt-1.5 max-w-[30ch] text-sm leading-relaxed text-muted-foreground">{step.body}</p>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
       </div>
     </section>

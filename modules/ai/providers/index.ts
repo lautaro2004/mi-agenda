@@ -18,7 +18,7 @@ import type { AiOperation } from "@/modules/ai/usage";
 export const DEFAULT_CLAUDE_FAST_MODEL = "claude-haiku-5-5";
 export const DEFAULT_CLAUDE_SMART_MODEL = "claude-sonnet-5-5";
 
-const SMART_OPERATIONS: AiOperation[] = ["training_onboarding", "training_continuous", "seo_generate"];
+const SMART_OPERATIONS: AiOperation[] = ["training_onboarding", "training_continuous", "seo_generate", "landing_copy"];
 
 const MAX_TOKENS: Record<AiOperation, number> = {
   whatsapp_reply: 1024,
@@ -28,6 +28,8 @@ const MAX_TOKENS: Record<AiOperation, number> = {
   seo_generate: 2048,
   // Calificación de leads: devuelve un JSON chico ({decision, reason}).
   lead_qualification: 512,
+  // Textos de la plantilla de captación: JSON mediano (hero, pasos, cierre).
+  landing_copy: 2048,
 };
 
 export type AIProviderName = "claude" | "gemini";

@@ -9,7 +9,8 @@ export type AiOperation =
   | "whatsapp_reply"
   | "simulator"
   | "seo_generate"
-  | "lead_qualification";
+  | "lead_qualification"
+  | "landing_copy";
 
 // Usado por los filtros del dashboard de superadmin (ver lib/superadmin/queries.ts)
 // para no repetir esta lista de literales en otro lado.
@@ -20,6 +21,7 @@ export const AI_OPERATIONS: AiOperation[] = [
   "simulator",
   "seo_generate",
   "lead_qualification",
+  "landing_copy",
 ];
 
 export interface AiUsageMeta {

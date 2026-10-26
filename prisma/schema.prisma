@@ -110,6 +110,7 @@ model Business {
   trainingPlan          TrainingPlan?
   trainingConversations TrainingConversation[]
   seoConfig             SeoConfig?
+  landingCopy           LandingCopy?
   subscription          Subscription?
   notifications         BusinessNotification[]
   inquiries             Inquiry[]
@@ -276,6 +277,23 @@ model SeoConfig {
   extraText       String?
   generatedAt     DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@schema("nexo")
+}
+
+// Textos de la plantilla de captación (ver modules/business/landing-copy.ts).
+// `content` sigue landingCopySchema (lib/schemas.ts) — se valida al guardar
+// y al leer; un JSON inválido se ignora y el sitio usa los textos fijos.
+// generatedAt: última generación con IA (null si el dueño lo escribió a mano).
+model LandingCopy {
+  id          String    @id @default(cuid())
+  businessId  String    @unique
+  content     Json
+  generatedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 

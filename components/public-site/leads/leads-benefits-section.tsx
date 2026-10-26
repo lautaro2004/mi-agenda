@@ -3,7 +3,15 @@ import type { Service } from "@/lib/types";
 // "Qué hacemos por vos": en dos columnas — título fijo a la izquierda,
 // servicios como filas a la derecha (con su foto si la tienen). Sin precio ni
 // duración: en esta plantilla no se vende un turno, se capta un contacto.
-export function LeadsBenefitsSection({ services, description }: { services: Service[]; description?: string | null }) {
+export function LeadsBenefitsSection({
+  services,
+  title,
+  description,
+}: {
+  services: Service[];
+  title: string;
+  description?: string | null;
+}) {
   if (services.length === 0) return null;
 
   return (
@@ -11,7 +19,7 @@ export function LeadsBenefitsSection({ services, description }: { services: Serv
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
         <div className="lg:sticky lg:top-24 lg:self-start">
           <h2 className="max-w-[14ch] text-3xl font-semibold tracking-[-0.03em] text-balance text-foreground sm:text-4xl">
-            Qué hacemos por vos
+            {title}
           </h2>
           {description && (
             <p className="mt-4 max-w-[42ch] text-base leading-relaxed text-muted-foreground">{description}</p>

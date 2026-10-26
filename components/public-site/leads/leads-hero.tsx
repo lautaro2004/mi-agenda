@@ -2,11 +2,14 @@ import { ArrowDown, Check, MessageCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { Business, SeoConfig, Service } from "@/lib/types";
+import type { Business, Service } from "@/lib/types";
 
 interface LeadsHeroProps {
   business: Business;
-  seo: Pick<SeoConfig, "h1">;
+  // Ya resueltos (textos del negocio o fallback) — ver resolveLeadsCopy.
+  title: string;
+  subtitle: string;
+  ctaLabel: string;
   services: Service[];
   // Imagen principal ya resuelta por la página (portada → galería → servicio).
   imageUrl: string | null;
@@ -20,7 +23,7 @@ interface LeadsHeroProps {
 // visual a la derecha: la imagen real del negocio con sus servicios reales
 // como tarjetas flotantes. Nunca inventa datos (ni cifras, ni reseñas).
 // El botón principal baja al formulario (#contacto, panel final).
-export function LeadsHero({ business, seo, services, imageUrl, tone, whatsappHref }: LeadsHeroProps) {
+export function LeadsHero({ business, title, subtitle, ctaLabel, services, imageUrl, tone, whatsappHref }: LeadsHeroProps) {
   const highlights = services.slice(0, 3);
   const light = tone === "light";
   // "Otro" es el rubro por defecto: mostrarlo como etiqueta no aporta nada.
@@ -72,17 +75,17 @@ export function LeadsHero({ business, seo, services, imageUrl, tone, whatsappHre
             </div>
 
             <h1 className="mt-6 max-w-[16ch] text-[2.6rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance sm:text-6xl">
-              {seo.h1 || business.name}
+              {title}
             </h1>
 
-            {business.description && (
+            {subtitle && (
               <p
                 className={cn(
                   "mt-5 max-w-[52ch] text-base leading-relaxed text-pretty sm:text-lg",
                   light ? "text-white/85" : "text-neutral-800"
                 )}
               >
-                {business.description}
+                {subtitle}
               </p>
             )}
 
@@ -116,7 +119,7 @@ export function LeadsHero({ business, seo, services, imageUrl, tone, whatsappHre
                 render={<a href="#contacto" />}
                 nativeButton={false}
               >
-                Quiero que me contacten
+                {ctaLabel}
                 <ArrowDown className="size-4" data-icon="inline-end" />
               </Button>
               {whatsappHref && (

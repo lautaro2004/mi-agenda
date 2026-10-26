@@ -9,6 +9,8 @@ import { getActiveServiceResources } from "@/modules/business/resource";
 import { listActiveGalleryBlocks } from "@/modules/business/gallery";
 import { buildFallbackSeoConfig, buildLocalBusinessJsonLd, getSeoConfig } from "@/modules/business/seo";
 import { getBrandColor, readableTextOn, sanitizeHexColor } from "@/lib/brand-color";
+import { resolveLeadsCopy } from "@/lib/landing-copy";
+import { getLandingCopy } from "@/modules/business/landing-copy";
 import { cn } from "@/lib/utils";
 import {
   getBookingIntent,
@@ -57,13 +59,21 @@ async function loadSite(slug: string) {
   const businessId = await getPublicBusinessIdBySlug(slug);
   if (!businessId) return null;
 
-  const [state, seo, galleryBlocks] = await Promise.all([
+  const [state, seo, galleryBlocks, landingCopy] = await Promise.all([
     getBusinessState(businessId),
     getSeoConfig(businessId),
     listActiveGalleryBlocks(businessId),
+    // Nunca tira abajo el sitio: si la tabla todavía no existe (migración
+    // sin aplicar) o la lectura falla, la plantilla usa los textos fijos. Se
+    // lee para todas las plantillas, así que un error acá afectaría a todos
+    // los negocios, no solo a los de captación.
+    getLandingCopy(businessId).catch((error) => {
+      console.error("[sitio] No se pudieron leer los textos de captación:", error);
+      return { copy: null, generatedAt: null };
+    }),
   ]);
 
-  return { ...state, seo, galleryBlocks };
+  return { ...state, seo, galleryBlocks, landingCopy: landingCopy.copy };
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -100,7 +110,7 @@ export default async function PublicSitePage({ params }: PageProps) {
   const site = await loadSite(slug);
   if (!site) notFound();
 
-  const { business, services, faqs, schedule, galleryBlocks } = site;
+  const { business, services, faqs, schedule, galleryBlocks, landingCopy } = site;
   const seo = site.seo ?? buildFallbackSeoConfig(business);
   // Misma regla en las tres piezas (header, callout, QR): la carta solo
   // "existe" para un visitante cuando está activa Y tiene un PDF real — ver
@@ -143,6 +153,12 @@ export default async function PublicSitePage({ params }: PageProps) {
   // cae en el --primary del tema, sin ningún cambio visual.
   const brandColor = sanitizeHexColor(getBrandColor(business));
   const modalTitle = intent === "meeting" ? "Agendar reunión" : "Reservar turno";
+  // Textos de la plantilla de captación: los del negocio (generados con IA o
+  // escritos a mano en Sitio web) o los fijos — ver lib/landing-copy.ts.
+  const leadsCopy = resolveLeadsCopy(landingCopy, {
+    heroTitle: seo.h1 || business.name,
+    heroSubtitle: business.description ?? "",
+  });
 
   return (
     <div
@@ -176,7 +192,9 @@ export default async function PublicSitePage({ params }: PageProps) {
           <main>
             <LeadsHero
               business={business}
-              seo={seo}
+              title={leadsCopy.heroTitle}
+              subtitle={leadsCopy.heroSubtitle}
+              ctaLabel={leadsCopy.ctaLabel}
               services={visibleServices}
               imageUrl={
                 // Portada → primera foto de la galería → foto del primer
@@ -189,11 +207,19 @@ export default async function PublicSitePage({ params }: PageProps) {
               tone={readableTextOn(brandColor)}
               whatsappHref={whatsappHref}
             />
-            <LeadsStepsSection />
-            <LeadsBenefitsSection services={visibleServices} />
+            <LeadsStepsSection steps={leadsCopy.steps} />
+            <LeadsBenefitsSection services={visibleServices} title={leadsCopy.servicesTitle} description={leadsCopy.servicesIntro} />
             <GallerySection blocks={galleryBlocks} />
             <FaqSection faqs={faqs} />
-            <LeadsFinalCta businessName={business.name} slug={slug} whatsappHref={whatsappHref} />
+            <LeadsFinalCta
+              title={leadsCopy.closingTitle}
+              body={leadsCopy.closingBody}
+              reasons={leadsCopy.reasons}
+              formTitle={leadsCopy.formTitle}
+              formSubtitle={leadsCopy.formSubtitle}
+              slug={slug}
+              whatsappHref={whatsappHref}
+            />
           </main>
         ) : template === "booking" ? (
           <main>
