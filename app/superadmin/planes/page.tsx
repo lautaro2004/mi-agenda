@@ -6,12 +6,25 @@ import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Circle, Pencil, Plus } from "lucide-react";
 
 import { PageHeader } from "@/components/dashboard/page-header";
-import { PlanDialog } from "@/components/superadmin/plan-dialog";
+import { PlanDialog, type PlanOption } from "@/components/superadmin/plan-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requestJson } from "@/lib/api-client";
+import { formatMoney, offerKind, packSavingsFor, type PackSavings } from "@/lib/billing-pricing";
 import type { PlanFormValues } from "@/lib/schemas";
+
+interface PriceRow {
+  id: string;
+  interval: "month" | "year";
+  amount: number;
+  currency: string;
+  active: boolean;
+  mercadoPagoPlanId: string | null;
+  mercadoPagoSyncStatus: string | null;
+  mercadoPagoLastSyncedAt: string | null;
+  mercadoPagoSyncError: string | null;
+}
 
 interface PlanWithUsage {
   id: string;
@@ -35,60 +48,98 @@ interface PlanWithUsage {
   mercadoPagoSyncStatus: string | null;
   mercadoPagoLastSyncedAt: string | null;
   mercadoPagoSyncError: string | null;
+  products: string[];
+  crmMaxUsers: number | null;
+  trialDays: number | null;
+  displayOrder: number;
+  packNexoPlanId: string | null;
+  packCrmPlanId: string | null;
+  prices: PriceRow[];
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
-// Columna "Mercado Pago" (sección 15 del pedido): nunca debe poder leerse
-// como "conectado" si mercadoPagoSyncStatus no es exactamente "synced" — un
-// plan pago sin sincronizar todavía y uno con error se muestran distinto a
-// propósito, para que Superadmin nunca crea que un plan está conectado sin
-// estarlo.
-function MercadoPagoStatusCell({ plan }: { plan: PlanWithUsage }) {
-  if (plan.monthlyPrice <= 0) {
-    return <span className="text-xs text-muted-foreground">No aplica</span>;
-  }
-
-  if (plan.mercadoPagoSyncStatus === "synced" && plan.mercadoPagoPlanId) {
+// Estado de sincronización de UN precio con Mercado Pago. Nunca debe poder
+// leerse como "conectado" si mercadoPagoSyncStatus no es exactamente
+// "synced": sin sincronizar y con error se muestran distinto a propósito.
+function SyncBadge({ price }: { price: Pick<PriceRow, "mercadoPagoPlanId" | "mercadoPagoSyncStatus" | "mercadoPagoLastSyncedAt" | "mercadoPagoSyncError"> }) {
+  if (price.mercadoPagoSyncStatus === "synced" && price.mercadoPagoPlanId) {
     return (
-      <div className="flex flex-col gap-1">
-        <Badge variant="outline" className="w-fit gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
-          <CheckCircle2 className="size-3" />
-          Conectado
-        </Badge>
-        <p className="font-mono text-[11px] text-muted-foreground" title={plan.mercadoPagoPlanId}>
-          {plan.mercadoPagoPlanId.slice(0, 18)}…
-        </p>
-        {plan.mercadoPagoLastSyncedAt && (
-          <p className="text-[11px] text-muted-foreground">
-            {dateTimeFormatter.format(new Date(plan.mercadoPagoLastSyncedAt))}
-          </p>
+      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400" title={price.mercadoPagoPlanId}>
+        <CheckCircle2 className="size-3" />
+        Sincronizado
+        {price.mercadoPagoLastSyncedAt && (
+          <span className="text-muted-foreground"> · {dateTimeFormatter.format(new Date(price.mercadoPagoLastSyncedAt))}</span>
         )}
-      </div>
+      </span>
     );
   }
-
-  if (plan.mercadoPagoSyncStatus === "error") {
+  if (price.mercadoPagoSyncStatus === "error") {
     return (
-      <div className="flex flex-col gap-1">
-        <Badge variant="outline" className="w-fit gap-1 border-destructive/30 text-destructive">
-          <AlertTriangle className="size-3" />
-          Error
-        </Badge>
-        {plan.mercadoPagoSyncError && (
-          <p className="max-w-48 truncate text-[11px] text-destructive" title={plan.mercadoPagoSyncError}>
-            {plan.mercadoPagoSyncError}
-          </p>
-        )}
-      </div>
+      <span className="inline-flex max-w-56 items-center gap-1 truncate text-[11px] text-destructive" title={price.mercadoPagoSyncError ?? ""}>
+        <AlertTriangle className="size-3 shrink-0" />
+        Error: {price.mercadoPagoSyncError ?? "desconocido"}
+      </span>
     );
   }
-
   return (
-    <Badge variant="outline" className="w-fit gap-1 text-muted-foreground">
+    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
       <Circle className="size-3" />
       No conectado
-    </Badge>
+    </span>
+  );
+}
+
+function PriceCell({ plan }: { plan: PlanWithUsage }) {
+  if (plan.monthlyPrice <= 0 && !plan.prices.some((p) => p.interval === "year" && p.active)) {
+    return <span className="text-muted-foreground">Nivel base</span>;
+  }
+  // El mensual siempre se lee del Plan (su preapproval_plan de siempre); el
+  // anual, de su PlanPrice.
+  const yearly = plan.prices.find((p) => p.interval === "year");
+  return (
+    <div className="space-y-1.5">
+      {plan.monthlyPrice > 0 && (
+        <div>
+          <p className="text-foreground">{formatMoney(plan.monthlyPrice, plan.currency)} / mes</p>
+          <SyncBadge price={plan} />
+        </div>
+      )}
+      {yearly && (
+        <div className={yearly.active ? undefined : "opacity-60"}>
+          <p className="text-foreground">
+            {formatMoney(yearly.amount, yearly.currency)} / año{!yearly.active && " (inactivo)"}
+          </p>
+          <SyncBadge price={yearly} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SavingsLine({ label, savings }: { label: string; savings: PackSavings }) {
+  if (savings.status === "unavailable") {
+    return (
+      <p className="text-[11px] text-muted-foreground">
+        {label}: sin comparar (falta precio {savings.missing.map((m) => (m === "crm" ? "de Nodo" : m === "nexo" ? "de Nexo" : "del pack")).join(", ")})
+      </p>
+    );
+  }
+  if (savings.status === "more_expensive") {
+    return (
+      <p className="flex items-center gap-1 text-[11px] font-medium text-destructive">
+        <AlertTriangle className="size-3" />
+        {label}: el pack cuesta más que contratar los dos por separado ({formatMoney(savings.individualTotal)})
+      </p>
+    );
+  }
+  if (savings.status === "no_discount") {
+    return <p className="text-[11px] text-amber-700 dark:text-amber-400">{label}: sin descuento (igual a la suma individual)</p>;
+  }
+  return (
+    <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+      {label}: ahorra {formatMoney(savings.savings)} ({savings.percent.toLocaleString("es-AR")}%) vs {formatMoney(savings.individualTotal)}
+    </p>
   );
 }
 
@@ -107,13 +158,11 @@ const FEATURE_LABEL: Record<
 
 const numberFormatter = new Intl.NumberFormat("es-AR");
 
-function formatPrice(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("es-AR", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
-  } catch {
-    return `${currency} ${numberFormatter.format(amount)}`;
-  }
-}
+const SECTIONS: { kind: "nexo" | "crm" | "pack"; title: string; hint: string }[] = [
+  { kind: "nexo", title: "Nexo", hint: "Presencia digital, atención y automatización." },
+  { kind: "crm", title: "Nodo", hint: "CRM. Nodo no tiene plan gratuito; quien contrata solo Nodo conserva el gratuito de Nexo." },
+  { kind: "pack", title: "Pack Nexo + Nodo", hint: "Una sola suscripción que habilita los dos productos. El ahorro se calcula contra sus planes de referencia." },
+];
 
 export default function SuperadminPlanesPage() {
   const [plans, setPlans] = React.useState<PlanWithUsage[] | null>(null);
@@ -129,13 +178,18 @@ export default function SuperadminPlanesPage() {
 
   React.useEffect(loadPlans, []);
 
-  // El plan de Nexo se guarda igual pase lo que pase con Mercado Pago (ver
-  // syncPlanWithMercadoPago) — pero si el sync falló, hay que decírselo a
-  // Superadmin en vez de un genérico "Plan creado/actualizado" que sugiera
-  // que todo salió bien (sección 2/15 del pedido).
+  const byId = React.useMemo(() => new Map((plans ?? []).map((p) => [p.id, p])), [plans]);
+  const planOptions: PlanOption[] = (plans ?? []).map((p) => ({ id: p.id, name: p.name, products: p.products }));
+
+  // El plan se guarda igual pase lo que pase con Mercado Pago (ver
+  // syncPlanWithMercadoPago) — si el sync del mensual o del anual falló,
+  // se avisa en vez de un "guardado" genérico.
   function notifyPlanSaved(plan: PlanWithUsage, savedLabel: string) {
+    const yearlyError = plan.prices?.find((p) => p.interval === "year" && p.mercadoPagoSyncStatus === "error");
     if (plan.mercadoPagoSyncStatus === "error") {
-      toast.warning(`${savedLabel}, pero no se pudo sincronizar con Mercado Pago: ${plan.mercadoPagoSyncError ?? "error desconocido"}`);
+      toast.warning(`${savedLabel}, pero no se pudo sincronizar el precio mensual con Mercado Pago: ${plan.mercadoPagoSyncError ?? "error desconocido"}`);
+    } else if (yearlyError) {
+      toast.warning(`${savedLabel}, pero no se pudo sincronizar el precio anual con Mercado Pago: ${yearlyError.mercadoPagoSyncError ?? "error desconocido"}`);
     } else {
       toast.success(savedLabel);
     }
@@ -168,6 +222,9 @@ export default function SuperadminPlanesPage() {
   }
 
   async function toggleActive(plan: PlanWithUsage) {
+    if (plan.active && plan.businessCount > 0 && !window.confirm(`¿Desactivar "${plan.name}"? No afecta a las ${plan.businessCount} empresas que ya lo tienen; solo deja de ofrecerse.`)) {
+      return;
+    }
     try {
       await requestJson(`/api/superadmin/planes/${plan.id}`, {
         method: "PATCH",
@@ -180,109 +237,159 @@ export default function SuperadminPlanesPage() {
     }
   }
 
+  function renderRow(plan: PlanWithUsage) {
+    const kind = offerKind(plan.products);
+    const nexoRef = plan.packNexoPlanId ? (byId.get(plan.packNexoPlanId) ?? null) : null;
+    const crmRef = plan.packCrmPlanId ? (byId.get(plan.packCrmPlanId) ?? null) : null;
+    return (
+      <tr key={plan.id} className="border-b border-border align-top last:border-0 hover:bg-muted/40">
+        <td className="px-4 py-3">
+          <p className="font-medium text-foreground">{plan.name}</p>
+          <p className="text-xs text-muted-foreground">{plan.slug}</p>
+          {plan.trialDays ? <p className="mt-1 text-[11px] text-muted-foreground">Prueba: {plan.trialDays} días</p> : null}
+        </td>
+        <td className="px-4 py-3">
+          <PriceCell plan={plan} />
+          {kind === "pack" && (
+            <div className="mt-2 space-y-0.5">
+              {nexoRef && crmRef ? (
+                <>
+                  <SavingsLine label="Mensual" savings={packSavingsFor(plan, nexoRef, crmRef, "month")} />
+                  <SavingsLine label="Anual" savings={packSavingsFor(plan, nexoRef, crmRef, "year")} />
+                  <p className="text-[11px] text-muted-foreground">
+                    vs {nexoRef.name} + {crmRef.name}
+                  </p>
+                </>
+              ) : (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">Elegí los planes de referencia para calcular el ahorro.</p>
+              )}
+            </div>
+          )}
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex flex-wrap gap-1">
+            {plan.products.includes("nexo") &&
+              (Object.keys(FEATURE_LABEL) as (keyof typeof FEATURE_LABEL)[])
+                .filter((key) => plan[key])
+                .map((key) => (
+                  <Badge key={key} variant="outline" className="text-[11px]">
+                    {FEATURE_LABEL[key]}
+                  </Badge>
+                ))}
+            {plan.products.includes("nexo") && (
+              <Badge variant="outline" className="text-[11px]">
+                {plan.aiCredits > 0 ? `${numberFormatter.format(plan.aiCredits)} créditos IA` : "Sin IA"}
+              </Badge>
+            )}
+            {plan.products.includes("nexo") && plan.maxServices !== null && (
+              <Badge variant="outline" className="text-[11px]">
+                Hasta {plan.maxServices} servicios
+              </Badge>
+            )}
+            {plan.products.includes("crm") && (
+              <Badge variant="outline" className="text-[11px]">
+                Nodo · {plan.crmMaxUsers ?? "?"} usuarios
+              </Badge>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-3 text-muted-foreground">
+          <Link href={`/superadmin/empresas?plan=${plan.slug}`} className="underline-offset-2 hover:text-foreground hover:underline">
+            {numberFormatter.format(plan.businessCount)}
+          </Link>
+        </td>
+        <td className="px-4 py-3">
+          <Badge variant={plan.active ? "secondary" : "outline"}>{plan.active ? "Activo" : "Inactivo"}</Badge>
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex items-center justify-end gap-2">
+            <PlanDialog
+              plan={plan}
+              allPlans={planOptions}
+              trigger={
+                <Button size="icon-sm" variant="ghost" aria-label="Editar plan">
+                  <Pencil className="size-3.5" />
+                </Button>
+              }
+              onSubmit={(values) => handleUpdate(plan.id, values)}
+            />
+            <Button size="sm" variant="outline" onClick={() => void toggleActive(plan)}>
+              {plan.active ? "Desactivar" : "Activar"}
+            </Button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Planes"
-        description="Definen el precio y el límite de IA que después se asigna a cada empresa desde su detalle."
+        description="Planes de Nexo, de Nodo y el pack: productos, precios mensual y anual, límites y prueba gratuita."
         action={
-          <PlanDialog trigger={<Button size="sm"><Plus className="size-4" data-icon="inline-start" />Nuevo plan</Button>} onSubmit={handleCreate} />
+          <PlanDialog
+            allPlans={planOptions}
+            trigger={
+              <Button size="sm">
+                <Plus className="size-4" data-icon="inline-start" />
+                Nuevo plan
+              </Button>
+            }
+            onSubmit={handleCreate}
+          />
         }
       />
 
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="px-4 py-3 font-medium">Plan</th>
-              <th className="px-4 py-3 font-medium">Precio</th>
-              <th className="px-4 py-3 font-medium">Créditos IA</th>
-              <th className="px-4 py-3 font-medium">Funcionalidades</th>
-              <th className="px-4 py-3 font-medium">Empresas</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3 font-medium">Mercado Pago</th>
-              <th className="px-4 py-3 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <tr key={i} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3" colSpan={8}>
-                    <Skeleton className="h-5 w-full" />
-                  </td>
-                </tr>
-              ))
-            ) : !plans || plans.length === 0 ? (
-              <tr>
-                <td className="px-4 py-8 text-center text-muted-foreground" colSpan={8}>
-                  Todavía no hay planes creados.
-                </td>
-              </tr>
-            ) : (
-              plans.map((plan) => (
-                <tr key={plan.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-foreground">{plan.name}</p>
-                    <p className="text-xs text-muted-foreground">{plan.slug}</p>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {plan.monthlyPrice > 0 ? `${formatPrice(plan.monthlyPrice, plan.currency)} / mes` : "Nivel base"}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{plan.aiCredits > 0 ? numberFormatter.format(plan.aiCredits) : "No incluye"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {(Object.keys(FEATURE_LABEL) as (keyof typeof FEATURE_LABEL)[])
-                        .filter((key) => plan[key])
-                        .map((key) => (
-                          <Badge key={key} variant="outline" className="text-[11px]">
-                            {FEATURE_LABEL[key]}
-                          </Badge>
-                        ))}
-                      {plan.maxServices !== null && (
-                        <Badge variant="outline" className="text-[11px]">
-                          Hasta {plan.maxServices} servicios
-                        </Badge>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    <Link href={`/superadmin/empresas?plan=${plan.slug}`} className="underline-offset-2 hover:text-foreground hover:underline">
-                      {numberFormatter.format(plan.businessCount)}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={plan.active ? "secondary" : "outline"}>{plan.active ? "Activo" : "Inactivo"}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <MercadoPagoStatusCell plan={plan} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <PlanDialog
-                        plan={plan}
-                        trigger={
-                          <Button size="icon-sm" variant="ghost" aria-label="Editar plan">
-                            <Pencil className="size-3.5" />
-                          </Button>
-                        }
-                        onSubmit={(values) => handleUpdate(plan.id, values)}
-                      />
-                      <Button size="sm" variant="outline" onClick={() => void toggleActive(plan)}>
-                        {plan.active ? "Desactivar" : "Activar"}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {loading ? (
+        <Skeleton className="h-40 w-full rounded-2xl" />
+      ) : !plans || plans.length === 0 ? (
+        <p className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+          Todavía no hay planes creados.
+        </p>
+      ) : (
+        SECTIONS.map((section) => {
+          const rows = plans.filter((p) => offerKind(p.products) === section.kind);
+          return (
+            <section key={section.kind} className="space-y-2">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">{section.title}</h2>
+                <p className="text-xs text-muted-foreground">{section.hint}</p>
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="px-4 py-3 font-medium">Plan</th>
+                      <th className="px-4 py-3 font-medium">Precio y Mercado Pago</th>
+                      <th className="px-4 py-3 font-medium">Incluye</th>
+                      <th className="px-4 py-3 font-medium">Empresas</th>
+                      <th className="px-4 py-3 font-medium">Estado</th>
+                      <th className="px-4 py-3 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td className="px-4 py-6 text-center text-muted-foreground" colSpan={6}>
+                          Todavía no hay planes de este tipo.
+                        </td>
+                      </tr>
+                    ) : (
+                      rows.map(renderRow)
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          );
+        })
+      )}
 
       <p className="text-xs text-muted-foreground">
         Un plan con empresas asignadas no se puede eliminar — solo desactivar. Desactivarlo impide asignarlo a nuevas
-        empresas, pero no afecta a quienes ya lo tienen.
+        empresas, pero no afecta a quienes ya lo tienen. Cambiar un precio crea un plan nuevo en Mercado Pago para las
+        próximas contrataciones; quienes ya pagan siguen con el anterior.
       </p>
     </div>
   );

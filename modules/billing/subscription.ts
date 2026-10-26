@@ -67,6 +67,10 @@ export interface PlanSummary {
   // Usuarios incluidos en Nodo. null en planes sin Nodo.
   crmMaxUsers: number | null;
   trialDays: number | null;
+  displayOrder: number;
+  // Pack: planes individuales de referencia para calcular el ahorro.
+  packNexoPlanId: string | null;
+  packCrmPlanId: string | null;
   // Precios por período. Vacío cuando la consulta no los incluyó.
   prices: PlanPriceSummary[];
 }
@@ -414,7 +418,7 @@ export async function listActivePlans(): Promise<PublicPlan[]> {
   // El nivel base no es una opción comercial: nunca se lista para contratar.
   const plans = await prisma.plan.findMany({
     where: { active: true, slug: { not: BASE_PLAN_SLUG } },
-    orderBy: { monthlyPrice: "asc" },
+    orderBy: [{ displayOrder: "asc" }, { monthlyPrice: "asc" }],
     include: { prices: true },
   });
   return plans.map((p) => ({ ...planToSummary(p), description: p.description }));
@@ -451,7 +455,7 @@ export interface PlanWithUsage extends PlanSummary {
 
 export async function listPlansForAdmin(): Promise<PlanWithUsage[]> {
   const [plans, counts] = await Promise.all([
-    prisma.plan.findMany({ orderBy: { monthlyPrice: "asc" }, include: { prices: true } }),
+    prisma.plan.findMany({ orderBy: [{ displayOrder: "asc" }, { monthlyPrice: "asc" }], include: { prices: true } }),
     prisma.subscription.groupBy({ by: ["planId"], _count: { _all: true } }),
   ]);
 
@@ -488,6 +492,9 @@ export interface PlanInput {
   trialDays?: number | null;
   // undefined = no tocar el precio anual; null/0 = desactivarlo.
   yearlyPrice?: number | null;
+  displayOrder?: number;
+  packNexoPlanId?: string | null;
+  packCrmPlanId?: string | null;
 }
 
 // Reglas comerciales que el schema no puede expresar (ver planSchema).
@@ -499,6 +506,35 @@ export function validatePlanCommercial(input: { products?: string[]; crmMaxUsers
   if (products.some((p) => p !== "nexo" && p !== "crm")) return "Producto desconocido.";
   if (products.includes("crm") && (!crmMaxUsers || crmMaxUsers < 1)) {
     return "Un plan que incluye Nodo tiene que fijar cuántos usuarios incluye.";
+  }
+  return null;
+}
+
+// Referencias del pack (contra qué planes se calcula el ahorro): solo en
+// planes con los dos productos, y cada una tiene que ser un plan de UN solo
+// producto del tipo correcto (Nexo → solo Nexo; Nodo → solo Nodo).
+export async function validatePackReferences(
+  input: { products?: string[]; packNexoPlanId?: string | null; packCrmPlanId?: string | null },
+  existing?: { id: string; products: string[]; packNexoPlanId: string | null; packCrmPlanId: string | null }
+): Promise<string | null> {
+  const products = input.products ?? existing?.products ?? ["nexo"];
+  const isPack = products.includes("nexo") && products.includes("crm");
+  const nexoRef = input.packNexoPlanId !== undefined ? input.packNexoPlanId : (existing?.packNexoPlanId ?? null);
+  const crmRef = input.packCrmPlanId !== undefined ? input.packCrmPlanId : (existing?.packCrmPlanId ?? null);
+  if (!isPack) {
+    return nexoRef || crmRef ? "Solo un pack (Nexo + Nodo) compara contra planes individuales." : null;
+  }
+  for (const [ref, kind, label] of [
+    [nexoRef, "nexo", "Nexo"],
+    [crmRef, "crm", "Nodo"],
+  ] as const) {
+    if (!ref) continue;
+    if (existing && ref === existing.id) return "Un pack no puede compararse contra sí mismo.";
+    const plan = await prisma.plan.findUnique({ where: { id: ref }, select: { products: true } });
+    if (!plan) return `El plan de ${label} elegido para comparar no existe.`;
+    if (plan.products.length !== 1 || plan.products[0] !== kind) {
+      return `Para comparar el pack elegí un plan que incluya solo ${label}.`;
+    }
   }
   return null;
 }
@@ -524,6 +560,9 @@ export async function createPlan(data: PlanInput): Promise<PlanWithUsage> {
       products: data.products ?? ["nexo"],
       crmMaxUsers: data.products?.includes("crm") ? (data.crmMaxUsers ?? null) : null,
       trialDays: data.trialDays ?? null,
+      displayOrder: data.displayOrder ?? 0,
+      packNexoPlanId: data.packNexoPlanId ?? null,
+      packCrmPlanId: data.packCrmPlanId ?? null,
     },
   });
   await upsertPlanPrices(plan.id, { yearlyPrice: data.yearlyPrice });
@@ -557,6 +596,9 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
       ...(data.products !== undefined ? { products: data.products } : {}),
       ...(data.crmMaxUsers !== undefined ? { crmMaxUsers: data.crmMaxUsers } : {}),
       ...(data.trialDays !== undefined ? { trialDays: data.trialDays } : {}),
+      ...(data.displayOrder !== undefined ? { displayOrder: data.displayOrder } : {}),
+      ...(data.packNexoPlanId !== undefined ? { packNexoPlanId: data.packNexoPlanId } : {}),
+      ...(data.packCrmPlanId !== undefined ? { packCrmPlanId: data.packCrmPlanId } : {}),
     },
   });
   await upsertPlanPrices(plan.id, { yearlyPrice: data.yearlyPrice });
@@ -626,6 +668,9 @@ function planToSummary(plan: {
   products?: string[];
   crmMaxUsers?: number | null;
   trialDays?: number | null;
+  displayOrder?: number;
+  packNexoPlanId?: string | null;
+  packCrmPlanId?: string | null;
   prices?: {
     id: string;
     interval: string;
@@ -661,6 +706,9 @@ function planToSummary(plan: {
     products: plan.products ?? ["nexo"],
     crmMaxUsers: plan.crmMaxUsers ?? null,
     trialDays: plan.trialDays ?? null,
+    displayOrder: plan.displayOrder ?? 0,
+    packNexoPlanId: plan.packNexoPlanId ?? null,
+    packCrmPlanId: plan.packCrmPlanId ?? null,
     prices: (plan.prices ?? [])
       .map((p) => ({
         id: p.id,

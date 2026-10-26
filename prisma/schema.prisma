@@ -863,6 +863,16 @@ model Plan {
   crmMaxUsers Int?
   // Días de prueba gratuita (free_trial del preapproval_plan). null/0 = sin.
   trialDays   Int?
+  // Orden en la página de precios (menor = primero).
+  displayOrder Int @default(0)
+  // Pack (plan con nexo + crm): planes individuales contra los que se
+  // calcula el ahorro — ver lib/billing-pricing.ts. null fuera de los packs.
+  packNexoPlanId String?
+  packCrmPlanId  String?
+  packNexoPlan   Plan?   @relation("PackNexo", fields: [packNexoPlanId], references: [id], onDelete: SetNull)
+  packCrmPlan    Plan?   @relation("PackCrm", fields: [packCrmPlanId], references: [id], onDelete: SetNull)
+  packsAsNexo    Plan[]  @relation("PackNexo")
+  packsAsCrm     Plan[]  @relation("PackCrm")
 
   // ── Mercado Pago (ver modules/billing/mercadopago/) ─────────────────────
   // Agenda interna (monthlyPrice = 0) nunca tiene estos campos poblados — no
@@ -1004,6 +1014,25 @@ model Subscription {
 // segundo intento con el mismo id choca contra el @id y el handler corta ahí
 // sin reprocesar. Fila de auditoría liviana, nunca se borra ni se lee para
 // nada más que este chequeo.
+// Auditoría del superadmin: quién cambió qué, cuándo y por qué (planes,
+// precios, asignaciones y bonificaciones). Solo inserciones.
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  actorEmail String
+  action     String
+  entityType String
+  entityId   String
+  businessId String?
+  reason     String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([businessId, createdAt])
+  @@schema("nexo")
+}
+
 model MercadoPagoWebhookEvent {
   id         String   @id
   type       String

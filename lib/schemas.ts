@@ -517,6 +517,11 @@ export const planSchema = z.object({
   trialDays: z.coerce.number().int().min(0).max(365).nullable().optional(),
   // Precio anual (débito automático cada 12 meses). null/0 = sin anual.
   yearlyPrice: z.coerce.number().min(0, "El precio no puede ser negativo").nullable().optional(),
+  displayOrder: z.coerce.number().int().min(0).max(999).optional(),
+  // Solo packs: planes individuales contra los que se calcula el ahorro
+  // (validados en el servidor, ver validatePackReferences).
+  packNexoPlanId: z.string().min(1).nullable().optional(),
+  packCrmPlanId: z.string().min(1).nullable().optional(),
 });
 
 // input/output separados (no z.infer) por el mismo motivo que ServiceFormInput

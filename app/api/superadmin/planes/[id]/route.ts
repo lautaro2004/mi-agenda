@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getSuperadminSession } from "@/lib/auth/superadmin";
 import { planUpdateSchema } from "@/lib/schemas";
-import { updatePlan, getPlanById, validatePlanCommercial } from "@/modules/billing/subscription";
+import { updatePlan, getPlanById, validatePlanCommercial, validatePackReferences, listPlansForAdmin } from "@/modules/billing/subscription";
+import { logAdminAction } from "@/modules/admin/audit";
 import { syncPlanPricesWithMercadoPago, syncPlanWithMercadoPago } from "@/modules/billing/mercadopago/sync-plan";
 
 interface RouteParams {
@@ -29,7 +30,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const existing = await getPlanById(id);
   if (!existing) return NextResponse.json({ error: "Plan no encontrado." }, { status: 404 });
-  const commercialError = validatePlanCommercial(parsed.data, existing);
+  const commercialError = validatePlanCommercial(parsed.data, existing) ?? (await validatePackReferences(parsed.data, existing));
   if (commercialError) return NextResponse.json({ error: commercialError }, { status: 400 });
 
   try {
@@ -44,7 +45,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const synced = await syncPlanWithMercadoPago(plan);
     // Después del mensual de siempre: precio anual (si hay) — ver sync-plan.ts.
     await syncPlanPricesWithMercadoPago(plan.id);
-    return NextResponse.json({ plan: synced ?? plan });
+    const fresh = (await listPlansForAdmin()).find((p) => p.id === plan.id);
+    await logAdminAction({ actorEmail: admin.email, action: "plan.update", entityType: "plan", entityId: plan.id, before: existing, after: fresh ?? plan });
+    return NextResponse.json({ plan: fresh ?? synced ?? plan });
   } catch (error) {
     console.error("[superadmin/planes/:id] Error al actualizar plan:", error);
     return NextResponse.json({ error: "No pudimos actualizar el plan. ¿El slug ya existe?" }, { status: 400 });

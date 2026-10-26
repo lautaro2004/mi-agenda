@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getSuperadminSession } from "@/lib/auth/superadmin";
 import { planSchema } from "@/lib/schemas";
-import { createPlan, listPlansForAdmin, validatePlanCommercial } from "@/modules/billing/subscription";
+import { createPlan, listPlansForAdmin, validatePackReferences, validatePlanCommercial } from "@/modules/billing/subscription";
+import { logAdminAction } from "@/modules/admin/audit";
 import { syncPlanPricesWithMercadoPago, syncPlanWithMercadoPago } from "@/modules/billing/mercadopago/sync-plan";
 
 export async function GET() {
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
   }
 
-  const commercialError = validatePlanCommercial(parsed.data);
+  const commercialError = validatePlanCommercial(parsed.data) ?? (await validatePackReferences(parsed.data));
   if (commercialError) return NextResponse.json({ error: commercialError }, { status: 400 });
 
   try {
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     // Después del mensual de siempre: precio anual (si hay) — ver sync-plan.ts.
     await syncPlanPricesWithMercadoPago(plan.id);
     const fresh = (await listPlansForAdmin()).find((p) => p.id === plan.id);
+    await logAdminAction({ actorEmail: admin.email, action: "plan.create", entityType: "plan", entityId: plan.id, after: fresh ?? plan });
     return NextResponse.json({ plan: fresh ?? synced ?? plan }, { status: 201 });
   } catch (error) {
     // Choque más probable: slug duplicado (@unique en Plan.slug).
