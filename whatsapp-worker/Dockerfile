@@ -10,6 +10,5 @@ RUN npm ci --ignore-scripts && npm i --no-save tsx@4 && npx prisma generate
 COPY . .
 ENV NODE_ENV=production \
     WHATSAPP_SESSIONS_DIR=/data/whatsapp-sessions
-VOLUME ["/data"]
 EXPOSE 8080
 CMD ["npx", "tsx", "--tsconfig", "tsconfig.json", "whatsapp-worker/server.ts"]
