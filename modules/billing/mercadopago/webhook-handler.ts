@@ -4,7 +4,11 @@ import {
   getSubscriptionWithPlan,
   type BusinessSubscription,
 } from "@/modules/billing/subscription";
-import { classifyInstallment, getAuthorizedPayment } from "@/modules/billing/mercadopago/authorized-payments";
+import {
+  classifyInstallment,
+  getAuthorizedPayment,
+  type AuthorizedPaymentSnapshot,
+} from "@/modules/billing/mercadopago/authorized-payments";
 import { getPreapproval } from "@/modules/billing/mercadopago/subscriptions";
 import { mapMercadoPagoStatus } from "@/modules/billing/mercadopago/status-map";
 import { recordWebhookEventOnce } from "@/modules/billing/mercadopago/webhook-events";
@@ -153,6 +157,24 @@ async function processAuthorizedPayment(authorizedPaymentId: string): Promise<We
   // ya no es el del negocio, no hay suscripción que tocar.
   const existing = await getSubscriptionByPreapprovalId(installment.preapprovalId);
   if (!existing) return { handled: true, duplicate: false, action: "skipped_no_subscription" };
+  return applyInstallment(existing, installment);
+}
+
+// Aplica UNA cuota a la suscripción vigente. Compartida por el webhook y la
+// conciliación (reconcile.ts): misma regla, se haya enterado Nexo por
+// notificación o releyendo Mercado Pago. Idempotente: aplicar dos veces la
+// misma cuota deja el mismo estado (pastDueSince no se reinicia, el período
+// sale de la propia cuota/preapproval).
+export async function applyInstallment(
+  existing: BusinessSubscription,
+  installment: AuthorizedPaymentSnapshot,
+  now: Date = new Date()
+): Promise<WebhookProcessResult> {
+  const outcome = classifyInstallment(installment);
+  if (outcome === "pending") return { handled: true, duplicate: false, action: "acknowledged" };
+  if (!installment.preapprovalId) {
+    return { handled: false, error: `La cuota ${installment.id} no tiene preapproval_id.` };
+  }
   if (existing.status === "canceled" || existing.status === "expired") {
     return { handled: true, duplicate: false, action: "skipped_stale" };
   }
@@ -160,7 +182,6 @@ async function processAuthorizedPayment(authorizedPaymentId: string): Promise<We
     return { handled: true, duplicate: false, action: "skipped_stale" };
   }
 
-  const now = new Date();
   if (outcome === "paid") {
     let nextPaymentDate: Date | null = existing.currentPeriodEnd;
     try {

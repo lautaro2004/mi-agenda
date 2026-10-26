@@ -41,3 +41,25 @@ export function classifyInstallment(snapshot: Pick<AuthorizedPaymentSnapshot, "s
   if (snapshot.status === "processed" && snapshot.paymentStatus === "rejected") return "failing";
   return "pending";
 }
+
+/** Cuotas de un preapproval, la más reciente primero (para la conciliación). */
+export async function searchAuthorizedPayments(preapprovalId: string): Promise<AuthorizedPaymentSnapshot[]> {
+  const response = await new Invoice(getMercadoPagoClient()).search({ options: { preapproval_id: preapprovalId, limit: 20 } });
+  return (response.results ?? [])
+    .map((r) => ({
+      id: String(r.id ?? ""),
+      preapprovalId: r.preapproval_id ?? preapprovalId,
+      status: r.status ?? null,
+      paymentStatus: r.payment?.status ?? null,
+      debitDate: r.debit_date ? new Date(r.debit_date) : null,
+    }))
+    .sort((a, b) => (b.debitDate?.getTime() ?? 0) - (a.debitDate?.getTime() ?? 0));
+}
+
+/**
+ * La cuota que define el estado actual: la más reciente que ya se resolvió
+ * (cobrada o fallando). Las programadas/en proceso todavía no dicen nada.
+ */
+export function latestDecisiveInstallment(installments: AuthorizedPaymentSnapshot[]): AuthorizedPaymentSnapshot | null {
+  return installments.find((i) => classifyInstallment(i) !== "pending") ?? null;
+}
