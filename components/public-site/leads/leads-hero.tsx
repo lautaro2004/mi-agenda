@@ -74,7 +74,13 @@ export function LeadsHero({ business, title, subtitle, ctaLabel, services, image
               )}
             </div>
 
-            <h1 className="mt-6 max-w-[16ch] text-[2.6rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance sm:text-6xl">
+            {/* Color explícito (la base global pinta los títulos con text-foreground). */}
+            <h1
+              className={cn(
+                "mt-6 max-w-[16ch] text-[2.6rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance sm:text-6xl",
+                light ? "text-white" : "text-neutral-950"
+              )}
+            >
               {title}
             </h1>
 

@@ -46,7 +46,11 @@ export function LeadsFinalCta({
 
         <div className="relative grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-14">
           <div data-reveal>
-            <h2 className="max-w-[16ch] text-3xl font-semibold tracking-[-0.03em] text-balance sm:text-5xl">{title}</h2>
+            {/* Color explícito: la base global pinta h1–h4 con text-foreground
+                (app/globals.css) y le ganaba al color heredado del panel oscuro. */}
+            <h2 className="max-w-[16ch] text-3xl font-semibold tracking-[-0.03em] text-balance text-background sm:text-5xl">
+              {title}
+            </h2>
             <p className="mt-4 max-w-[44ch] text-base leading-relaxed text-background/75 sm:text-lg">{body}</p>
             <ul className="mt-7 flex flex-col gap-3">
               {reasons.map((reason) => (
@@ -79,7 +83,7 @@ export function LeadsFinalCta({
           <div data-reveal className="rounded-[1.5rem] bg-background text-foreground shadow-2xl">
             <div className="flex items-start justify-between gap-3 px-5 pt-6 sm:px-6">
               <div>
-                <h3 className="text-xl font-semibold tracking-tight">{formTitle}</h3>
+                <h3 className="text-xl font-semibold tracking-tight text-foreground">{formTitle}</h3>
                 {formSubtitle && <p className="mt-1 text-sm text-muted-foreground">{formSubtitle}</p>}
               </div>
               <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
