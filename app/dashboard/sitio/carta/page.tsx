@@ -41,7 +41,7 @@ export default function MenuPage() {
   const { data: subscriptionData } = useBusinessSubscription();
   // undefined mientras carga: no bloqueamos la carta antes de saber el plan
   // real (mismo criterio que app/dashboard/whatsapp/conexion/page.tsx).
-  const digitalMenuEnabled = subscriptionData?.subscription?.plan.digitalMenuEnabled ?? true;
+  const digitalMenuEnabled = (subscriptionData?.subscription?.effectivePlan ?? subscriptionData?.subscription?.plan)?.digitalMenuEnabled ?? true;
 
   const [menu, setMenu] = React.useState<MenuState | null>(null);
   const [loadError, setLoadError] = React.useState(false);

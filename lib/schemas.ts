@@ -507,6 +507,16 @@ export const planSchema = z.object({
   galleryEnabled: z.boolean().default(true),
   digitalMenuEnabled: z.boolean().default(true),
   active: z.boolean().default(true),
+  // ── Facturación unificada Nexo + Nodo ───────────────────────────────────
+  // Qué habilita el plan. Default ["nexo"] = comportamiento de siempre.
+  // "Un plan con Nodo fija sus usuarios incluidos" se valida en el servicio
+  // (validatePlanCommercial): un .refine acá rompería planUpdateSchema
+  // (.partial() no admite refinamientos).
+  products: z.array(z.enum(["nexo", "crm"])).min(1, "Elegí al menos un producto").default(["nexo"]),
+  crmMaxUsers: z.coerce.number().int().min(1, "Al menos 1 usuario").max(1000).nullable().optional(),
+  trialDays: z.coerce.number().int().min(0).max(365).nullable().optional(),
+  // Precio anual (débito automático cada 12 meses). null/0 = sin anual.
+  yearlyPrice: z.coerce.number().min(0, "El precio no puede ser negativo").nullable().optional(),
 });
 
 // input/output separados (no z.infer) por el mismo motivo que ServiceFormInput
@@ -674,6 +684,8 @@ export const subscriptionCheckoutSchema = z.object({
   planId: z.string().min(1, "Elegí un plan"),
   cardTokenId: z.string().min(1, "Falta el token de la tarjeta"),
   payerEmail: z.string().email("Email inválido"),
+  // Ausente = mensual (la pantalla de siempre no lo manda).
+  interval: z.enum(["month", "year"]).optional(),
 });
 
 export type SubscriptionCheckoutValues = z.infer<typeof subscriptionCheckoutSchema>;

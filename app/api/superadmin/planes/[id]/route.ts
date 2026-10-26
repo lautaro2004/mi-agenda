@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getSuperadminSession } from "@/lib/auth/superadmin";
 import { planUpdateSchema } from "@/lib/schemas";
-import { updatePlan } from "@/modules/billing/subscription";
-import { syncPlanWithMercadoPago } from "@/modules/billing/mercadopago/sync-plan";
+import { updatePlan, getPlanById, validatePlanCommercial } from "@/modules/billing/subscription";
+import { syncPlanPricesWithMercadoPago, syncPlanWithMercadoPago } from "@/modules/billing/mercadopago/sync-plan";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -27,6 +27,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
   }
 
+  const existing = await getPlanById(id);
+  if (!existing) return NextResponse.json({ error: "Plan no encontrado." }, { status: 404 });
+  const commercialError = validatePlanCommercial(parsed.data, existing);
+  if (commercialError) return NextResponse.json({ error: commercialError }, { status: 400 });
+
   try {
     const plan = await updatePlan(id, parsed.data);
     if (!plan) {
@@ -37,6 +42,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     // si cambió el precio — ver syncPlanWithMercadoPago). Si el plan pasó a
     // ser de precio 0 (Agenda interna) o ya serlo, esto es un no-op.
     const synced = await syncPlanWithMercadoPago(plan);
+    // Después del mensual de siempre: precio anual (si hay) — ver sync-plan.ts.
+    await syncPlanPricesWithMercadoPago(plan.id);
     return NextResponse.json({ plan: synced ?? plan });
   } catch (error) {
     console.error("[superadmin/planes/:id] Error al actualizar plan:", error);

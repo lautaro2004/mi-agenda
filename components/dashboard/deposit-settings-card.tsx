@@ -38,7 +38,7 @@ interface DepositSettingsCardProps {
 export function DepositSettingsCard({ business, onSaved }: DepositSettingsCardProps) {
   const [justSaved, setJustSaved] = React.useState(false);
   const { data: subscriptionData } = useBusinessSubscription();
-  const depositsEnabled = subscriptionData?.subscription?.plan.depositsEnabled ?? true;
+  const depositsEnabled = (subscriptionData?.subscription?.effectivePlan ?? subscriptionData?.subscription?.plan)?.depositsEnabled ?? true;
 
   const {
     register,

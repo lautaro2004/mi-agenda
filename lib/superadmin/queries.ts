@@ -170,7 +170,7 @@ export async function getAiUsageRanking(params: { from: Date; take?: number }): 
     .map((r) => {
       const sub = r.businessId ? (subsByBusiness.get(r.businessId) ?? null) : null;
       const requests = r._count._all;
-      const aiCreditsLimit = sub?.plan.aiCredits ?? null;
+      const aiCreditsLimit = sub?.nexoPlan.aiCredits ?? null;
       return {
         businessId: r.businessId,
         businessName: r.businessId ? (nameById.get(r.businessId) ?? "Negocio eliminado") : "Sin negocio asociado",
@@ -425,7 +425,7 @@ export interface PlanUsageInfo {
 
 function buildPlanUsageInfo(sub: BusinessSubscription | null, requestsThisMonth: number): PlanUsageInfo {
   const access = resolveAiAccess(sub);
-  const aiCreditsLimit = sub ? sub.plan.aiCredits : null;
+  const aiCreditsLimit = sub ? sub.nexoPlan.aiCredits : null;
   return {
     plan: sub?.plan ?? null,
     subscriptionStatus: access.status,

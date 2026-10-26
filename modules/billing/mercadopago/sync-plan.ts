@@ -1,5 +1,6 @@
 import type { PlanWithUsage } from "@/modules/billing/subscription";
-import { updatePlanMercadoPagoSync } from "@/modules/billing/subscription";
+import { updatePlanMercadoPagoSync, updatePlanPriceMercadoPagoSync, upsertPlanPrices } from "@/modules/billing/subscription";
+import { prisma } from "@/lib/prisma";
 import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago/client";
 import { createPreapprovalPlan, getPreapprovalPlan, updatePreapprovalPlanMetadata } from "@/modules/billing/mercadopago/plans";
 
@@ -32,6 +33,9 @@ interface PlanForSync {
   currency: string;
   active: boolean;
   mercadoPagoPlanId: string | null;
+  // Prueba gratuita (null en todos los planes existentes → misma llamada
+  // a Mercado Pago que siempre).
+  trialDays?: number | null;
 }
 
 // Devuelve null cuando no hace falta sincronizar (Agenda interna / precio 0) — el caller
@@ -74,6 +78,9 @@ export async function syncPlanWithMercadoPago(plan: PlanForSync): Promise<PlanWi
         name: plan.name,
         monthlyPrice: plan.monthlyPrice,
         currency: plan.currency,
+        // Solo si hay prueba: sin ella, la llamada es idéntica a la de
+        // siempre (la que ya funciona en producción).
+        ...(plan.trialDays ? { trialDays: plan.trialDays } : {}),
       });
       return updatePlanMercadoPagoSync(plan.id, {
         mercadoPagoPlanId: created.id,
@@ -94,6 +101,9 @@ export async function syncPlanWithMercadoPago(plan: PlanForSync): Promise<PlanWi
         name: plan.name,
         monthlyPrice: plan.monthlyPrice,
         currency: plan.currency,
+        // Solo si hay prueba: sin ella, la llamada es idéntica a la de
+        // siempre (la que ya funciona en producción).
+        ...(plan.trialDays ? { trialDays: plan.trialDays } : {}),
       });
       return updatePlanMercadoPagoSync(plan.id, {
         mercadoPagoPlanId: created.id,
@@ -109,5 +119,61 @@ export async function syncPlanWithMercadoPago(plan: PlanForSync): Promise<PlanWi
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido al sincronizar con Mercado Pago.";
     return updatePlanMercadoPagoSync(plan.id, { mercadoPagoSyncStatus: "error", mercadoPagoSyncError: message });
+  }
+}
+
+// ── Precios por período (facturación unificada) ──────────────────────────
+// Se llama DESPUÉS de syncPlanWithMercadoPago (el mensual de siempre):
+// 1. refleja el precio mensual en su PlanPrice (mismo preapproval_plan,
+//    nunca crea otro);
+// 2. sincroniza el ANUAL como su propio preapproval_plan de 12 meses, con
+//    las mismas reglas que el mensual: un cambio de monto/moneda crea uno
+//    nuevo (los suscriptores existentes siguen en el anterior), un cambio de
+//    nombre/estado actualiza el existente.
+// Nunca lanza: un error queda en mercadoPagoSyncStatus/SyncError del precio.
+export async function syncPlanPricesWithMercadoPago(planId: string): Promise<void> {
+  await upsertPlanPrices(planId, {});
+  const plan = await prisma.plan.findUnique({ where: { id: planId }, include: { prices: true } });
+  if (!plan) return;
+  const yearly = plan.prices.find((p) => p.interval === "year");
+  if (!yearly) return;
+  // Inactivo y nunca sincronizado: no hay nada que crear en MP.
+  if (!yearly.active && !yearly.mercadoPagoPlanId) return;
+  if (!isMercadoPagoConfigured()) {
+    await updatePlanPriceMercadoPagoSync(yearly.id, {
+      mercadoPagoSyncStatus: "error",
+      mercadoPagoSyncError: "Mercado Pago no está configurado (falta MERCADOPAGO_ACCESS_TOKEN).",
+    });
+    return;
+  }
+  const name = `${plan.name} (anual)`;
+  try {
+    const needsNew =
+      !yearly.mercadoPagoPlanId ||
+      (await (async () => {
+        const current = await getPreapprovalPlan(yearly.mercadoPagoPlanId!);
+        return current.transactionAmount !== yearly.amount || current.currencyId !== yearly.currency;
+      })());
+    if (needsNew) {
+      if (!yearly.active) return; // no se crea un preapproval_plan para un precio desactivado
+      const created = await createPreapprovalPlan({
+        name,
+        monthlyPrice: yearly.amount,
+        currency: yearly.currency,
+        frequencyMonths: 12,
+        trialDays: plan.trialDays,
+      });
+      await updatePlanPriceMercadoPagoSync(yearly.id, {
+        mercadoPagoPlanId: created.id,
+        mercadoPagoSyncStatus: "synced",
+        mercadoPagoSyncError: null,
+      });
+      return;
+    }
+    await updatePreapprovalPlanMetadata(yearly.mercadoPagoPlanId!, { name, active: yearly.active });
+    await updatePlanPriceMercadoPagoSync(yearly.id, { mercadoPagoSyncStatus: "synced", mercadoPagoSyncError: null });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error desconocido al sincronizar con Mercado Pago.";
+    await updatePlanPriceMercadoPagoSync(yearly.id, { mercadoPagoSyncStatus: "error", mercadoPagoSyncError: message });
   }
 }

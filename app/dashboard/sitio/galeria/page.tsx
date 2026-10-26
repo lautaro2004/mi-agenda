@@ -21,7 +21,7 @@ export default function GalleryPage() {
   const { data: subscriptionData } = useBusinessSubscription();
   // undefined mientras carga: no bloqueamos "Nuevo bloque" antes de saber el
   // plan real (mismo criterio que app/dashboard/whatsapp/conexion/page.tsx).
-  const galleryEnabled = subscriptionData?.subscription?.plan.galleryEnabled ?? true;
+  const galleryEnabled = (subscriptionData?.subscription?.effectivePlan ?? subscriptionData?.subscription?.plan)?.galleryEnabled ?? true;
 
   const load = React.useCallback(() => {
     setLoadError(false);

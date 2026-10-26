@@ -119,6 +119,45 @@ describe("createSubscriptionCheckout — validaciones de Nexo", () => {
     expect(createPreapproval).not.toHaveBeenCalled();
   });
 
+  it("ALREADY_SUBSCRIBED también con un pago atrasado (el débito sigue vivo: evitar doble cobro)", async () => {
+    getSubscriptionWithPlan.mockResolvedValue({ provider: "mercadopago", status: "past_due" });
+    const result = await createSubscriptionCheckout(INPUT);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error.code).toBe("ALREADY_SUBSCRIBED");
+  });
+
+  it("anual: usa el preapproval_plan del precio anual y guarda el período", async () => {
+    getPlanById.mockResolvedValue({
+      ...PLAN_ESENCIAL,
+      prices: [{ id: "price_year", interval: "year", active: true, mercadoPagoPlanId: "mp_plan_anual" }],
+    });
+    getSubscriptionWithPlan.mockResolvedValue(null);
+    createPreapproval.mockResolvedValue({ id: "preapproval_y", status: "authorized" });
+    assignSubscription.mockResolvedValue({ ok: true, subscription: {} });
+
+    await createSubscriptionCheckout({ ...INPUT, interval: "year" });
+
+    expect(createPreapproval).toHaveBeenCalledWith(expect.objectContaining({ preapprovalPlanId: "mp_plan_anual" }));
+    expect(assignSubscription).toHaveBeenCalledWith(
+      "biz_1",
+      expect.objectContaining({ planPriceId: "price_year", billingInterval: "year" })
+    );
+    // El espía de console.log se reutiliza entre tests (beforeEach no lo
+    // reinicia): sin esto, la línea de diagnóstico de ESTE checkout anual es
+    // la que encuentra el test de diagnóstico de más abajo.
+    consoleLogSpy.mockClear();
+  });
+
+  it("anual sin precio anual sincronizado → PLAN_NOT_SYNCED (nunca cae en el mensual)", async () => {
+    getPlanById.mockResolvedValue({ ...PLAN_ESENCIAL, prices: [] });
+    getSubscriptionWithPlan.mockResolvedValue(null);
+    const result = await createSubscriptionCheckout({ ...INPUT, interval: "year" });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error.code).toBe("PLAN_NOT_SYNCED");
+  });
+
   it("permite contratar si la suscripción existente NO es de Mercado Pago (ej. trial/benefit)", async () => {
     getSubscriptionWithPlan.mockResolvedValue({ provider: "manual", status: "trialing", planId: "plan_gratis" });
     createPreapproval.mockResolvedValue({ id: "preapproval_1", status: "authorized" });

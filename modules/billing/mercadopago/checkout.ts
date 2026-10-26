@@ -1,4 +1,4 @@
-import type { BusinessSubscription } from "@/modules/billing/subscription";
+import type { BillingInterval, BusinessSubscription } from "@/modules/billing/subscription";
 import { BASE_PLAN_SLUG, assignSubscription, getPlanById, getSubscriptionWithPlan } from "@/modules/billing/subscription";
 import { createPreapproval } from "@/modules/billing/mercadopago/subscriptions";
 import { getPreapprovalPlan } from "@/modules/billing/mercadopago/plans";
@@ -46,6 +46,9 @@ export interface CheckoutInput {
   planId: string;
   payerEmail: string;
   cardTokenId: string;
+  // Período a contratar. Ausente = "month": la pantalla de Nexo de siempre
+  // sigue mandando lo mismo y usa el mismo preapproval_plan de siempre.
+  interval?: BillingInterval;
 }
 
 export type CheckoutResult =
@@ -58,7 +61,7 @@ const SIMPLE_ERROR_MESSAGE: Record<SimpleErrorCode, string> = {
   PLAN_NOT_FOUND: "El plan elegido no existe.",
   PLAN_INACTIVE: "Ese plan ya no está disponible.",
   PLAN_NOT_SYNCED: "Ese plan todavía no está disponible para contratar — probá de nuevo en unos minutos.",
-  ALREADY_SUBSCRIBED: "Ya tenés una suscripción paga activa.",
+  ALREADY_SUBSCRIBED: "Ya tenés una suscripción paga activa. Si tenés un pago pendiente, actualizá tu medio de pago en lugar de contratar de nuevo.",
   MERCADOPAGO_NOT_CONFIGURED: "La contratación online todavía no está configurada.",
   NEXO_ACTIVATION_ERROR: "El pago se procesó, pero no pudimos activar tu plan.",
   UNEXPECTED_ERROR: "No pudimos procesar la contratación. Intentá de nuevo en unos minutos.",
@@ -121,10 +124,21 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   // plan comercial. Se rechaza por slug además del chequeo de abajo, así
   // que no depende de que nadie le sincronice un preapproval_plan por error.
   if (plan.slug === BASE_PLAN_SLUG) return simpleError("PLAN_NOT_FOUND");
-  if (!plan.mercadoPagoPlanId) return simpleError("PLAN_NOT_SYNCED");
-
+  // Precio del período elegido. El mensual es el preapproval_plan de
+  // siempre (Plan.mercadoPagoPlanId); el anual, el de su PlanPrice.
+  const interval: BillingInterval = input.interval ?? "month";
+  const price = (plan.prices ?? []).find((p) => p.interval === interval);
+  const mercadoPagoPlanId = interval === "month" ? plan.mercadoPagoPlanId : (price?.active ? price.mercadoPagoPlanId : null);
+  if (!mercadoPagoPlanId) return simpleError("PLAN_NOT_SYNCED");
   const existing = await getSubscriptionWithPlan(input.businessId);
-  if (existing?.provider === "mercadopago" && existing.status === "active") {
+  // Un preapproval vivo (al día O con un cobro en reintento) ya está
+  // cobrando: crear otro sería un doble débito. Antes solo se miraba
+  // "active", y con un pago atrasado se podía duplicar.
+  if (
+    existing?.provider === "mercadopago" &&
+    existing.status !== "canceled" &&
+    existing.status !== "expired"
+  ) {
     return simpleError("ALREADY_SUBSCRIBED");
   }
 
@@ -138,14 +152,14 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   // para descartar una mezcla de credenciales TEST/producción o de
   // aplicaciones distintas. Sacar una vez resuelta la investigación.
   console.log(
-    `[checkout][diag] negocio=${input.businessId} preapproval_plan_id=${plan.mercadoPagoPlanId} card_token_id=${maskTail(input.cardTokenId)} access_token=${getAccessTokenFingerprint()}`
+    `[checkout][diag] negocio=${input.businessId} preapproval_plan_id=${mercadoPagoPlanId} card_token_id=${maskTail(input.cardTokenId)} access_token=${getAccessTokenFingerprint()}`
   );
-  await logPreapprovalPlanDiagnostics(plan.mercadoPagoPlanId);
+  await logPreapprovalPlanDiagnostics(mercadoPagoPlanId);
 
   let preapproval;
   try {
     preapproval = await createPreapproval({
-      preapprovalPlanId: plan.mercadoPagoPlanId,
+      preapprovalPlanId: mercadoPagoPlanId,
       payerEmail: input.payerEmail,
       cardTokenId: input.cardTokenId,
       // Alcanza con businessId: Subscription es 1:1 por negocio (businessId
@@ -171,7 +185,7 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
       message: info.rawMessage,
       cardTokenIdTail: maskTail(input.cardTokenId),
       accessTokenTail: getAccessTokenFingerprint(),
-      preapprovalPlanId: plan.mercadoPagoPlanId,
+      preapprovalPlanId: mercadoPagoPlanId,
     });
 
     return {
@@ -219,6 +233,8 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
     providerSubscriptionId: preapproval.id,
     mercadoPagoStatus: preapproval.status,
     mercadoPagoLastSyncedAt: now,
+    ...(price ? { planPriceId: price.id } : {}),
+    billingInterval: interval,
   });
 
   if (!result.ok) {

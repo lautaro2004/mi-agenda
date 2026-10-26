@@ -60,8 +60,15 @@ function appBaseUrl(): string {
 
 export interface CreatePreapprovalPlanInput {
   name: string;
+  // Monto de CADA cobro (mensual o anual según frequencyMonths). El nombre
+  // se mantiene por compatibilidad con la sincronización mensual existente.
   monthlyPrice: number;
   currency: string;
+  // Opcionales: sin ellos, la llamada es idéntica a la de siempre (mensual,
+  // sin prueba). 12 = débito automático anual (la documentación de MP usa
+  // justamente "mensual y anual" como ejemplo de planes asociados).
+  frequencyMonths?: 1 | 12;
+  trialDays?: number | null;
 }
 
 // Alta de un preapproval_plan NUEVO — se usa tanto para la primera
@@ -76,10 +83,13 @@ export async function createPreapprovalPlan(input: CreatePreapprovalPlanInput): 
       reason: input.name,
       back_url: `${appBaseUrl()}/dashboard/suscripcion`,
       auto_recurring: {
-        frequency: 1,
+        frequency: input.frequencyMonths ?? 1,
         frequency_type: "months",
         transaction_amount: input.monthlyPrice,
         currency_id: input.currency,
+        ...(input.trialDays && input.trialDays > 0
+          ? { free_trial: { frequency: input.trialDays, frequency_type: "days" } }
+          : {}),
       },
     },
   });

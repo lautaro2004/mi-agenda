@@ -31,11 +31,11 @@ export default function EstadisticasPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const statsEnabled = subscriptionData?.subscription?.plan.statsEnabled ?? true;
+  const statsEnabled = (subscriptionData?.subscription?.effectivePlan ?? subscriptionData?.subscription?.plan)?.statsEnabled ?? true;
   // El desglose por servicio es el diferencial de Profesional (ver sección A
   // de la propuesta) — comparar por slug alcanza para esto, no amerita una
   // columna de Plan aparte (no es un gate duro, es aditivo).
-  const advanced = subscriptionData?.subscription?.plan.slug === "profesional";
+  const advanced = (subscriptionData?.subscription?.effectivePlan ?? subscriptionData?.subscription?.plan)?.slug === "profesional";
 
   React.useEffect(() => {
     if (!statsEnabled) {

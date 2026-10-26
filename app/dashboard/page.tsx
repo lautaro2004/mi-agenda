@@ -156,7 +156,7 @@ export default function DashboardPage() {
           label="Uso de IA"
           value={
             subscriptionData?.subscription
-              ? `${subscriptionData.aiUsage.requests} / ${subscriptionData.subscription.plan.aiCredits}`
+              ? `${subscriptionData.aiUsage.requests} / ${(subscriptionData.subscription.effectivePlan ?? subscriptionData.subscription.plan).aiCredits}`
               : "—"
           }
           description="Respuestas este período"

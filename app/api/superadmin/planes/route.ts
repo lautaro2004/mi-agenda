@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getSuperadminSession } from "@/lib/auth/superadmin";
 import { planSchema } from "@/lib/schemas";
-import { createPlan, listPlansForAdmin } from "@/modules/billing/subscription";
-import { syncPlanWithMercadoPago } from "@/modules/billing/mercadopago/sync-plan";
+import { createPlan, listPlansForAdmin, validatePlanCommercial } from "@/modules/billing/subscription";
+import { syncPlanPricesWithMercadoPago, syncPlanWithMercadoPago } from "@/modules/billing/mercadopago/sync-plan";
 
 export async function GET() {
   const admin = await getSuperadminSession();
@@ -27,6 +27,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
   }
 
+  const commercialError = validatePlanCommercial(parsed.data);
+  if (commercialError) return NextResponse.json({ error: commercialError }, { status: 400 });
+
   try {
     const plan = await createPlan(parsed.data);
     // Fase 2: un plan pago recién creado se sincroniza con Mercado Pago de
@@ -36,7 +39,10 @@ export async function POST(request: Request) {
     // que Superadmin lo vea y reintente, en vez de perder el plan recién
     // creado por un problema de MP.
     const synced = await syncPlanWithMercadoPago(plan);
-    return NextResponse.json({ plan: synced ?? plan }, { status: 201 });
+    // Después del mensual de siempre: precio anual (si hay) — ver sync-plan.ts.
+    await syncPlanPricesWithMercadoPago(plan.id);
+    const fresh = (await listPlansForAdmin()).find((p) => p.id === plan.id);
+    return NextResponse.json({ plan: fresh ?? synced ?? plan }, { status: 201 });
   } catch (error) {
     // Choque más probable: slug duplicado (@unique en Plan.slug).
     console.error("[superadmin/planes] Error al crear plan:", error);

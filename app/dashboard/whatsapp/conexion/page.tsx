@@ -26,7 +26,7 @@ export default function WhatsAppConnectionPage() {
   const { data: subscriptionData } = useBusinessSubscription();
   // undefined mientras carga: no bloqueamos el botón antes de saber el plan
   // real (evita un parpadeo "no podés" → "sí podés" apenas llega la data).
-  const whatsappEnabled = subscriptionData?.subscription?.plan.whatsappEnabled ?? true;
+  const whatsappEnabled = (subscriptionData?.subscription?.effectivePlan ?? subscriptionData?.subscription?.plan)?.whatsappEnabled ?? true;
 
   async function handleConnect() {
     try {

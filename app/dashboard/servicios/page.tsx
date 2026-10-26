@@ -17,7 +17,7 @@ import { useBusinessSubscription } from "@/lib/subscription-client";
 export default function ServicesSettingsPage() {
   const { state, hydrated, refresh, addService, updateService, removeService } = useOnboarding();
   const { data: subscriptionData } = useBusinessSubscription();
-  const maxServices = subscriptionData?.subscription?.plan.maxServices ?? null;
+  const maxServices = (subscriptionData?.subscription?.effectivePlan ?? subscriptionData?.subscription?.plan)?.maxServices ?? null;
   const atLimit = maxServices !== null && state.services.length >= maxServices;
 
   // El estado de OnboardingProvider es una foto tomada al loguearse (vive en

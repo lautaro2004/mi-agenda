@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { TrainingMode } from "@/modules/ai/prompt/training";
 import { BASE_PLAN_SLUG, BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus } from "@/lib/types";
+import { resolveProductAccess, type ProductAccess } from "@/lib/billing-access";
 
 // ── Planes y suscripciones ───────────────────────────────────────────────
 // Única capa que entiende Subscription/Plan: lib/ai-limits.ts (hot path, un
@@ -60,6 +61,29 @@ export interface PlanSummary {
   mercadoPagoSyncStatus: string | null;
   mercadoPagoLastSyncedAt: Date | null;
   mercadoPagoSyncError: string | null;
+  // ── Facturación unificada Nexo + Nodo (lib/billing-access.ts) ──────────
+  // ["nexo"], ["crm"] o ["nexo","crm"] (pack).
+  products: string[];
+  // Usuarios incluidos en Nodo. null en planes sin Nodo.
+  crmMaxUsers: number | null;
+  trialDays: number | null;
+  // Precios por período. Vacío cuando la consulta no los incluyó.
+  prices: PlanPriceSummary[];
+}
+
+export const BILLING_INTERVALS = ["month", "year"] as const;
+export type BillingInterval = (typeof BILLING_INTERVALS)[number];
+
+export interface PlanPriceSummary {
+  id: string;
+  interval: BillingInterval;
+  amount: number;
+  currency: string;
+  active: boolean;
+  mercadoPagoPlanId: string | null;
+  mercadoPagoSyncStatus: string | null;
+  mercadoPagoLastSyncedAt: Date | null;
+  mercadoPagoSyncError: string | null;
 }
 
 export interface BusinessSubscription {
@@ -80,12 +104,76 @@ export interface BusinessSubscription {
   // Subscription (prisma/schema.prisma) y revertExpiredBenefits() más abajo.
   benefitExpiresAt: Date | null;
   previousPlanId: string | null;
+  planPriceId: string | null;
+  billingInterval: BillingInterval | null;
+  // Inicio persistido del atraso (gracia de 7 días, ver lib/billing-access.ts).
+  pastDueSince: Date | null;
+  // Plan contratado (puede ser de Nexo, de Nodo o el pack).
   plan: PlanSummary;
+  // ── Acceso EFECTIVO (calculado, nunca persistido) ──────────────────────
+  // Se separan tres cosas: el plan CONTRATADO (`plan`, nunca se pisa), el
+  // ESTADO de la suscripción (`status`/`pastDueSince`) y el acceso efectivo
+  // a cada producto (esto). Ver lib/billing-access.ts.
+  nexoAccess: ProductAccess;
+  crmAccess: ProductAccess;
+  // Plan que Nexo usa para sus límites y funciones: el contratado mientras
+  // el acceso a Nexo esté vigente (activo, prueba, gracia de 7 días,
+  // cancelado dentro del período pago). Si no — plan sin Nexo, gracia
+  // vencida, prueba vencida, cancelado y vencido — el plan gratuito "Agenda
+  // interna". La configuración y los datos del plan anterior NO se tocan:
+  // vuelven solos al regularizar o contratar un plan que los incluya.
+  nexoPlan: PlanSummary;
+  // true cuando Nexo está funcionando con el plan gratuito por cualquiera
+  // de esos motivos (nexoPlan = Agenda interna).
+  nexoOnBaseTier: boolean;
 }
 
 type SubscriptionWithPlan = Prisma.SubscriptionGetPayload<{ include: { plan: true } }>;
+type PlanRow = SubscriptionWithPlan["plan"];
 
-function toBusinessSubscription(row: SubscriptionWithPlan): BusinessSubscription {
+// Fila del plan base, para resolver nexoPlan de los planes sin Nexo. Se lee
+// solo cuando hace falta (planes de Nodo) y se cachea un minuto.
+let basePlanCache: { row: PlanRow | null; at: number } | null = null;
+async function getBasePlanRow(): Promise<PlanRow | null> {
+  if (basePlanCache && Date.now() - basePlanCache.at < 60_000) return basePlanCache.row;
+  const row = await prisma.plan.findUnique({ where: { slug: BASE_PLAN_SLUG } });
+  basePlanCache = { row, at: Date.now() };
+  return row;
+}
+
+// Nivel base "vacío" si el plan base no existiera (no debería pasar): nada
+// de Nexo habilitado — nunca más de lo que corresponde.
+function emptyNexoTier(row: PlanRow): PlanSummary {
+  return {
+    ...planToSummary(row),
+    aiCredits: 0,
+    maxServices: 0,
+    publicWebEnabled: false,
+    whatsappEnabled: false,
+    depositsEnabled: false,
+    customTrainingEnabled: false,
+    statsEnabled: false,
+    galleryEnabled: false,
+    digitalMenuEnabled: false,
+  };
+}
+
+function toBusinessSubscription(row: SubscriptionWithPlan, basePlan?: PlanRow | null, now: Date = new Date()): BusinessSubscription {
+  const plan = planToSummary(row.plan);
+  const accessInput = {
+    status: row.status,
+    provider: row.provider,
+    currentPeriodEnd: row.currentPeriodEnd,
+    pastDueSince: row.pastDueSince,
+    mercadoPagoLastSyncedAt: row.mercadoPagoLastSyncedAt,
+    plan,
+  };
+  const nexoAccess = resolveProductAccess(accessInput, "nexo", now);
+  const crmAccess = resolveProductAccess(accessInput, "crm", now);
+  // El plan base en sí (Agenda interna) nunca "se degrada": ya es el gratuito.
+  const isBasePlan = row.plan.slug === BASE_PLAN_SLUG;
+  const onBaseTier = !isBasePlan && nexoAccess.access === "blocked";
+  const nexoPlan = !onBaseTier ? plan : basePlan ? planToSummary(basePlan) : emptyNexoTier(row.plan);
   return {
     id: row.id,
     businessId: row.businessId,
@@ -99,13 +187,23 @@ function toBusinessSubscription(row: SubscriptionWithPlan): BusinessSubscription
     mercadoPagoLastSyncedAt: row.mercadoPagoLastSyncedAt,
     benefitExpiresAt: row.benefitExpiresAt,
     previousPlanId: row.previousPlanId,
-    plan: planToSummary(row.plan),
+    planPriceId: row.planPriceId,
+    billingInterval: (row.billingInterval as BillingInterval | null) ?? null,
+    pastDueSince: row.pastDueSince,
+    plan,
+    nexoAccess,
+    crmAccess,
+    nexoPlan,
+    nexoOnBaseTier: onBaseTier,
   };
 }
 
 export async function getSubscriptionWithPlan(businessId: string): Promise<BusinessSubscription | null> {
   const row = await prisma.subscription.findUnique({ where: { businessId }, include: { plan: true } });
-  return row ? toBusinessSubscription(row) : null;
+  if (!row) return null;
+  // Siempre disponible (cacheado un minuto): cualquier suscripción puede
+  // terminar en el plan gratuito según su estado (gracia vencida, etc.).
+  return toBusinessSubscription(row, await getBasePlanRow());
 }
 
 export async function getSubscriptionsWithPlanForBusinesses(
@@ -118,8 +216,9 @@ export async function getSubscriptionsWithPlanForBusinesses(
     include: { plan: true },
   });
 
+  const basePlan = rows.length ? await getBasePlanRow() : null;
   const map = new Map<string, BusinessSubscription>();
-  for (const row of rows) map.set(row.businessId, toBusinessSubscription(row));
+  for (const row of rows) map.set(row.businessId, toBusinessSubscription(row, basePlan));
   return map;
 }
 
@@ -156,13 +255,12 @@ export interface AiAccessResolution {
   status: BillingSubscriptionStatus | "none";
 }
 
-// Única función que entiende la semántica de estados. trialing vencido,
-// canceled y expired cortan el acceso (limit 0) — exactamente lo que pide
-// la sección 11 del pedido: "si el trial está vencido, no debería seguir
-// consumiendo IA ilimitadamente". past_due se trata como período de gracia
-// (sigue activo): no hay dunning ni reintentos de cobro implementados
-// todavía, así que cortar de inmediato sería más agresivo de lo que el
-// sistema puede justificar hoy.
+// La semántica de estados vive en lib/billing-access.ts (resolveProductAccess)
+// y llega acá ya resuelta como acceso efectivo: prueba vencida, gracia de 7
+// días vencida, cancelación fuera del período pago y vencida hacen que
+// Nexo funcione con el plan gratuito (que puede no incluir IA → limit 0).
+// Antes, past_due era una gracia sin límite y una cancelación cortaba la IA
+// de inmediato; ahora son 7 días y "hasta el fin del período pagado".
 //
 // Desactivar un Plan (Plan.active = false) NO corta retroactivamente a
 // quienes ya lo tienen asignado — eso sería un efecto secundario sorpresivo
@@ -170,22 +268,14 @@ export interface AiAccessResolution {
 // asignar ESE plan a nuevas suscripciones (ver assignSubscription).
 export function resolveAiAccess(sub: BusinessSubscription | null): AiAccessResolution {
   if (!sub) return { allowed: true, limit: -1, status: "none" };
-
-  switch (sub.status) {
-    case "trialing": {
-      const expired = sub.currentPeriodEnd !== null && sub.currentPeriodEnd.getTime() < Date.now();
-      return expired
-        ? { allowed: false, limit: 0, status: sub.status }
-        : { allowed: true, limit: sub.plan.aiCredits, status: sub.status };
-    }
-    case "active":
-    case "past_due":
-      return { allowed: true, limit: sub.plan.aiCredits, status: sub.status };
-    case "canceled":
-    case "expired":
-    default:
-      return { allowed: false, limit: 0, status: sub.status };
-  }
+  // Todo sale del acceso efectivo (lib/billing-access.ts vía
+  // toBusinessSubscription): dentro de la gracia, la prueba o el período de
+  // una cancelación, los créditos del plan contratado; fuera de eso, los
+  // del plan gratuito (nexoPlan = Agenda interna). Un plan gratuito sin
+  // créditos de IA queda "no permitido", igual que antes al vencer una
+  // prueba o cancelar.
+  const limit = sub.nexoPlan.aiCredits;
+  return { allowed: !sub.nexoOnBaseTier || limit > 0, limit, status: sub.status };
 }
 
 // Traduce el -1 interno de resolveAiAccess a un número real. Función pura
@@ -236,14 +326,14 @@ const UNGATED_FEATURES: PlanFeatures = {
 export function resolvePlanFeatures(sub: BusinessSubscription | null): PlanFeatures {
   if (!sub) return UNGATED_FEATURES;
   return {
-    maxServices: sub.plan.maxServices,
-    publicWebEnabled: sub.plan.publicWebEnabled,
-    whatsappEnabled: sub.plan.whatsappEnabled,
-    depositsEnabled: sub.plan.depositsEnabled,
-    customTrainingEnabled: sub.plan.customTrainingEnabled,
-    statsEnabled: sub.plan.statsEnabled,
-    galleryEnabled: sub.plan.galleryEnabled,
-    digitalMenuEnabled: sub.plan.digitalMenuEnabled,
+    maxServices: sub.nexoPlan.maxServices,
+    publicWebEnabled: sub.nexoPlan.publicWebEnabled,
+    whatsappEnabled: sub.nexoPlan.whatsappEnabled,
+    depositsEnabled: sub.nexoPlan.depositsEnabled,
+    customTrainingEnabled: sub.nexoPlan.customTrainingEnabled,
+    statsEnabled: sub.nexoPlan.statsEnabled,
+    galleryEnabled: sub.nexoPlan.galleryEnabled,
+    digitalMenuEnabled: sub.nexoPlan.digitalMenuEnabled,
   };
 }
 
@@ -325,6 +415,7 @@ export async function listActivePlans(): Promise<PublicPlan[]> {
   const plans = await prisma.plan.findMany({
     where: { active: true, slug: { not: BASE_PLAN_SLUG } },
     orderBy: { monthlyPrice: "asc" },
+    include: { prices: true },
   });
   return plans.map((p) => ({ ...planToSummary(p), description: p.description }));
 }
@@ -335,7 +426,7 @@ export async function listActivePlans(): Promise<PublicPlan[]> {
 // prisma directamente (mismo criterio de dependencia en un solo sentido que
 // sync-plan.ts).
 export async function getPlanById(planId: string): Promise<PlanSummary | null> {
-  const plan = await prisma.plan.findUnique({ where: { id: planId } });
+  const plan = await prisma.plan.findUnique({ where: { id: planId }, include: { prices: true } });
   return plan ? planToSummary(plan) : null;
 }
 
@@ -360,7 +451,7 @@ export interface PlanWithUsage extends PlanSummary {
 
 export async function listPlansForAdmin(): Promise<PlanWithUsage[]> {
   const [plans, counts] = await Promise.all([
-    prisma.plan.findMany({ orderBy: { monthlyPrice: "asc" } }),
+    prisma.plan.findMany({ orderBy: { monthlyPrice: "asc" }, include: { prices: true } }),
     prisma.subscription.groupBy({ by: ["planId"], _count: { _all: true } }),
   ]);
 
@@ -392,6 +483,24 @@ export interface PlanInput {
   galleryEnabled?: boolean;
   digitalMenuEnabled?: boolean;
   active?: boolean;
+  products?: string[];
+  crmMaxUsers?: number | null;
+  trialDays?: number | null;
+  // undefined = no tocar el precio anual; null/0 = desactivarlo.
+  yearlyPrice?: number | null;
+}
+
+// Reglas comerciales que el schema no puede expresar (ver planSchema).
+// Devuelve un mensaje para mostrar, o null si está bien.
+export function validatePlanCommercial(input: { products?: string[]; crmMaxUsers?: number | null }, existing?: { products: string[]; crmMaxUsers: number | null }): string | null {
+  const products = input.products ?? existing?.products ?? ["nexo"];
+  const crmMaxUsers = input.crmMaxUsers !== undefined ? input.crmMaxUsers : (existing?.crmMaxUsers ?? null);
+  if (products.length === 0) return "Elegí al menos un producto.";
+  if (products.some((p) => p !== "nexo" && p !== "crm")) return "Producto desconocido.";
+  if (products.includes("crm") && (!crmMaxUsers || crmMaxUsers < 1)) {
+    return "Un plan que incluye Nodo tiene que fijar cuántos usuarios incluye.";
+  }
+  return null;
 }
 
 export async function createPlan(data: PlanInput): Promise<PlanWithUsage> {
@@ -412,8 +521,12 @@ export async function createPlan(data: PlanInput): Promise<PlanWithUsage> {
       galleryEnabled: data.galleryEnabled ?? true,
       digitalMenuEnabled: data.digitalMenuEnabled ?? true,
       active: data.active ?? true,
+      products: data.products ?? ["nexo"],
+      crmMaxUsers: data.products?.includes("crm") ? (data.crmMaxUsers ?? null) : null,
+      trialDays: data.trialDays ?? null,
     },
   });
+  await upsertPlanPrices(plan.id, { yearlyPrice: data.yearlyPrice });
   return { ...planToSummary(plan), description: plan.description, createdAt: plan.createdAt.toISOString(), updatedAt: plan.updatedAt.toISOString(), businessCount: 0 };
 }
 
@@ -441,8 +554,12 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
       ...(data.galleryEnabled !== undefined ? { galleryEnabled: data.galleryEnabled } : {}),
       ...(data.digitalMenuEnabled !== undefined ? { digitalMenuEnabled: data.digitalMenuEnabled } : {}),
       ...(data.active !== undefined ? { active: data.active } : {}),
+      ...(data.products !== undefined ? { products: data.products } : {}),
+      ...(data.crmMaxUsers !== undefined ? { crmMaxUsers: data.crmMaxUsers } : {}),
+      ...(data.trialDays !== undefined ? { trialDays: data.trialDays } : {}),
     },
   });
+  await upsertPlanPrices(plan.id, { yearlyPrice: data.yearlyPrice });
 
   const count = await prisma.subscription.count({ where: { planId: id } });
   return { ...planToSummary(plan), description: plan.description, createdAt: plan.createdAt.toISOString(), updatedAt: plan.updatedAt.toISOString(), businessCount: count };
@@ -506,6 +623,20 @@ function planToSummary(plan: {
   mercadoPagoSyncStatus: string | null;
   mercadoPagoLastSyncedAt: Date | null;
   mercadoPagoSyncError: string | null;
+  products?: string[];
+  crmMaxUsers?: number | null;
+  trialDays?: number | null;
+  prices?: {
+    id: string;
+    interval: string;
+    amount: number;
+    currency: string;
+    active: boolean;
+    mercadoPagoPlanId: string | null;
+    mercadoPagoSyncStatus: string | null;
+    mercadoPagoLastSyncedAt: Date | null;
+    mercadoPagoSyncError: string | null;
+  }[];
 }): PlanSummary {
   return {
     id: plan.id,
@@ -527,6 +658,22 @@ function planToSummary(plan: {
     mercadoPagoSyncStatus: plan.mercadoPagoSyncStatus,
     mercadoPagoLastSyncedAt: plan.mercadoPagoLastSyncedAt,
     mercadoPagoSyncError: plan.mercadoPagoSyncError,
+    products: plan.products ?? ["nexo"],
+    crmMaxUsers: plan.crmMaxUsers ?? null,
+    trialDays: plan.trialDays ?? null,
+    prices: (plan.prices ?? [])
+      .map((p) => ({
+        id: p.id,
+        interval: p.interval as BillingInterval,
+        amount: p.amount,
+        currency: p.currency,
+        active: p.active,
+        mercadoPagoPlanId: p.mercadoPagoPlanId,
+        mercadoPagoSyncStatus: p.mercadoPagoSyncStatus,
+        mercadoPagoLastSyncedAt: p.mercadoPagoLastSyncedAt,
+        mercadoPagoSyncError: p.mercadoPagoSyncError,
+      }))
+      .sort((a, b) => (a.interval === b.interval ? 0 : a.interval === "month" ? -1 : 1)),
   };
 }
 
@@ -559,6 +706,13 @@ export interface AssignSubscriptionInput {
   providerSubscriptionId?: string | null;
   mercadoPagoStatus?: string | null;
   mercadoPagoLastSyncedAt?: Date | null;
+  // Mismo criterio (ausente = null): solo quien cobra por Mercado Pago
+  // (checkout, webhook, conciliación) los pasa en cada llamada.
+  planPriceId?: string | null;
+  billingInterval?: BillingInterval | null;
+  // Inicio del atraso. Solo el webhook/conciliación lo fija (una vez) y lo
+  // limpia con un cobro aprobado — ver modules/billing/mercadopago/.
+  pastDueSince?: Date | null;
 }
 
 export type AssignSubscriptionError = "plan_not_found" | "plan_inactive";
@@ -585,6 +739,9 @@ export async function assignSubscription(
       providerSubscriptionId: input.providerSubscriptionId ?? null,
       mercadoPagoStatus: input.mercadoPagoStatus ?? null,
       mercadoPagoLastSyncedAt: input.mercadoPagoLastSyncedAt ?? null,
+      planPriceId: input.planPriceId ?? null,
+      billingInterval: input.billingInterval ?? null,
+      pastDueSince: input.pastDueSince ?? null,
     },
     update: {
       planId: input.planId,
@@ -597,6 +754,9 @@ export async function assignSubscription(
       providerSubscriptionId: input.providerSubscriptionId ?? null,
       mercadoPagoStatus: input.mercadoPagoStatus ?? null,
       mercadoPagoLastSyncedAt: input.mercadoPagoLastSyncedAt ?? null,
+      planPriceId: input.planPriceId ?? null,
+      billingInterval: input.billingInterval ?? null,
+      pastDueSince: input.pastDueSince ?? null,
     },
     include: { plan: true },
   });
@@ -677,4 +837,72 @@ export async function revertExpiredBenefits(now: Date = new Date()): Promise<{ r
   }
 
   return { reverted, skipped };
+}
+
+// ── Precios por período (PlanPrice) ───────────────────────────────────────
+// El precio MENSUAL sigue saliendo de Plan.monthlyPrice y de su
+// preapproval_plan de siempre (syncPlanWithMercadoPago, probado en
+// producción): su PlanPrice solo lo refleja, nunca crea un preapproval_plan
+// propio. El ANUAL es independiente y se sincroniza en
+// syncPlanPricesWithMercadoPago (modules/billing/mercadopago/sync-plan.ts).
+export async function upsertPlanPrices(planId: string, input: { yearlyPrice?: number | null }): Promise<void> {
+  const plan = await prisma.plan.findUnique({ where: { id: planId } });
+  if (!plan) return;
+
+  if (plan.monthlyPrice > 0) {
+    const mirror = {
+      amount: plan.monthlyPrice,
+      currency: plan.currency,
+      active: plan.active,
+      mercadoPagoPlanId: plan.mercadoPagoPlanId,
+      mercadoPagoSyncStatus: plan.mercadoPagoSyncStatus,
+      mercadoPagoLastSyncedAt: plan.mercadoPagoLastSyncedAt,
+      mercadoPagoSyncError: plan.mercadoPagoSyncError,
+    };
+    await prisma.planPrice.upsert({
+      where: { planId_interval: { planId, interval: "month" } },
+      create: { planId, interval: "month", ...mirror },
+      update: mirror,
+    });
+  } else {
+    await prisma.planPrice.updateMany({ where: { planId, interval: "month" }, data: { active: false } });
+  }
+
+  if (input.yearlyPrice === undefined) return;
+  if (!input.yearlyPrice || input.yearlyPrice <= 0) {
+    // Se desactiva (no se borra): puede haber suscripciones anuales vigentes.
+    await prisma.planPrice.updateMany({ where: { planId, interval: "year" }, data: { active: false } });
+    return;
+  }
+  await prisma.planPrice.upsert({
+    where: { planId_interval: { planId, interval: "year" } },
+    create: { planId, interval: "year", amount: input.yearlyPrice, currency: plan.currency, active: plan.active },
+    update: { amount: input.yearlyPrice, currency: plan.currency, active: plan.active },
+  });
+}
+
+export async function getPlanPrice(priceId: string) {
+  return prisma.planPrice.findUnique({ where: { id: priceId }, include: { plan: true } });
+}
+
+export async function updatePlanPriceMercadoPagoSync(
+  priceId: string,
+  data: { mercadoPagoPlanId?: string; mercadoPagoSyncStatus: "synced" | "error"; mercadoPagoSyncError: string | null }
+): Promise<void> {
+  await prisma.planPrice.update({
+    where: { id: priceId },
+    data: {
+      ...(data.mercadoPagoPlanId ? { mercadoPagoPlanId: data.mercadoPagoPlanId } : {}),
+      mercadoPagoSyncStatus: data.mercadoPagoSyncStatus,
+      mercadoPagoSyncError: data.mercadoPagoSyncError,
+      mercadoPagoLastSyncedAt: new Date(),
+    },
+  });
+}
+
+// Suscripción cuyo cobro es ESTE preapproval de Mercado Pago (o null). Lo usa
+// el webhook de cuotas: una cuota trae preapproval_id, no el negocio.
+export async function getSubscriptionByPreapprovalId(preapprovalId: string): Promise<BusinessSubscription | null> {
+  const row = await prisma.subscription.findFirst({ where: { providerSubscriptionId: preapprovalId }, select: { businessId: true } });
+  return row ? getSubscriptionWithPlan(row.businessId) : null;
 }

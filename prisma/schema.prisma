@@ -852,6 +852,18 @@ model Plan {
   galleryEnabled        Boolean @default(true)
   digitalMenuEnabled    Boolean @default(true)
 
+  // ── Productos (facturación unificada Nexo + Nodo) ───────────────────────
+  // Qué habilita el plan: ["nexo"], ["crm"] (Nodo) o ["nexo","crm"] (pack).
+  // Default ["nexo"]: los planes existentes no cambian. Un plan SIN "nexo"
+  // deja a Nexo en el nivel base (Agenda interna) — ver nexoEffectivePlan()
+  // en modules/billing/subscription.ts. Nodo lee esto por su espejo.
+  products    String[] @default(["nexo"])
+  // Usuarios incluidos en Nodo (límite fijo, validado en el servidor de
+  // Nodo). null en planes sin Nodo.
+  crmMaxUsers Int?
+  // Días de prueba gratuita (free_trial del preapproval_plan). null/0 = sin.
+  trialDays   Int?
+
   // ── Mercado Pago (ver modules/billing/mercadopago/) ─────────────────────
   // Agenda interna (monthlyPrice = 0) nunca tiene estos campos poblados — no
   // necesita preapproval_plan. mercadoPagoPlanId es el id del preapproval_plan VIGENTE
@@ -877,7 +889,33 @@ model Plan {
 
   subscriptions Subscription[]
   promoCodes    PromoCode[]
+  prices        PlanPrice[]
 
+  @@schema("nexo")
+}
+
+// Un precio de un Plan por período ("month" | "year"). Cada uno es su propio
+// preapproval_plan en Mercado Pago (la frecuencia es fija por
+// preapproval_plan: 1 o 12 meses). Plan.monthlyPrice/mercadoPagoPlanId son
+// columnas de compatibilidad sincronizadas con el precio mensual.
+model PlanPrice {
+  id                      String    @id @default(cuid())
+  planId                  String
+  interval                String
+  amount                  Float
+  currency                String    @default("ARS")
+  active                  Boolean   @default(true)
+  mercadoPagoPlanId       String?   @unique
+  mercadoPagoSyncStatus   String?
+  mercadoPagoLastSyncedAt DateTime?
+  mercadoPagoSyncError    String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @default(now()) @updatedAt
+
+  plan          Plan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@unique([planId, interval])
   @@schema("nexo")
 }
 
@@ -934,6 +972,13 @@ model Subscription {
   // (sección 9/17/18 del pedido).
   benefitExpiresAt        DateTime?
   previousPlanId          String?
+  // Precio/período contratado (null = asignación manual o bonificación sin
+  // cobro). Ver PlanPrice.
+  planPriceId             String?
+  billingInterval         String?
+  // Inicio persistido del atraso — ver la migración
+  // 20261026120000_billing_products_prices y resolveProductAccess().
+  pastDueSince            DateTime?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
@@ -943,10 +988,12 @@ model Subscription {
   // arrastrar suscripciones activas a un plan borrado. La UI de Superadmin
   // ni siquiera expone un borrado físico: solo activar/desactivar.
   plan     Plan     @relation(fields: [planId], references: [id])
+  planPrice PlanPrice? @relation(fields: [planPriceId], references: [id], onDelete: SetNull)
 
   @@index([planId])
   @@index([status])
   @@index([benefitExpiresAt])
+  @@index([pastDueSince])
   @@schema("nexo")
 }
 

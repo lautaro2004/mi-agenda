@@ -45,7 +45,20 @@ export interface BusinessSubscriptionInfo {
   // "mercadopago" ofrece cancelar desde /dashboard/suscripcion (Fase 5), ver
   // modules/billing/subscription.ts#SUBSCRIPTION_PROVIDERS.
   provider: string | null;
+  // Plan contratado.
   plan: SubscriptionPlanInfo;
+  // Plan con el que Nexo funciona hoy (el contratado o el gratuito si venció
+  // la gracia/prueba/período). Gatear la UI con esto, nunca con `plan`.
+  effectivePlan?: SubscriptionPlanInfo;
+  degraded?: boolean;
+  nexoAccess?: {
+    access: "full" | "grace" | "blocked";
+    reason: string;
+    graceEndsAt: string | null;
+    periodEndsAt: string | null;
+  };
+  pastDueSince?: string | null;
+  billingInterval?: "month" | "year" | null;
 }
 
 export interface AiUsageTotals {

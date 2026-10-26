@@ -54,7 +54,7 @@ export default function OnboardingIndexPage() {
   // El entrenamiento por chat es la IA de WhatsApp: solo lo incluyen
   // Profesional y Empresa. Un negocio en Agenda interna o Esencial configura
   // todo con el formulario, sin pasar por acá.
-  const aiIncluded = subscriptionData?.subscription?.plan.customTrainingEnabled ?? true;
+  const aiIncluded = (subscriptionData?.subscription?.effectivePlan ?? subscriptionData?.subscription?.plan)?.customTrainingEnabled ?? true;
   React.useEffect(() => {
     if (!aiIncluded) router.replace("/onboarding/negocio");
   }, [aiIncluded, router]);
