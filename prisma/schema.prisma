@@ -861,6 +861,9 @@ model Plan {
   // Usuarios incluidos en Nodo (límite fijo, validado en el servidor de
   // Nodo). null en planes sin Nodo.
   crmMaxUsers Int?
+  // Precio por usuario extra de Nodo (moneda del plan), por período. NULL = no ofrece extras.
+  extraUserMonthlyPrice Float?
+  extraUserYearlyPrice  Float?
   // Días de prueba gratuita (free_trial del preapproval_plan). null/0 = sin.
   trialDays   Int?
   // Orden en la página de precios (menor = primero).
@@ -989,6 +992,14 @@ model Subscription {
   // Inicio persistido del atraso — ver la migración
   // 20261026120000_billing_products_prices y resolveProductAccess().
   pastDueSince            DateTime?
+  // Plan de lista en USD: monto en pesos que se cobra hoy en Mercado Pago, la
+  // cotización usada y cuándo (ver lib/fx.ts y modules/billing/mercadopago/reprice.ts).
+  // NULL para planes en ARS y suscripciones anteriores.
+  // Usuarios extra de Nodo contratados sobre los incluidos en el plan.
+  extraUsers              Int       @default(0)
+  arsAmount               Float?
+  fxRate                  Float?
+  fxRateAt                DateTime?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 

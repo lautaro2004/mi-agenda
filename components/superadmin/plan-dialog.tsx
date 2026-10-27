@@ -59,6 +59,8 @@ interface PlanLike {
   id?: string;
   products?: string[];
   crmMaxUsers?: number | null;
+  extraUserMonthlyPrice?: number | null;
+  extraUserYearlyPrice?: number | null;
   trialDays?: number | null;
   displayOrder?: number;
   packNexoPlanId?: string | null;
@@ -84,7 +86,7 @@ export function PlanDialog({ trigger, plan, allPlans = [], onSubmit }: PlanDialo
     slug: plan?.slug ?? "",
     description: plan?.description ?? "",
     monthlyPrice: plan?.monthlyPrice ?? 0,
-    currency: plan?.currency ?? "ARS",
+    currency: plan?.currency === "USD" ? "USD" : "ARS",
     aiCredits: plan?.aiCredits ?? 0,
     maxServices: plan?.maxServices ?? null,
     publicWebEnabled: plan?.publicWebEnabled ?? true,
@@ -97,6 +99,8 @@ export function PlanDialog({ trigger, plan, allPlans = [], onSubmit }: PlanDialo
     active: plan?.active ?? true,
     products: (plan?.products as ("nexo" | "crm")[] | undefined) ?? ["nexo"],
     crmMaxUsers: plan?.crmMaxUsers ?? null,
+    extraUserMonthlyPrice: plan?.extraUserMonthlyPrice ?? null,
+    extraUserYearlyPrice: plan?.extraUserYearlyPrice ?? null,
     trialDays: plan?.trialDays ?? null,
     displayOrder: plan?.displayOrder ?? 0,
     packNexoPlanId: plan?.packNexoPlanId ?? null,
@@ -149,7 +153,7 @@ export function PlanDialog({ trigger, plan, allPlans = [], onSubmit }: PlanDialo
       // Fuera de un pack no hay planes de referencia.
       ...(kind !== "pack" ? { packNexoPlanId: null, packCrmPlanId: null } : {}),
       // Un plan sin Nodo no tiene usuarios de Nodo.
-      ...(!values.products.includes("crm") ? { crmMaxUsers: null } : {}),
+      ...(!values.products.includes("crm") ? { crmMaxUsers: null, extraUserMonthlyPrice: null, extraUserYearlyPrice: null } : {}),
     });
     setOpen(false);
   }
@@ -229,7 +233,18 @@ export function PlanDialog({ trigger, plan, allPlans = [], onSubmit }: PlanDialo
 
               <Field data-invalid={!!errors.currency}>
                 <FieldLabel htmlFor="plan-currency">Moneda</FieldLabel>
-                <Input id="plan-currency" placeholder="ARS" aria-invalid={!!errors.currency} {...register("currency")} />
+                <select
+                  id="plan-currency"
+                  aria-invalid={!!errors.currency}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  {...register("currency")}
+                >
+                  <option value="ARS">ARS (pesos)</option>
+                  <option value="USD">USD (referencia, se cobra en pesos)</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  En USD el precio es una referencia: al contratar se cobra en pesos al dólar oficial (BNA venta) y se reajusta en cada renovación.
+                </p>
                 <FieldError errors={[errors.currency]} />
               </Field>
 
@@ -320,6 +335,34 @@ export function PlanDialog({ trigger, plan, allPlans = [], onSubmit }: PlanDialo
                   <FieldDescription>Límite fijo, validado en el servidor de Nodo.</FieldDescription>
                   <FieldError errors={[errors.crmMaxUsers]} />
                 </Field>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {([
+                    ["extraUserMonthlyPrice", "Usuario extra (mensual)"],
+                    ["extraUserYearlyPrice", "Usuario extra (anual)"],
+                  ] as const).map(([name, label]) => (
+                    <Field key={name}>
+                      <FieldLabel htmlFor={`plan-${name}`}>{label}</FieldLabel>
+                      <Controller
+                        control={control}
+                        name={name}
+                        render={({ field }) => (
+                          <Input
+                            id={`plan-${name}`}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Sin extras"
+                            value={typeof field.value === "number" ? field.value : ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          />
+                        )}
+                      />
+                    </Field>
+                  ))}
+                </div>
+                <FieldDescription>
+                  Lo que suma cada usuario extra al plan, en la moneda del plan. Vacío = el plan no ofrece extras. Para que un plan chico con extras no salga más barato que el siguiente, la pantalla de planes avisa si los precios se solapan.
+                </FieldDescription>
               </div>
             )}
 

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requestJson } from "@/lib/api-client";
+import { tierWarnings, type SeatTier } from "@/lib/billing-seats";
 import { formatMoney, offerKind, packSavingsFor, type PackSavings } from "@/lib/billing-pricing";
 import type { PlanFormValues } from "@/lib/schemas";
 
@@ -50,6 +51,8 @@ interface PlanWithUsage {
   mercadoPagoSyncError: string | null;
   products: string[];
   crmMaxUsers: number | null;
+  extraUserMonthlyPrice: number | null;
+  extraUserYearlyPrice: number | null;
   trialDays: number | null;
   displayOrder: number;
   packNexoPlanId: string | null;
@@ -71,6 +74,14 @@ function SyncBadge({ price }: { price: Pick<PriceRow, "mercadoPagoPlanId" | "mer
         {price.mercadoPagoLastSyncedAt && (
           <span className="text-muted-foreground"> · {dateTimeFormatter.format(new Date(price.mercadoPagoLastSyncedAt))}</span>
         )}
+      </span>
+    );
+  }
+  if (price.mercadoPagoSyncStatus === "reference") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-sky-700 dark:text-sky-400" title="Se cobra en pesos al dólar oficial al contratar">
+        <CheckCircle2 className="size-3" />
+        Referencia USD · se cobra en pesos
       </span>
     );
   }
@@ -110,7 +121,8 @@ function PriceCell({ plan }: { plan: PlanWithUsage }) {
           <p className="text-foreground">
             {formatMoney(yearly.amount, yearly.currency)} / año{!yearly.active && " (inactivo)"}
           </p>
-          <SyncBadge price={yearly} />
+          {/* Un precio desactivado no se vende: no mostrar errores viejos de sincronización. */}
+          {yearly.active && <SyncBadge price={yearly} />}
         </div>
       )}
     </div>
@@ -163,6 +175,20 @@ const SECTIONS: { kind: "nexo" | "crm" | "pack"; title: string; hint: string }[]
   { kind: "crm", title: "Nodo", hint: "CRM. Nodo no tiene plan gratuito; quien contrata solo Nodo conserva el gratuito de Nexo." },
   { kind: "pack", title: "Pack Nexo + Nodo", hint: "Una sola suscripción que habilita los dos productos. El ahorro se calcula contra sus planes de referencia." },
 ];
+
+// Avisos de solapamiento entre planes de Nodo + usuarios extra (mensual y
+// anual por separado). Ver lib/billing-seats.ts.
+function crmTierWarnings(plans: PlanWithUsage[]): string[] {
+  const crm = plans.filter((p) => p.active && offerKind(p.products) === "crm" && p.crmMaxUsers);
+  const monthly: SeatTier[] = crm
+    .filter((p) => p.monthlyPrice > 0)
+    .map((p) => ({ name: p.name, users: p.crmMaxUsers!, price: p.monthlyPrice, extraUserPrice: p.extraUserMonthlyPrice }));
+  const yearly: SeatTier[] = crm.flatMap((p) => {
+    const price = p.prices.find((x) => x.interval === "year" && x.active);
+    return price ? [{ name: p.name, users: p.crmMaxUsers!, price: price.amount, extraUserPrice: p.extraUserYearlyPrice }] : [];
+  });
+  return [...tierWarnings(monthly).map((m) => `Mensual: ${m}`), ...tierWarnings(yearly).map((m) => `Anual: ${m}`)];
+}
 
 export default function SuperadminPlanesPage() {
   const [plans, setPlans] = React.useState<PlanWithUsage[] | null>(null);
@@ -291,6 +317,11 @@ export default function SuperadminPlanesPage() {
                 Nodo · {plan.crmMaxUsers ?? "?"} usuarios
               </Badge>
             )}
+            {plan.products.includes("crm") && plan.extraUserMonthlyPrice !== null && (
+              <Badge variant="outline" className="text-[11px]">
+                +{formatMoney(plan.extraUserMonthlyPrice, plan.currency)} por usuario extra
+              </Badge>
+            )}
           </div>
         </td>
         <td className="px-4 py-3 text-muted-foreground">
@@ -350,12 +381,20 @@ export default function SuperadminPlanesPage() {
       ) : (
         SECTIONS.map((section) => {
           const rows = plans.filter((p) => offerKind(p.products) === section.kind);
+          const tierIssues = section.kind === "crm" ? crmTierWarnings(plans) : [];
           return (
             <section key={section.kind} className="space-y-2">
               <div>
                 <h2 className="text-sm font-semibold text-foreground">{section.title}</h2>
                 <p className="text-xs text-muted-foreground">{section.hint}</p>
               </div>
+              {tierIssues.length > 0 && (
+                <ul className="space-y-1 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
+                  {tierIssues.map((message) => (
+                    <li key={message}>⚠ {message}</li>
+                  ))}
+                </ul>
+              )}
               <div className="overflow-x-auto rounded-2xl border border-border bg-card">
                 <table className="w-full text-sm">
                   <thead>

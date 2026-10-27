@@ -41,6 +41,6 @@ describe("PATCH /api/business/inquiries/[id]", () => {
 
   it("actualiza scopeado al businessId de la sesión", async () => {
     expect((await call({ status: "IN_PROGRESS" })).status).toBe(200);
-    expect(updateInquiryStatus).toHaveBeenCalledWith("biz_1", "inq_1", "IN_PROGRESS");
+    expect(updateInquiryStatus).toHaveBeenCalledWith("biz_1", "inq_1", { status: "IN_PROGRESS" });
   });
 });

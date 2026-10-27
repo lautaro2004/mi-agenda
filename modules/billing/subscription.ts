@@ -66,6 +66,9 @@ export interface PlanSummary {
   products: string[];
   // Usuarios incluidos en Nodo. null en planes sin Nodo.
   crmMaxUsers: number | null;
+  // Precio por usuario extra de Nodo (null = el plan no ofrece extras).
+  extraUserMonthlyPrice: number | null;
+  extraUserYearlyPrice: number | null;
   trialDays: number | null;
   displayOrder: number;
   // Pack: planes individuales de referencia para calcular el ahorro.
@@ -112,6 +115,8 @@ export interface BusinessSubscription {
   billingInterval: BillingInterval | null;
   // Inicio persistido del atraso (gracia de 7 días, ver lib/billing-access.ts).
   pastDueSince: Date | null;
+  // Usuarios extra de Nodo contratados (el límite es crmMaxUsers + extraUsers).
+  extraUsers: number;
   // Plan contratado (puede ser de Nexo, de Nodo o el pack).
   plan: PlanSummary;
   // ── Acceso EFECTIVO (calculado, nunca persistido) ──────────────────────
@@ -194,6 +199,7 @@ function toBusinessSubscription(row: SubscriptionWithPlan, basePlan?: PlanRow | 
     planPriceId: row.planPriceId,
     billingInterval: (row.billingInterval as BillingInterval | null) ?? null,
     pastDueSince: row.pastDueSince,
+    extraUsers: row.extraUsers ?? 0,
     plan,
     nexoAccess,
     crmAccess,
@@ -489,6 +495,8 @@ export interface PlanInput {
   active?: boolean;
   products?: string[];
   crmMaxUsers?: number | null;
+  extraUserMonthlyPrice?: number | null;
+  extraUserYearlyPrice?: number | null;
   trialDays?: number | null;
   // undefined = no tocar el precio anual; null/0 = desactivarlo.
   yearlyPrice?: number | null;
@@ -559,6 +567,8 @@ export async function createPlan(data: PlanInput): Promise<PlanWithUsage> {
       active: data.active ?? true,
       products: data.products ?? ["nexo"],
       crmMaxUsers: data.products?.includes("crm") ? (data.crmMaxUsers ?? null) : null,
+      extraUserMonthlyPrice: data.products?.includes("crm") ? (data.extraUserMonthlyPrice || null) : null,
+      extraUserYearlyPrice: data.products?.includes("crm") ? (data.extraUserYearlyPrice || null) : null,
       trialDays: data.trialDays ?? null,
       displayOrder: data.displayOrder ?? 0,
       packNexoPlanId: data.packNexoPlanId ?? null,
@@ -595,6 +605,8 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
       ...(data.active !== undefined ? { active: data.active } : {}),
       ...(data.products !== undefined ? { products: data.products } : {}),
       ...(data.crmMaxUsers !== undefined ? { crmMaxUsers: data.crmMaxUsers } : {}),
+      ...(data.extraUserMonthlyPrice !== undefined ? { extraUserMonthlyPrice: data.extraUserMonthlyPrice || null } : {}),
+      ...(data.extraUserYearlyPrice !== undefined ? { extraUserYearlyPrice: data.extraUserYearlyPrice || null } : {}),
       ...(data.trialDays !== undefined ? { trialDays: data.trialDays } : {}),
       ...(data.displayOrder !== undefined ? { displayOrder: data.displayOrder } : {}),
       ...(data.packNexoPlanId !== undefined ? { packNexoPlanId: data.packNexoPlanId } : {}),
@@ -620,7 +632,7 @@ export interface PlanMercadoPagoSyncUpdate {
   // id vigente, típicamente porque se creó una versión nueva por cambio de
   // precio.
   mercadoPagoPlanId?: string;
-  mercadoPagoSyncStatus: "synced" | "error";
+  mercadoPagoSyncStatus: "synced" | "error" | "reference";
   mercadoPagoSyncError: string | null;
 }
 
@@ -667,6 +679,8 @@ function planToSummary(plan: {
   mercadoPagoSyncError: string | null;
   products?: string[];
   crmMaxUsers?: number | null;
+  extraUserMonthlyPrice?: number | null;
+  extraUserYearlyPrice?: number | null;
   trialDays?: number | null;
   displayOrder?: number;
   packNexoPlanId?: string | null;
@@ -705,6 +719,8 @@ function planToSummary(plan: {
     mercadoPagoSyncError: plan.mercadoPagoSyncError,
     products: plan.products ?? ["nexo"],
     crmMaxUsers: plan.crmMaxUsers ?? null,
+    extraUserMonthlyPrice: plan.extraUserMonthlyPrice ?? null,
+    extraUserYearlyPrice: plan.extraUserYearlyPrice ?? null,
     trialDays: plan.trialDays ?? null,
     displayOrder: plan.displayOrder ?? 0,
     packNexoPlanId: plan.packNexoPlanId ?? null,
@@ -761,6 +777,13 @@ export interface AssignSubscriptionInput {
   // Inicio del atraso. Solo el webhook/conciliación lo fija (una vez) y lo
   // limpia con un cobro aprobado — ver modules/billing/mercadopago/.
   pastDueSince?: Date | null;
+}
+
+export async function setSubscriptionFx(
+  businessId: string,
+  fx: { arsAmount: number; fxRate: number | null; fxRateAt: Date | null; extraUsers?: number }
+): Promise<void> {
+  await prisma.subscription.update({ where: { businessId }, data: fx });
 }
 
 export type AssignSubscriptionError = "plan_not_found" | "plan_inactive";
@@ -935,7 +958,7 @@ export async function getPlanPrice(priceId: string) {
 
 export async function updatePlanPriceMercadoPagoSync(
   priceId: string,
-  data: { mercadoPagoPlanId?: string; mercadoPagoSyncStatus: "synced" | "error"; mercadoPagoSyncError: string | null }
+  data: { mercadoPagoPlanId?: string; mercadoPagoSyncStatus: "synced" | "error" | "reference"; mercadoPagoSyncError: string | null }
 ): Promise<void> {
   await prisma.planPrice.update({
     where: { id: priceId },

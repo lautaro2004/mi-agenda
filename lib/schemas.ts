@@ -492,7 +492,7 @@ export const planSchema = z.object({
   slug: z.string().min(2).max(40).regex(SLUG_RE, "Solo minúsculas, números y guiones"),
   description: z.string().max(300, "La descripción es demasiado larga").optional(),
   monthlyPrice: z.coerce.number().min(0, "El precio no puede ser negativo"),
-  currency: z.string().min(3, "Ej: ARS").max(6),
+  currency: z.enum(["ARS", "USD"], { message: "La moneda debe ser ARS o USD." }),
   // Cantidad de respuestas de IA, no tokens — ver comentario en el modelo
   // Plan (prisma/schema.prisma) y modules/billing/subscription.ts.
   // 0 = el plan no incluye IA (Agenda interna, Esencial).
@@ -514,6 +514,9 @@ export const planSchema = z.object({
   // (.partial() no admite refinamientos).
   products: z.array(z.enum(["nexo", "crm"])).min(1, "Elegí al menos un producto").default(["nexo"]),
   crmMaxUsers: z.coerce.number().int().min(1, "Al menos 1 usuario").max(1000).nullable().optional(),
+  // Precio por usuario extra de Nodo, por período (null/0 = no ofrece extras).
+  extraUserMonthlyPrice: z.coerce.number().min(0).nullable().optional(),
+  extraUserYearlyPrice: z.coerce.number().min(0).nullable().optional(),
   trialDays: z.coerce.number().int().min(0).max(365).nullable().optional(),
   // Precio anual (débito automático cada 12 meses). null/0 = sin anual.
   yearlyPrice: z.coerce.number().min(0, "El precio no puede ser negativo").nullable().optional(),
@@ -691,6 +694,8 @@ export const subscriptionCheckoutSchema = z.object({
   payerEmail: z.string().email("Email inválido"),
   // Ausente = mensual (la pantalla de siempre no lo manda).
   interval: z.enum(["month", "year"]).optional(),
+  // Usuarios de Nodo extra sobre los incluidos en el plan (ausente = 0).
+  extraUsers: z.coerce.number().int().min(0).max(500).optional(),
 });
 
 export type SubscriptionCheckoutValues = z.infer<typeof subscriptionCheckoutSchema>;

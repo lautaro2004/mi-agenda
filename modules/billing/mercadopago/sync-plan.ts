@@ -2,6 +2,7 @@ import type { PlanWithUsage } from "@/modules/billing/subscription";
 import { updatePlanMercadoPagoSync, updatePlanPriceMercadoPagoSync, upsertPlanPrices } from "@/modules/billing/subscription";
 import { prisma } from "@/lib/prisma";
 import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago/client";
+import { needsConversion } from "@/lib/fx";
 import { createPreapprovalPlan, getPreapprovalPlan, updatePreapprovalPlanMetadata } from "@/modules/billing/mercadopago/plans";
 
 // ── Orquestación Plan de Nexo ↔ preapproval_plan de Mercado Pago ────────
@@ -50,6 +51,13 @@ interface PlanForSync {
 export async function syncPlanWithMercadoPago(plan: PlanForSync): Promise<PlanWithUsage | null> {
   if (plan.monthlyPrice <= 0) {
     return null;
+  }
+
+  // Precio de lista en USD: no existe un preapproval_plan (MP solo opera en
+  // ARS y el monto depende de la cotización del día). Se cobra con una
+  // suscripción sin plan, ver checkout.ts. Se marca como "reference".
+  if (needsConversion(plan.currency)) {
+    return updatePlanMercadoPagoSync(plan.id, { mercadoPagoSyncStatus: "reference", mercadoPagoSyncError: null });
   }
 
   // Un plan pago que nunca se ofreció (active=false y todavía sin
@@ -137,6 +145,10 @@ export async function syncPlanPricesWithMercadoPago(planId: string): Promise<voi
   if (!plan) return;
   const yearly = plan.prices.find((p) => p.interval === "year");
   if (!yearly) return;
+  if (needsConversion(yearly.currency)) {
+    await updatePlanPriceMercadoPagoSync(yearly.id, { mercadoPagoSyncStatus: "reference", mercadoPagoSyncError: null });
+    return;
+  }
   // Inactivo y nunca sincronizado: no hay nada que crear en MP.
   if (!yearly.active && !yearly.mercadoPagoPlanId) return;
   if (!isMercadoPagoConfigured()) {

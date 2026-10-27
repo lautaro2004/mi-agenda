@@ -110,3 +110,56 @@ export async function cancelPreapproval(preapprovalId: string): Promise<Preappro
   const response = await client.update({ id: preapprovalId, body: { status: "cancelled" } });
   return toSnapshot(response);
 }
+
+export interface CreatePreapprovalWithoutPlanInput {
+  payerEmail: string;
+  cardTokenId: string;
+  externalReference: string;
+  reason: string;
+  // Monto YA convertido a pesos. Mercado Pago Argentina solo opera en ARS.
+  amountArs: number;
+  frequencyMonths: 1 | 12;
+  trialDays?: number | null;
+  backUrl: string;
+}
+
+// Suscripción SIN preapproval_plan: se usa para planes de lista en USD, donde
+// el monto en pesos depende de la cotización del día y no puede vivir en un
+// preapproval_plan fijo. Con card_token_id + status "authorized" se crea
+// directamente (reason/external_reference/back_url son obligatorios sin plan).
+export async function createPreapprovalWithoutPlan(input: CreatePreapprovalWithoutPlanInput): Promise<PreapprovalSnapshot> {
+  const client = new PreApproval(getMercadoPagoClient());
+  const body = {
+    reason: input.reason,
+    payer_email: input.payerEmail,
+    card_token_id: input.cardTokenId,
+    external_reference: input.externalReference,
+    back_url: input.backUrl,
+    status: "authorized" as const,
+    auto_recurring: {
+      frequency: input.frequencyMonths,
+      frequency_type: "months" as const,
+      transaction_amount: input.amountArs,
+      currency_id: "ARS",
+      ...(input.trialDays ? { free_trial: { frequency: input.trialDays, frequency_type: "days" as const } } : {}),
+    },
+  };
+  console.log("[subscriptions] POST /preapproval (sin plan):", {
+    amountArs: input.amountArs,
+    frequencyMonths: input.frequencyMonths,
+    card_token_id: maskTail(input.cardTokenId),
+    payer_email: "(oculto)",
+  });
+  const response = await client.create({ body });
+  return toSnapshot(response);
+}
+
+// Reajuste por cotización: cambia SOLO el monto de los próximos cobros.
+export async function updatePreapprovalAmount(preapprovalId: string, amountArs: number): Promise<PreapprovalSnapshot> {
+  const client = new PreApproval(getMercadoPagoClient());
+  const response = await client.update({
+    id: preapprovalId,
+    body: { auto_recurring: { transaction_amount: amountArs, currency_id: "ARS" } },
+  });
+  return toSnapshot(response);
+}

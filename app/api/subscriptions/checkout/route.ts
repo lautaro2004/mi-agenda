@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     planId: parsed.data.planId,
     cardTokenId: parsed.data.cardTokenId,
     interval: parsed.data.interval,
+    extraUsers: parsed.data.extraUsers,
     payerEmail: parsed.data.payerEmail,
   });
 

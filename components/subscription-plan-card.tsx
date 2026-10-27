@@ -60,7 +60,7 @@ export function PlanCard({
           <Button className="w-full" variant="outline" disabled>
             Plan actual
           </Button>
-        ) : plan.monthlyPrice > 0 && plan.mercadoPagoPlanId && onContracted ? (
+        ) : plan.monthlyPrice > 0 && (plan.mercadoPagoPlanId || plan.currency.toUpperCase() !== "ARS") && onContracted ? (
           <SubscriptionCheckoutDialog
             plan={plan}
             onSuccess={onContracted}

@@ -6,9 +6,10 @@ vi.mock("@/modules/business/slug", () => ({
 }));
 
 const createInquiry = vi.fn();
-vi.mock("@/modules/inquiries/service", () => ({
-  createInquiry: (...a: unknown[]) => createInquiry(...a),
-}));
+vi.mock("@/modules/inquiries/service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/inquiries/service")>();
+  return { ...actual, createInquiry: (...a: unknown[]) => createInquiry(...a) };
+});
 
 const isRateLimited = vi.fn();
 vi.mock("@/lib/rate-limit", () => ({

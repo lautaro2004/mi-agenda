@@ -2,7 +2,8 @@
 #   1. revierte las bonificaciones vencidas (/api/cron/revert-expired-benefits)
 #      — antes ningún workflow lo llamaba, así que no vencían solas;
 #   2. concilia las suscripciones con Mercado Pago (/api/cron/reconcile-billing)
-#      — red de seguridad de los webhooks (solo lee MP).
+#      — red de seguridad de los webhooks (solo lee MP);
+#   3. reajusta a pesos los planes con precio de lista en USD (/api/cron/reprice-fx);
 # Los dos son idempotentes.
 #
 # Requiere los mismos secrets que email-cron.yml: NEXO_APP_URL y CRON_SECRET.
@@ -30,7 +31,7 @@ jobs:
             exit 0
           fi
           fail=0
-          for path in revert-expired-benefits reconcile-billing; do
+          for path in revert-expired-benefits reconcile-billing reprice-fx; do
             status=$(curl -sS -o response.txt -w "%{http_code}" --max-time 240 -X POST \
               -H "Authorization: Bearer $CRON_SECRET" \
               "$APP_URL/api/cron/$path")

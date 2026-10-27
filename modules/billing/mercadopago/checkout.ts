@@ -1,6 +1,8 @@
 import type { BillingInterval, BusinessSubscription } from "@/modules/billing/subscription";
-import { BASE_PLAN_SLUG, assignSubscription, getPlanById, getSubscriptionWithPlan } from "@/modules/billing/subscription";
-import { createPreapproval } from "@/modules/billing/mercadopago/subscriptions";
+import { BASE_PLAN_SLUG, assignSubscription, getPlanById, getSubscriptionWithPlan, setSubscriptionFx } from "@/modules/billing/subscription";
+import { createPreapproval, createPreapprovalWithoutPlan } from "@/modules/billing/mercadopago/subscriptions";
+import { priceWithExtras } from "@/lib/billing-seats";
+import { FxUnavailableError, convertToArs, getUsdArsRate, needsConversion } from "@/lib/fx";
 import { getPreapprovalPlan } from "@/modules/billing/mercadopago/plans";
 import { mapMercadoPagoStatus } from "@/modules/billing/mercadopago/status-map";
 import { MercadoPagoNotConfiguredError, getAccessTokenFingerprint } from "@/modules/billing/mercadopago/client";
@@ -21,6 +23,8 @@ export type CheckoutErrorCode =
   | "PLAN_NOT_FOUND"
   | "PLAN_INACTIVE"
   | "PLAN_NOT_SYNCED"
+  | "FX_UNAVAILABLE"
+  | "EXTRA_USERS_NOT_AVAILABLE"
   | "ALREADY_SUBSCRIBED"
   | "MERCADOPAGO_NOT_CONFIGURED"
   | "MERCADOPAGO_CHECKOUT_ERROR"
@@ -49,6 +53,8 @@ export interface CheckoutInput {
   // Período a contratar. Ausente = "month": la pantalla de Nexo de siempre
   // sigue mandando lo mismo y usa el mismo preapproval_plan de siempre.
   interval?: BillingInterval;
+  // Usuarios de Nodo extra sobre los incluidos (solo planes que los ofrecen).
+  extraUsers?: number;
 }
 
 export type CheckoutResult =
@@ -61,6 +67,8 @@ const SIMPLE_ERROR_MESSAGE: Record<SimpleErrorCode, string> = {
   PLAN_NOT_FOUND: "El plan elegido no existe.",
   PLAN_INACTIVE: "Ese plan ya no está disponible.",
   PLAN_NOT_SYNCED: "Ese plan todavía no está disponible para contratar — probá de nuevo en unos minutos.",
+  EXTRA_USERS_NOT_AVAILABLE: "Este plan no admite usuarios extra.",
+  FX_UNAVAILABLE: "No pudimos obtener la cotización del dólar para calcular el monto en pesos. Probá de nuevo en unos minutos.",
   ALREADY_SUBSCRIBED: "Ya tenés una suscripción paga activa. Si tenés un pago pendiente, actualizá tu medio de pago en lugar de contratar de nuevo.",
   MERCADOPAGO_NOT_CONFIGURED: "La contratación online todavía no está configurada.",
   NEXO_ACTIVATION_ERROR: "El pago se procesó, pero no pudimos activar tu plan.",
@@ -128,8 +136,27 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   // siempre (Plan.mercadoPagoPlanId); el anual, el de su PlanPrice.
   const interval: BillingInterval = input.interval ?? "month";
   const price = (plan.prices ?? []).find((p) => p.interval === interval);
+  // Precio de lista en USD: se cobra en pesos con una suscripción sin plan
+  // (monto = lista × dólar oficial del momento). Ver lib/fx.ts.
+  const listCurrency = interval === "month" ? plan.currency : (price?.currency ?? plan.currency);
+  const extras = Math.max(0, Math.trunc(input.extraUsers ?? 0));
+  const extraUnit = interval === "month" ? plan.extraUserMonthlyPrice : plan.extraUserYearlyPrice;
+  if (extras > 0 && (!plan.products?.includes("crm") || !extraUnit || extraUnit <= 0)) {
+    return simpleError("EXTRA_USERS_NOT_AVAILABLE");
+  }
+  const baseAmount = interval === "month" ? plan.monthlyPrice : (price?.amount ?? 0);
+  const listAmount = extras > 0 ? priceWithExtras(baseAmount, extraUnit, extras) : baseAmount;
+  const convert = needsConversion(listCurrency);
+  // Monto dinámico (USD, o con usuarios extra): no cabe en un preapproval_plan
+  // fijo, se crea una suscripción sin plan con el monto ya calculado.
+  const dynamic = convert || extras > 0;
   const mercadoPagoPlanId = interval === "month" ? plan.mercadoPagoPlanId : (price?.active ? price.mercadoPagoPlanId : null);
-  if (!mercadoPagoPlanId) return simpleError("PLAN_NOT_SYNCED");
+  if (dynamic) {
+    if (interval === "year" && !price?.active) return simpleError("PLAN_NOT_SYNCED");
+    if (!(listAmount > 0)) return simpleError("PLAN_NOT_SYNCED");
+  } else if (!mercadoPagoPlanId) {
+    return simpleError("PLAN_NOT_SYNCED");
+  }
   const existing = await getSubscriptionWithPlan(input.businessId);
   // Un preapproval vivo (al día O con un cobro en reintento) ya está
   // cobrando: crear otro sería un doble débito. Antes solo se miraba
@@ -151,22 +178,47 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   // en el camino) y (b) qué Access Token está realmente activo en runtime,
   // para descartar una mezcla de credenciales TEST/producción o de
   // aplicaciones distintas. Sacar una vez resuelta la investigación.
-  console.log(
+  if (mercadoPagoPlanId && !dynamic) console.log(
     `[checkout][diag] negocio=${input.businessId} preapproval_plan_id=${mercadoPagoPlanId} card_token_id=${maskTail(input.cardTokenId)} access_token=${getAccessTokenFingerprint()}`
   );
-  await logPreapprovalPlanDiagnostics(mercadoPagoPlanId);
+  if (mercadoPagoPlanId && !dynamic) await logPreapprovalPlanDiagnostics(mercadoPagoPlanId);
+
+  let fx: { arsAmount: number; fxRate: number | null; fxRateAt: Date | null } | null = null;
+  if (convert) {
+    try {
+      const quote = await getUsdArsRate();
+      fx = { arsAmount: convertToArs(listAmount, quote.rate), fxRate: quote.rate, fxRateAt: new Date() };
+    } catch (error) {
+      if (error instanceof FxUnavailableError) return simpleError("FX_UNAVAILABLE");
+      throw error;
+    }
+  } else if (dynamic) {
+    // Plan en pesos con usuarios extra: sin cotización, el monto ya está en ARS.
+    fx = { arsAmount: listAmount, fxRate: null, fxRateAt: null };
+  }
 
   let preapproval;
   try {
-    preapproval = await createPreapproval({
-      preapprovalPlanId: mercadoPagoPlanId,
-      payerEmail: input.payerEmail,
-      cardTokenId: input.cardTokenId,
-      // Alcanza con businessId: Subscription es 1:1 por negocio (businessId
-      // @unique), así que no hace falta componer un id más largo para
-      // identificar a qué Subscription de Nexo corresponde este preapproval.
-      externalReference: input.businessId,
-    });
+    preapproval = fx
+      ? await createPreapprovalWithoutPlan({
+          payerEmail: input.payerEmail,
+          cardTokenId: input.cardTokenId,
+          externalReference: input.businessId,
+          reason: `${plan.name}${interval === "year" ? " (anual)" : ""}${extras > 0 ? ` + ${extras} usuario${extras === 1 ? "" : "s"}` : ""}`,
+          amountArs: fx.arsAmount,
+          frequencyMonths: interval === "year" ? 12 : 1,
+          trialDays: plan.trialDays,
+          backUrl: `${process.env.BETTER_AUTH_URL ?? "https://nexo.kodexa.ar"}/dashboard`,
+        })
+      : await createPreapproval({
+          preapprovalPlanId: mercadoPagoPlanId!,
+          payerEmail: input.payerEmail,
+          cardTokenId: input.cardTokenId,
+          // Alcanza con businessId: Subscription es 1:1 por negocio (businessId
+          // @unique), así que no hace falta componer un id más largo para
+          // identificar a qué Subscription de Nexo corresponde este preapproval.
+          externalReference: input.businessId,
+        });
   } catch (error) {
     if (error instanceof MercadoPagoNotConfiguredError) {
       console.error(`[checkout] Mercado Pago no configurado — negocio ${input.businessId}, plan ${input.planId}.`);
@@ -252,6 +304,14 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
         detail: "Contactanos para regularizar tu suscripción — el pago ya fue autorizado por Mercado Pago.",
       },
     };
+  }
+
+  if (fx) {
+    // No bloquea la contratación: el cobro ya está autorizado; si esto falla, el
+    // reajuste mensual simplemente no encuentra la suscripción hasta corregirlo.
+    await setSubscriptionFx(input.businessId, { ...fx, extraUsers: extras }).catch((error) =>
+      console.error(`[checkout] No se pudo guardar la cotización (negocio ${input.businessId}):`, error)
+    );
   }
 
   return { ok: true, subscription: result.subscription, mercadoPagoStatus: preapproval.status ?? "" };

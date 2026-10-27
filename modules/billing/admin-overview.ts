@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { BASE_PLAN_SLUG } from "@/lib/types";
 import { offerKind } from "@/lib/billing-pricing";
+import { seatLimit } from "@/lib/billing-seats";
 import { classifySubscription, computeSeatUsage, type BillingKind, type SeatUsage } from "@/lib/billing-admin";
 import type { ProductAccess } from "@/lib/billing-access";
 import { getSubscriptionsWithPlanForBusinesses, type BusinessSubscription } from "@/modules/billing/subscription";
@@ -104,7 +105,7 @@ export function buildBillingOverview(
     mercadoPagoLastSyncedAt: sub.mercadoPagoLastSyncedAt?.toISOString() ?? null,
     hasPreapproval: !!sub.providerSubscriptionId,
     crmSeats: plan.products.includes("crm") && plan.crmMaxUsers
-      ? computeSeatUsage({ limit: plan.crmMaxUsers, members: extras.seatMembers, pendingInvites: extras.seatPending })
+      ? computeSeatUsage({ limit: seatLimit(plan.crmMaxUsers, sub.extraUsers), members: extras.seatMembers, pendingInvites: extras.seatPending })
       : null,
   };
 }

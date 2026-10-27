@@ -40,6 +40,18 @@ interface CardPaymentFormData {
   payer: { email?: string };
 }
 
+interface QuoteBody {
+  converted: boolean;
+  listCurrency: string;
+  listAmount: number;
+  arsAmount: number;
+  rate?: number;
+  rateAt?: string;
+}
+
+const arsFormatter = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 });
+const usdFormatter = new Intl.NumberFormat("es-AR", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+
 // Espejo de CheckoutErrorResult (modules/billing/mercadopago/checkout.ts) —
 // lo que devuelve POST /api/subscriptions/checkout cuando falla.
 interface CheckoutErrorBody {
@@ -155,7 +167,33 @@ export function SubscriptionCheckoutDialog({ plan, trigger, onSuccess }: Subscri
     console.error("[checkout] Card Payment Brick error:", error);
   }, []);
 
-  const initialization = React.useMemo(() => ({ amount: plan.monthlyPrice }), [plan.monthlyPrice]);
+  // Plan con precio de lista en USD: se cobra en pesos al dólar oficial. El
+  // Brick se monta recién con el monto en pesos ya resuelto (su
+  // initialization no debe cambiar con el diálogo abierto).
+  const isConverted = plan.currency.toUpperCase() !== "ARS";
+  const [quote, setQuote] = React.useState<QuoteBody | null>(null);
+  const [quoteError, setQuoteError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!open || !isConverted) return;
+    let cancelled = false;
+    setQuote(null);
+    setQuoteError(null);
+    fetch(`/api/subscriptions/quote?planId=${encodeURIComponent(plan.id)}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) setQuoteError((data as { error?: string }).error ?? "No pudimos calcular el monto en pesos.");
+        else setQuote(data as QuoteBody);
+      })
+      .catch(() => !cancelled && setQuoteError("No pudimos calcular el monto en pesos."));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isConverted, plan.id]);
+
+  const brickAmount = isConverted ? (quote?.arsAmount ?? null) : plan.monthlyPrice;
+  const initialization = React.useMemo(() => ({ amount: brickAmount ?? 0 }), [brickAmount]);
 
   // Memoizado con deps vacías a propósito: el color se calcula UNA sola vez
   // al montar (el modo claro/oscuro de esta app sigue prefers-color-scheme,
@@ -191,6 +229,22 @@ export function SubscriptionCheckoutDialog({ plan, trigger, onSuccess }: Subscri
               <DialogDescription>Los datos de tu tarjeta se procesan directamente con Mercado Pago.</DialogDescription>
             </DialogHeader>
 
+            {isConverted && quote && quote.rate && (
+              <div className="rounded-xl bg-muted px-4 py-3 text-sm">
+                <p className="font-medium text-foreground">Se cobrará {arsFormatter.format(quote.arsAmount)} por mes</p>
+                <p className="mt-0.5 text-muted-foreground">
+                  Precio de lista {usdFormatter.format(quote.listAmount)} al dólar oficial (BNA venta) de hoy: {arsFormatter.format(quote.rate)}.
+                  El monto en pesos se reajusta en cada renovación según la cotización.
+                </p>
+              </div>
+            )}
+            {isConverted && quoteError && (
+              <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>{quoteError}</span>
+              </div>
+            )}
+
             {checkoutError && <CheckoutErrorNotice error={checkoutError} />}
 
             {!PUBLIC_KEY ? (
@@ -199,7 +253,7 @@ export function SubscriptionCheckoutDialog({ plan, trigger, onSuccess }: Subscri
                 <span>La contratación online todavía no está configurada. Contactanos para activar tu plan.</span>
               </div>
             ) : (
-              open && (
+              open && brickAmount !== null && (
                 <div className="relative">
                   <CardPayment
                     initialization={initialization}
