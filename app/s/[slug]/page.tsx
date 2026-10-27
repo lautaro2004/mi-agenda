@@ -36,6 +36,8 @@ import { FaqSection } from "@/components/public-site/faq-section";
 import { FinalCtaSection } from "@/components/public-site/final-cta-section";
 import { PublicFooter } from "@/components/public-site/footer";
 import { FloatingWhatsapp } from "@/components/public-site/floating-whatsapp";
+import { BookingChat } from "@/components/public-site/booking-chat";
+import { canUseWebAiChat } from "@/modules/billing/subscription";
 import { BookingHero } from "@/components/public-site/booking/booking-hero";
 import { BookingServicesSection } from "@/components/public-site/booking/booking-services-section";
 import { BookingImportantInfo } from "@/components/public-site/booking/booking-important-info";
@@ -121,6 +123,8 @@ export default async function PublicSitePage({ params }: PageProps) {
   // configurar.
   const hasMenu = business.menuEnabled && !!business.menuPdfUrl;
   const bookableServices = services.filter(isBookableService);
+  // Chat con IA: lo decide el plan (validado también en la API del chat).
+  const showChat = bookableServices.length > 0 && (await canUseWebAiChat(business.id));
   // Genérico, no depende del rubro ni del negocio puntual — ver
   // lib/booking-intent.ts. Decide si la web habla de "reservar un turno"
   // (el turno ES el producto) o de "agendar una reunión" (el turno es el
@@ -274,6 +278,7 @@ export default async function PublicSitePage({ params }: PageProps) {
 
         <PublicFooter business={business} slug={slug} />
         <FloatingWhatsapp href={floatingWhatsappHref} liftedOnMobile={template === "booking" || template === "leads"} />
+        {showChat && <BookingChat slug={slug} businessName={business.name} liftedOnMobile={template === "booking" || template === "leads"} />}
         {template === "booking" && <BookingStickyCta />}
       </BookingModalProvider>
     </div>

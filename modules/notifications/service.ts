@@ -125,6 +125,17 @@ export async function notifyBookingPending(appt: AppointmentNotifyInput): Promis
   });
 }
 
+export async function notifyApprovalRequested(appt: AppointmentNotifyInput): Promise<void> {
+  await createNotification({
+    businessId: appt.businessId,
+    type: "booking_pending",
+    title: "Solicitud de turno para aprobar",
+    body: `${appt.customerName} pidió ${appt.serviceName} para el ${formatAppointmentWhen(appt.date, appt.startTime)}. El horario queda reservado hasta que lo apruebes o rechaces.`,
+    resourceHref: "/dashboard/turnos",
+    payload: { appointmentId: appt.id, approval: true },
+  });
+}
+
 export async function notifyBookingCancelled(appt: AppointmentNotifyInput): Promise<void> {
   await createNotification({
     businessId: appt.businessId,

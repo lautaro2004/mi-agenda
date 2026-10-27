@@ -1,6 +1,6 @@
-import { priceWithExtras, seatLimit } from "@/lib/billing-seats";
-import { FxUnavailableError, convertToArs, getUsdArsRate, needsConversion } from "@/lib/fx";
+import { seatLimit } from "@/lib/billing-seats";
 import { prisma } from "@/lib/prisma";
+import { computeCharge } from "@/modules/billing/pricing";
 import { updatePreapprovalAmount } from "@/modules/billing/mercadopago/subscriptions";
 
 // ── Cambiar los usuarios extra de Nodo de una suscripción ─────────────────
@@ -31,7 +31,7 @@ export async function changeExtraUsers(businessId: string, extraUsers: number): 
   if (!Number.isInteger(extraUsers) || extraUsers < 0 || extraUsers > 500) {
     return fail("INVALID", "La cantidad de usuarios extra no es válida.");
   }
-  const sub = await prisma.subscription.findUnique({ where: { businessId }, include: { plan: true, planPrice: true } });
+  const sub = await prisma.subscription.findUnique({ where: { businessId }, include: { plan: { include: { prices: true } } } });
   if (!sub) return fail("NOT_FOUND", "No encontramos tu suscripción.");
 
   const plan = sub.plan;
@@ -66,24 +66,15 @@ export async function changeExtraUsers(businessId: string, extraUsers: number): 
     );
   }
 
-  const baseAmount = yearly ? (sub.planPrice?.amount ?? 0) : plan.monthlyPrice;
-  const listCurrency = yearly ? (sub.planPrice?.currency ?? plan.currency) : plan.currency;
-  const listAmount = priceWithExtras(baseAmount, extraUnit, extraUsers);
-
-  let arsAmount = listAmount;
-  let fxRate: number | null = null;
-  let fxRateAt: Date | null = null;
-  if (needsConversion(listCurrency)) {
-    try {
-      const quote = await getUsdArsRate();
-      arsAmount = convertToArs(listAmount, quote.rate);
-      fxRate = quote.rate;
-      fxRateAt = new Date();
-    } catch (error) {
-      if (error instanceof FxUnavailableError) return fail("FX_UNAVAILABLE", "No pudimos obtener la cotización del dólar. Probá de nuevo en unos minutos.");
-      throw error;
-    }
+  // Mismo cálculo que la cotización, el checkout y el reajuste (plan común o combo).
+  const charge = await computeCharge(plan, yearly ? "year" : "month", extraUsers);
+  if (!charge.ok) {
+    if (charge.error === "FX_UNAVAILABLE") return fail("FX_UNAVAILABLE", "No pudimos obtener la cotización del dólar. Probá de nuevo en unos minutos.");
+    return fail("NOT_SUPPORTED", "Tu suscripción no permite cambiar usuarios extra desde acá. Contactanos para ajustarla.");
   }
+  const arsAmount = charge.arsAmount;
+  const fxRate: number | null = charge.rate ?? null;
+  const fxRateAt: Date | null = charge.rate !== undefined ? new Date() : null;
 
   try {
     await updatePreapprovalAmount(sub.providerSubscriptionId, arsAmount);

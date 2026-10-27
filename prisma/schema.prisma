@@ -105,6 +105,7 @@ model Business {
   memoryEntries         MemoryEntry[]
   paymentProofs         PaymentProof[]
   resources             Resource[]
+  smartBookingRules     SmartBookingRules?
   schedules             Schedule[]
   services              Service[]
   trainingPlan          TrainingPlan?
@@ -377,6 +378,24 @@ model Resource {
   @@schema("nexo")
 }
 
+// Reglas de la agenda inteligente (Esencial+/Profesional/Empresa): una fila por
+// negocio. "rules" es JSON validado en lib/smart-booking.ts (smartBookingRulesSchema);
+// las instrucciones en lenguaje natural del dueño se guardan como referencia.
+// Perder el plan no borra la fila: las reglas se conservan y dejan de aplicarse.
+model SmartBookingRules {
+  businessId      String   @id
+  mode            String   @default("assisted")
+  rules           Json     @default("{}")
+  instructions    String?
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@schema("nexo")
+}
+
 // Tabla puente N:M entre Service y Resource.
 model ServiceResource {
   serviceId  String
@@ -554,6 +573,11 @@ model Appointment {
   // seña el estado del pago ES el estado de la reserva: no queda confirmada
   // hasta que el dueño valida el comprobante.
   status          String         @default("confirmed")
+  // Agenda inteligente: si status = "pending" Y esto tiene fecha, la reserva
+  // espera la aprobación del dueño y retiene el horario hasta ese momento
+  // (después se cancela sola — ver modules/appointments/approval.ts). null =
+  // turno normal. "pending" sin fecha conserva su significado de siempre.
+  approvalExpiresAt DateTime?
   notes           String?
   // Snapshot al momento de crear el turno (no una referencia viva al precio
   // actual del servicio): si el precio cambia después, un turno pendiente de
@@ -572,6 +596,7 @@ model Appointment {
   @@index([businessId, date])
   @@index([customerPhone])
   @@index([status])
+  @@index([status, approvalExpiresAt])
   @@index([resourceId])
   @@schema("nexo")
 }
@@ -878,6 +903,10 @@ model Plan {
   // calcula el ahorro — ver lib/billing-pricing.ts. null fuera de los packs.
   packNexoPlanId String?
   packCrmPlanId  String?
+  // Combo automático (Nexo + Nodo): % de descuento sobre la suma de los planes
+  // referenciados arriba. No null = el plan no tiene precio propio y se calcula
+  // al cobrar (modules/billing/pricing.ts). Los packs cargados a mano quedan null.
+  comboDiscountPct Float?
   packNexoPlan   Plan?   @relation("PackNexo", fields: [packNexoPlanId], references: [id], onDelete: SetNull)
   packCrmPlan    Plan?   @relation("PackCrm", fields: [packCrmPlanId], references: [id], onDelete: SetNull)
   packsAsNexo    Plan[]  @relation("PackNexo")

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // modules/business/current.ts). Si alguien agrega una ruta nueva en estas
 // carpetas sin minRole, este test falla.
 const ROOT = path.join(process.cwd(), "app/api");
-const ADMIN = ["ai-studio/", "business/assets", "business/email-notifications", "business/faqs", "business/gallery", "business/menu", "business/payment-settings", "business/resources", "business/schedule", "business/seo", "business/services", "business/site-template", "whatsapp/ai", "whatsapp/connect", "whatsapp/disconnect"];
+const ADMIN = ["ai-studio/", "business/assets", "business/email-notifications", "business/faqs", "business/gallery", "business/menu", "business/payment-settings", "business/resources", "business/schedule", "business/smart-booking", "business/seo", "business/services", "business/site-template", "whatsapp/ai", "whatsapp/connect", "whatsapp/disconnect"];
 const OWNER = ["business/promo-codes/redeem", "subscriptions/cancel", "subscriptions/checkout"];
 
 function handlers(file: string) {

@@ -10,7 +10,10 @@ export type AiOperation =
   | "simulator"
   | "seo_generate"
   | "lead_qualification"
-  | "landing_copy";
+  | "landing_copy"
+  | "web_booking_chat"
+  | "web_booking_chat_result"
+  | "smart_rules_interpret";
 
 // Usado por los filtros del dashboard de superadmin (ver lib/superadmin/queries.ts)
 // para no repetir esta lista de literales en otro lado.
@@ -22,6 +25,9 @@ export const AI_OPERATIONS: AiOperation[] = [
   "seo_generate",
   "lead_qualification",
   "landing_copy",
+  "web_booking_chat",
+  "web_booking_chat_result",
+  "smart_rules_interpret",
 ];
 
 export interface AiUsageMeta {

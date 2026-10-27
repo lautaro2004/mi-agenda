@@ -5,7 +5,7 @@ import type { BusinessSchedule } from "@/lib/types";
 import { getSlotsForDate } from "@/modules/ai/booking/flow";
 import { getActiveServiceResources } from "@/modules/business/resource";
 import { sendBookingConfirmation } from "@/modules/email/booking-emails";
-import { notifyBookingCancelled, notifyBookingCreated, notifyBookingPending } from "@/modules/notifications/service";
+import { notifyApprovalRequested, notifyBookingCancelled, notifyBookingCreated, notifyBookingPending } from "@/modules/notifications/service";
 
 // Único punto de entrada de disponibilidad/reserva del sistema — lo usan
 // tanto el Booking Flow de WhatsApp (modules/ai/booking/flow.ts) como los
@@ -147,9 +147,13 @@ export interface CreateAppointmentParams {
   // Flow pasa "pending_payment" cuando el negocio pide seña (ver
   // computeDepositAmount en modules/business/deposit.ts) junto con el
   // snapshot de montos correspondiente.
-  status?: "confirmed" | "pending_payment";
+  status?: "confirmed" | "pending_payment" | "pending";
   depositAmount?: number | null;
   totalAmount?: number | null;
+  // Agenda inteligente: la reserva espera aprobación del dueño y retiene el
+  // horario hasta esta fecha (ver modules/appointments/approval.ts). Va junto
+  // con status "pending".
+  approvalExpiresAt?: Date | null;
   // "customer" (sitio público o WhatsApp) dispara notificación al dueño;
   // "dashboard" (el dueño agendando a mano) no la dispara — notificarlo de
   // su propia acción sería ruido, no algo que requiera su atención (ver
@@ -191,9 +195,14 @@ export async function createAppointment(params: CreateAppointmentParams) {
           notes: params.notes,
           depositAmount: params.depositAmount ?? null,
           totalAmount: params.totalAmount ?? null,
+          approvalExpiresAt: params.approvalExpiresAt ?? null,
         },
       });
     });
+
+    // Esperando aprobación: no se manda "turno confirmado" al cliente todavía
+    // (se manda al aprobar) y al dueño se le avisa que tiene que decidir.
+    const awaitingApproval = appointment.status === "pending" && appointment.approvalExpiresAt !== null;
 
     if (params.source === "customer") {
       const notifyInput = {
@@ -204,12 +213,16 @@ export async function createAppointment(params: CreateAppointmentParams) {
         date: appointment.date,
         startTime: appointment.startTime,
       };
-      void (appointment.status === "pending_payment" ? notifyBookingPending(notifyInput) : notifyBookingCreated(notifyInput));
+      void (awaitingApproval
+        ? notifyApprovalRequested(notifyInput)
+        : appointment.status === "pending_payment"
+          ? notifyBookingPending(notifyInput)
+          : notifyBookingCreated(notifyInput));
     }
 
     // Nunca lanza; se espera para que en serverless el envío no se corte al
     // devolver la respuesta.
-    await sendBookingConfirmation(appointment.id);
+    if (!awaitingApproval) await sendBookingConfirmation(appointment.id);
 
     return { appointment };
   } catch (error) {

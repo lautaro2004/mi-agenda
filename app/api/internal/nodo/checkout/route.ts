@@ -12,6 +12,8 @@ const bodySchema = z.object({
   cardTokenId: z.string().min(1),
   interval: z.enum(["month", "year"]).optional(),
   extraUsers: z.coerce.number().int().min(0).max(500).optional(),
+  // Combo: plan de Nexo a sumar al plan de Nodo (planId), con descuento.
+  withNexoPlanId: z.string().min(1).optional(),
 });
 
 const OUR_FAULT_CODES: ReadonlySet<CheckoutErrorCode> = new Set(["MERCADOPAGO_NOT_CONFIGURED", "NEXO_ACTIVATION_ERROR", "UNEXPECTED_ERROR"]);
@@ -41,6 +43,7 @@ export async function POST(request: Request) {
     cardTokenId: parsed.data.cardTokenId,
     interval: parsed.data.interval,
     extraUsers: parsed.data.extraUsers,
+    withNexoPlanId: parsed.data.withNexoPlanId,
   });
 
   if (!result.ok) {

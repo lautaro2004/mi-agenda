@@ -9,6 +9,8 @@ const bodySchema = z.object({
   planId: z.string().min(1),
   interval: z.enum(["month", "year"]).optional(),
   extraUsers: z.coerce.number().int().min(0).max(500).optional(),
+  // Combo: plan de Nexo a sumar al plan de Nodo (planId), con descuento.
+  withNexoPlanId: z.string().min(1).optional(),
 });
 
 export async function POST(request: Request) {

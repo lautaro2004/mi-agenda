@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { approveAppointment, rejectAppointment } from "@/modules/appointments/approval";
 import { cancelAppointment, rescheduleAppointment } from "@/modules/appointments/service";
 import { getCurrentBusinessId } from "@/modules/business/current";
 import { rescheduleAppointmentSchema } from "@/lib/schemas";
@@ -16,7 +17,20 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const body = (await request.json()) as { action: "cancel" | "reschedule" } & Record<string, unknown>;
+    const body = (await request.json()) as { action: "cancel" | "reschedule" | "approve" | "reject" } & Record<string, unknown>;
+
+    // Agenda inteligente: el dueño decide una solicitud pendiente.
+    if (body.action === "approve") {
+      const result = await approveAppointment(businessId, id);
+      if (result.error === "not_found") return NextResponse.json({ error: "No hay una solicitud pendiente para aprobar." }, { status: 404 });
+      if (result.error === "expired") return NextResponse.json({ error: "La solicitud venció y el horario ya se liberó." }, { status: 409 });
+      return NextResponse.json({ appointment: result.appointment });
+    }
+    if (body.action === "reject") {
+      const result = await rejectAppointment(businessId, id);
+      if (result.error) return NextResponse.json({ error: "No hay una solicitud pendiente para rechazar." }, { status: 404 });
+      return NextResponse.json({ appointment: result.appointment });
+    }
 
     if (body.action === "cancel") {
       const appointment = await cancelAppointment(businessId, id, "dashboard");

@@ -65,6 +65,22 @@ export function bookingConfirmationEmail(data: BookingEmailData): RenderedEmail 
   };
 }
 
+// Solicitud que el negocio no pudo confirmar (la rechazó o venció sin respuesta).
+export function bookingDeclinedEmail(data: BookingEmailData & { reason: "rejected" | "expired" }): RenderedEmail {
+  const heading = "No pudimos confirmar tu turno";
+  const intro =
+    data.reason === "expired"
+      ? `Hola ${data.customerName}, no llegamos a confirmar tu solicitud a tiempo y el horario quedó libre. Podés elegir otro desde nuestra web.`
+      : `Hola ${data.customerName}, lamentablemente no podemos confirmar ese horario. Podés elegir otro desde nuestra web.`;
+  const html = renderEmailLayout({
+    preheader: `${data.serviceName} — ${capitalize(formatDateEs(data.date))}, ${data.startTime} hs`,
+    heading,
+    bodyHtml: paragraph(intro) + renderDetailRows(bookingRows(data)),
+    footerNote: CATEGORY_NOTE,
+  });
+  return { subject: `${heading} — ${data.businessName}`, html, text: bookingText(intro, data) };
+}
+
 export function appointmentReminderEmail(data: BookingEmailData, leadMinutes: number): RenderedEmail {
   const when = leadMinutes >= 60 ? "en 1 hora" : `en ${leadMinutes} minutos`;
   const intro = `Hola ${data.customerName}, te recordamos que tenés un turno ${when}.`;
@@ -162,4 +178,36 @@ export function passwordResetEmail(data: { name: string; url: string; expiresInM
     }),
     text: `${intro}\n\nElegir una contraseña nueva: ${data.url}\n\nSi no lo pediste, ignorá este mensaje.`,
   };
+}
+
+// Aviso al DUEÑO: el monto en pesos de su suscripción cambió por la cotización
+// del dólar oficial (planes con precio de lista en USD). Informativo: el precio
+// de lista no cambió.
+export function subscriptionRepriceEmail(data: {
+  planName: string;
+  oldAmount: number;
+  newAmount: number;
+  listAmount: number;
+  listCurrency: string;
+  rate: number;
+  nextChargeDate: string | null;
+}): RenderedEmail {
+  const up = data.newAmount > data.oldAmount;
+  const heading = "Se actualizó el monto de tu suscripción";
+  const when = data.nextChargeDate ? ` en tu próximo cobro (${data.nextChargeDate})` : " desde tu próximo cobro";
+  const intro = `El valor de tu plan ${data.planName} se mantiene en ${data.listCurrency} ${data.listAmount}, pero como se cobra en pesos, el monto ${up ? "sube" : "baja"}${when} por la cotización del dólar oficial (BNA venta).`;
+  const rows: Array<[string, string]> = [
+    ["Plan", data.planName],
+    ["Monto anterior", formatMoney(data.oldAmount)],
+    ["Monto nuevo", formatMoney(data.newAmount)],
+    ["Cotización usada", formatMoney(data.rate)],
+  ];
+  const html = renderEmailLayout({
+    preheader: `Tu próximo cobro será de ${formatMoney(data.newAmount)}`,
+    heading,
+    bodyHtml: paragraph(intro) + renderDetailRows(rows),
+    footerNote: "El monto en pesos se reajusta en cada renovación según la cotización. Si tenés dudas, respondé este mensaje.",
+  });
+  const text = `${intro}\n\n${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}`;
+  return { subject: `${heading} — ${data.planName}`, html, text };
 }

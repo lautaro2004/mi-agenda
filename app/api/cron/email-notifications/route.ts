@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { sendDailySummaries } from "@/modules/email/daily-summary";
 import { sendDueReminders } from "@/modules/email/booking-emails";
+import { expirePendingApprovals } from "@/modules/appointments/approval";
 
 // Mismo mecanismo que el resto de /api/cron/*: protegido con CRON_SECRET y
 // pensado para un scheduler externo (ver .github/workflows/email-cron.yml,
@@ -19,5 +20,7 @@ export async function POST(request: Request) {
 
   const reminders = await sendDueReminders();
   const dailySummaries = await sendDailySummaries();
-  return NextResponse.json({ reminders, dailySummaries });
+  // Agenda inteligente: libera los horarios de solicitudes que nadie aprobó a tiempo.
+  const approvals = await expirePendingApprovals();
+  return NextResponse.json({ reminders, dailySummaries, approvals });
 }

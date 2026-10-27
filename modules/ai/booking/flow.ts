@@ -308,7 +308,29 @@ async function handleNeedDate(
 
   // Lazy import to avoid circular dep at module load time
   const { getAvailableSlots } = await import("@/modules/appointments/service");
-  const slots = await getAvailableSlots(context.business.id, parsed.date, context.schedule, session.serviceId);
+  const dateIso = parsed.date.toISOString().split("T")[0];
+  // Agenda inteligente: si el plan la incluye, las reglas del negocio ordenan y
+  // filtran lo que el motor real devolvió (mismo criterio que el sitio y el
+  // chat web). Sin plan o sin reglas, null → se usa el motor tal cual.
+  let slots: string[] | null = null;
+  try {
+    const { getSmartAvailability } = await import("@/modules/smart-booking/booking");
+    const smart = await getSmartAvailability({
+      businessId: context.business.id,
+      date: dateIso,
+      schedule: context.schedule,
+      serviceId: session.serviceId,
+      durationMinutes: session.serviceDurationMinutes ?? 60,
+    });
+    if (smart) {
+      // Los preferidos del negocio van primero; el resto, en orden cronológico.
+      const preferred = new Set(smart.preferred);
+      slots = [...smart.slots.filter((t) => preferred.has(t)), ...smart.slots.filter((t) => !preferred.has(t))];
+    }
+  } catch (error) {
+    console.error("[booking-flow] Agenda inteligente no disponible, uso el motor normal:", error instanceof Error ? error.message : error);
+  }
+  if (!slots) slots = await getAvailableSlots(context.business.id, parsed.date, context.schedule, session.serviceId);
 
   if (!slots.length) {
     updateState(conversationId, "COLLECTING_INTENT", { ...session, step: "need_date" });
@@ -381,6 +403,30 @@ async function handleNeedConfirmation(
 
     // Persist appointment
     try {
+      // Agenda inteligente: el servidor revalida el horario contra las reglas y
+      // decide si se confirma o espera aprobación del dueño. Sin plan/reglas,
+      // o sin servicio atado, devuelve "confirm" y nada cambia.
+      let pendingApproval = false;
+      let approvalExpiresAt: Date | null = null;
+      if (session.serviceId && service) {
+        const { evaluateBooking } = await import("@/modules/smart-booking/booking");
+        const evaluation = await evaluateBooking({
+          businessId: conversation.businessId,
+          date: session.preferredDate!,
+          startTime: session.selectedSlot!,
+          schedule: context.schedule,
+          serviceId: session.serviceId,
+          durationMinutes: session.serviceDurationMinutes ?? 60,
+        });
+        if (!evaluation.ok) {
+          clearFlow(conversationId);
+          return bookingResponse(
+            `Lo siento, ese horario ya no está disponible. ¿Querés elegir otro? Escribí "quiero turno" para volver a empezar.`,
+          );
+        }
+        pendingApproval = evaluation.decision === "needs_approval";
+        approvalExpiresAt = evaluation.approvalExpiresAt;
+      }
       const { createAppointment } = await import("@/modules/appointments/service");
       const result = await createAppointment({
         businessId: conversation.businessId,
@@ -392,7 +438,9 @@ async function handleNeedConfirmation(
         date: session.preferredDate!,
         startTime: session.selectedSlot!,
         durationMinutes: session.serviceDurationMinutes ?? 60,
-        status: depositQuote ? "pending_payment" : "confirmed",
+        // Esperando aprobación: la seña (si hay) se pide recién cuando el dueño apruebe.
+        status: pendingApproval ? "pending" : depositQuote ? "pending_payment" : "confirmed",
+        approvalExpiresAt: pendingApproval ? approvalExpiresAt : null,
         depositAmount: depositQuote?.depositAmount,
         totalAmount: depositQuote?.totalAmount,
         source: "customer",
@@ -402,6 +450,14 @@ async function handleNeedConfirmation(
         clearFlow(conversationId);
         return bookingResponse(
           `Lo siento, ese horario ya fue tomado mientras coordinábamos. ¿Querés elegir otro? Escribí "quiero turno" para volver a empezar.`,
+        );
+      }
+
+      // Pendiente de aprobación: NO se confirma; se le avisa al cliente.
+      if (pendingApproval) {
+        updateState(conversationId, "BOOKED", { ...session, step: "confirmed" });
+        return bookingResponse(
+          `Recibimos tu solicitud de turno para *${serviceName}* ${dateLabel} a las *${slot}* ⏳. Todavía no está confirmada: el negocio la tiene que aprobar y te avisamos por acá apenas la revise.`,
         );
       }
 
@@ -418,10 +474,14 @@ async function handleNeedConfirmation(
         updateState(conversationId, "WAITING_PAYMENT_PROOF", next);
         return bookingResponse(buildDepositMessage(context.business, depositQuote, serviceName, dateLabel, slot));
       }
-    } catch {
-      // DB not available — still confirm to user (simulated booking). Sin
-      // turno persistido no hay forma de calcular/pedir una seña real, así
-      // que este fallback siempre se comporta como el flujo sin depósito.
+    } catch (error) {
+      // Sin turno persistido NO se confirma nada: decirle al cliente que quedó
+      // reservado sin que exista en la agenda genera dobles reservas y reclamos.
+      console.error("[booking-flow] No se pudo guardar el turno:", error instanceof Error ? error.message : error);
+      clearFlow(conversationId);
+      return bookingResponse(
+        `Tuve un problema para guardar tu turno y todavía NO quedó reservado. Probá de nuevo en unos minutos escribiendo "quiero turno", o contactá al negocio directamente.`,
+      );
     }
 
     const next: BookingSession = { ...session, step: "confirmed" };

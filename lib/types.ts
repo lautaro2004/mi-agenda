@@ -423,6 +423,9 @@ export interface Appointment {
   // en schema.prisma. null = este turno no requiere seña.
   depositAmount: number | null;
   totalAmount: number | null;
+  // Agenda inteligente: status "pending" con fecha = solicitud que espera la
+  // aprobación del negocio y retiene el horario hasta ese momento.
+  approvalExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -15,6 +15,8 @@ import { PublicHeader } from "@/components/public-site/header";
 import { PublicFooter } from "@/components/public-site/footer";
 import { FloatingWhatsapp } from "@/components/public-site/floating-whatsapp";
 import { BookingWidget } from "@/components/public-site/booking-widget";
+import { BookingChat } from "@/components/public-site/booking-chat";
+import { canUseWebAiChat } from "@/modules/billing/subscription";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -58,6 +60,7 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
   // página principal, que tampoco se renderiza en ese caso).
   if (bookableServices.length === 0) redirect(`/s/${slug}`);
 
+  const showChat = await canUseWebAiChat(businessId);
   const intent = getBookingIntent(services);
   const isMeeting = intent === "meeting";
 
@@ -111,6 +114,7 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
 
         <PublicFooter business={business} slug={slug} />
         <FloatingWhatsapp href={floatingWhatsappHref} />
+        {showChat && <BookingChat slug={slug} businessName={business.name} />}
       </BookingModalProvider>
     </div>
   );

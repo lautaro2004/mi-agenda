@@ -1,3 +1,4 @@
+import { syncCombosFor } from "@/modules/billing/combo";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { TrainingMode } from "@/modules/ai/prompt/training";
@@ -76,6 +77,8 @@ export interface PlanSummary {
   // Pack: planes individuales de referencia para calcular el ahorro.
   packNexoPlanId: string | null;
   packCrmPlanId: string | null;
+  // Combo automático: % de descuento (null en planes normales y packs manuales).
+  comboDiscountPct: number | null;
   // Precios por período. Vacío cuando la consulta no los incluyó.
   prices: PlanPriceSummary[];
 }
@@ -450,7 +453,7 @@ export interface PublicPlan extends PlanSummary {
 export async function listActivePlans(): Promise<PublicPlan[]> {
   // El nivel base no es una opción comercial: nunca se lista para contratar.
   const plans = await prisma.plan.findMany({
-    where: { active: true, slug: { not: BASE_PLAN_SLUG } },
+    where: { active: true, slug: { not: BASE_PLAN_SLUG }, comboDiscountPct: null },
     orderBy: [{ displayOrder: "asc" }, { monthlyPrice: "asc" }],
     include: { prices: true },
   });
@@ -488,7 +491,7 @@ export interface PlanWithUsage extends PlanSummary {
 
 export async function listPlansForAdmin(): Promise<PlanWithUsage[]> {
   const [plans, counts] = await Promise.all([
-    prisma.plan.findMany({ orderBy: [{ displayOrder: "asc" }, { monthlyPrice: "asc" }], include: { prices: true } }),
+    prisma.plan.findMany({ where: { comboDiscountPct: null }, orderBy: [{ displayOrder: "asc" }, { monthlyPrice: "asc" }], include: { prices: true } }),
     prisma.subscription.groupBy({ by: ["planId"], _count: { _all: true } }),
   ]);
 
@@ -647,6 +650,8 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
     },
   });
   await upsertPlanPrices(plan.id, { yearlyPrice: data.yearlyPrice });
+  // Los combos que usan este plan copian sus funciones nuevas (best-effort).
+  await syncCombosFor(plan.id);
 
   const count = await prisma.subscription.count({ where: { planId: id } });
   return { ...planToSummary(plan), description: plan.description, createdAt: plan.createdAt.toISOString(), updatedAt: plan.updatedAt.toISOString(), businessCount: count };
@@ -720,6 +725,7 @@ function planToSummary(plan: {
   displayOrder?: number;
   packNexoPlanId?: string | null;
   packCrmPlanId?: string | null;
+  comboDiscountPct?: number | null;
   prices?: {
     id: string;
     interval: string;
@@ -762,6 +768,7 @@ function planToSummary(plan: {
     displayOrder: plan.displayOrder ?? 0,
     packNexoPlanId: plan.packNexoPlanId ?? null,
     packCrmPlanId: plan.packCrmPlanId ?? null,
+    comboDiscountPct: plan.comboDiscountPct ?? null,
     prices: (plan.prices ?? [])
       .map((p) => ({
         id: p.id,

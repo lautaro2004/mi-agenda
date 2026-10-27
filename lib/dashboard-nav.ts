@@ -17,6 +17,7 @@ import {
   MessageSquareText,
   Plug,
   ScrollText,
+  Sparkles,
   Store,
   UserCog,
 } from "lucide-react";
@@ -28,6 +29,7 @@ export const DASHBOARD_NAV = [
   { href: "/dashboard", label: "Resumen", icon: LayoutDashboard },
   { href: "/dashboard/negocio", label: "Negocio", icon: Store, minRole: "admin" },
   { href: "/dashboard/horarios", label: "Horarios", icon: CalendarClock, minRole: "admin" },
+  { href: "/dashboard/agenda-inteligente", label: "Agenda inteligente", icon: Sparkles, minRole: "admin" },
   { href: "/dashboard/servicios", label: "Servicios", icon: ListChecks, minRole: "admin" },
   { href: "/dashboard/recursos", label: "Recursos", icon: Boxes, minRole: "admin" },
   { href: "/dashboard/preguntas-frecuentes", label: "Preguntas frecuentes", icon: MessageCircleQuestion, minRole: "admin" },

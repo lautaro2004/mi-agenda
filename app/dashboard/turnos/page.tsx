@@ -72,6 +72,31 @@ export default function TurnosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, statusFilter]);
 
+  // Agenda inteligente: aprobar o rechazar una solicitud pendiente.
+  const handleDecision = async (id: string, action: "approve" | "reject") => {
+    if (action === "reject" && !confirm("¿Rechazar esta solicitud? Se libera el horario y se le avisa al cliente.")) return;
+    setCancellingIds((prev) => new Set(prev).add(id));
+    setError(null);
+    try {
+      const res = await fetch(`/api/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "No se pudo actualizar la solicitud.");
+      }
+      await fetchAppointments();
+    } finally {
+      setCancellingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
   const handleCancel = async (id: string) => {
     if (!confirm("¿Cancelar este turno?")) return;
     setCancellingIds((prev) => new Set(prev).add(id));
@@ -191,15 +216,43 @@ export default function TurnosPage() {
                         STATUS_META[appt.status as AppointmentStatus]?.className,
                       )}
                     >
-                      {STATUS_META[appt.status as AppointmentStatus]?.label ?? appt.status}
+                      {appt.status === "pending" && appt.approvalExpiresAt
+                        ? "Por aprobar"
+                        : (STATUS_META[appt.status as AppointmentStatus]?.label ?? appt.status)}
                     </span>
+                    {appt.status === "pending" && appt.approvalExpiresAt && (
+                      <span className="text-[11px] text-muted-foreground">
+                        Responder antes del{" "}
+                        {new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(
+                          new Date(appt.approvalExpiresAt),
+                        )}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     {appt.serviceName} · {formatDate(appt.date)} a las {appt.startTime}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{appt.customerPhone}</p>
                 </div>
-                {appt.depositAmount != null && (
+                {appt.status === "pending" && appt.approvalExpiresAt && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={() => void handleDecision(appt.id, "approve")}
+                      disabled={cancelling}
+                      className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-emerald-400"
+                    >
+                      Aprobar
+                    </button>
+                    <button
+                      onClick={() => void handleDecision(appt.id, "reject")}
+                      disabled={cancelling}
+                      className="flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                )}
+                {appt.depositAmount != null && !(appt.status === "pending" && appt.approvalExpiresAt) && (
                   <PaymentReviewDialog
                     appointmentId={appt.id}
                     onUpdated={(updated) =>

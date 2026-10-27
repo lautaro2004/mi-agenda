@@ -52,6 +52,9 @@ interface ConfirmedBooking {
   // "reserva confirmada" (ver sección 6/7 de la tarea — nunca confirmar
   // solo porque llegó un archivo).
   depositAmount: number | null;
+  // Agenda inteligente: la solicitud espera la aprobación del negocio. No está
+  // confirmada (ni corresponde pedir la seña) hasta que la apruebe.
+  pendingApproval?: boolean;
 }
 
 function todayIso(): string {
@@ -197,6 +200,7 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
       const data = (await res.json()) as {
         error?: string;
         appointment?: { id: string; depositAmount: number | null };
+        pendingApproval?: boolean;
       };
       if (!res.ok || !data.appointment) throw new Error(data.error ?? "No pudimos confirmar la reserva.");
 
@@ -211,6 +215,7 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
         time: values.startTime,
         resource,
         depositAmount: data.appointment.depositAmount,
+        pendingApproval: data.pendingApproval === true,
       });
     } catch (error) {
       // Revalidado en el servidor: si el horario/recurso se ocupó mientras
@@ -226,7 +231,7 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
 
   if (bookableServices.length === 0) return null;
 
-  if (confirmed && confirmed.depositAmount != null) {
+  if (confirmed && !confirmed.pendingApproval && confirmed.depositAmount != null) {
     return (
       <DepositPendingCard
         slug={slug}
@@ -245,7 +250,15 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
     return (
       <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center sm:p-8">
         <CheckCircle2 className="mx-auto size-10 text-emerald-600 dark:text-emerald-400" />
-        <p className="mt-4 text-lg font-semibold text-foreground">¡Reserva confirmada!</p>
+        <p className="mt-4 text-lg font-semibold text-foreground">
+          {confirmed.pendingApproval ? "¡Recibimos tu solicitud!" : "¡Reserva confirmada!"}
+        </p>
+        {confirmed.pendingApproval && (
+          <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+            El horario quedó reservado para vos. El negocio tiene que aprobarlo: te vamos a avisar apenas lo haga. Si no
+            llega a confirmarlo, el horario se libera y te avisamos.
+          </p>
+        )}
         <div className="mt-3 space-y-1 text-sm text-muted-foreground">
           <p>{confirmed.service}</p>
           <p className="capitalize">

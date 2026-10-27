@@ -2,7 +2,9 @@ import type { BillingInterval, BusinessSubscription } from "@/modules/billing/su
 import { BASE_PLAN_SLUG, assignSubscription, getPlanById, getSubscriptionWithPlan, setSubscriptionFx } from "@/modules/billing/subscription";
 import { createPreapproval, createPreapprovalWithoutPlan } from "@/modules/billing/mercadopago/subscriptions";
 import { priceWithExtras } from "@/lib/billing-seats";
-import { FxUnavailableError, convertToArs, getUsdArsRate, needsConversion } from "@/lib/fx";
+import { needsConversion } from "@/lib/fx";
+import { getOrCreateComboPlan } from "@/modules/billing/combo";
+import { computeCharge, isComboPlan } from "@/modules/billing/pricing";
 import { getPreapprovalPlan } from "@/modules/billing/mercadopago/plans";
 import { mapMercadoPagoStatus } from "@/modules/billing/mercadopago/status-map";
 import { MercadoPagoNotConfiguredError, getAccessTokenFingerprint } from "@/modules/billing/mercadopago/client";
@@ -55,6 +57,9 @@ export interface CheckoutInput {
   interval?: BillingInterval;
   // Usuarios de Nodo extra sobre los incluidos (solo planes que los ofrecen).
   extraUsers?: number;
+  // Combo: junto con planId (el plan de Nodo), el plan de Nexo a sumar. Se
+  // cobra la suma de ambos con descuento (ver modules/billing/combo.ts).
+  withNexoPlanId?: string;
 }
 
 export type CheckoutResult =
@@ -125,7 +130,15 @@ export async function createSubscriptionCheckout(input: CheckoutInput): Promise<
 }
 
 async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
-  const plan = await getPlanById(input.planId);
+  // Combo: se resuelve (o crea) el plan interno que habilita Nexo + Nodo y el
+  // resto del checkout corre contra ese plan, con el precio calculado al momento.
+  let effectivePlanId = input.planId;
+  if (input.withNexoPlanId) {
+    const combo = await getOrCreateComboPlan(input.withNexoPlanId, input.planId);
+    if (!combo.ok) return simpleError("PLAN_NOT_FOUND");
+    effectivePlanId = combo.planId;
+  }
+  const plan = await getPlanById(effectivePlanId);
   if (!plan) return simpleError("PLAN_NOT_FOUND");
   if (!plan.active) return simpleError("PLAN_INACTIVE");
   // Agenda interna (nivel base, monthlyPrice=0) nunca se contrata: no es un
@@ -145,13 +158,18 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
     return simpleError("EXTRA_USERS_NOT_AVAILABLE");
   }
   const baseAmount = interval === "month" ? plan.monthlyPrice : (price?.amount ?? 0);
-  const listAmount = extras > 0 ? priceWithExtras(baseAmount, extraUnit, extras) : baseAmount;
-  const convert = needsConversion(listCurrency);
+  const isCombo = isComboPlan(plan);
+  // En un combo el monto se calcula al contratar (ver computeCharge): acá solo
+  // se valida lo estructural.
+  const listAmount = isCombo ? 1 : extras > 0 ? priceWithExtras(baseAmount, extraUnit, extras) : baseAmount;
+  const convert = !isCombo && needsConversion(listCurrency);
   // Monto dinámico (USD, o con usuarios extra): no cabe en un preapproval_plan
   // fijo, se crea una suscripción sin plan con el monto ya calculado.
-  const dynamic = convert || extras > 0;
+  const dynamic = isCombo || convert || extras > 0;
   const mercadoPagoPlanId = interval === "month" ? plan.mercadoPagoPlanId : (price?.active ? price.mercadoPagoPlanId : null);
-  if (dynamic) {
+  if (dynamic && isCombo) {
+    // Sin precio propio: se valida al calcular el cobro.
+  } else if (dynamic) {
     if (interval === "year" && !price?.active) return simpleError("PLAN_NOT_SYNCED");
     if (!(listAmount > 0)) return simpleError("PLAN_NOT_SYNCED");
   } else if (!mercadoPagoPlanId) {
@@ -184,17 +202,16 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   if (mercadoPagoPlanId && !dynamic) await logPreapprovalPlanDiagnostics(mercadoPagoPlanId);
 
   let fx: { arsAmount: number; fxRate: number | null; fxRateAt: Date | null } | null = null;
-  if (convert) {
-    try {
-      const quote = await getUsdArsRate();
-      fx = { arsAmount: convertToArs(listAmount, quote.rate), fxRate: quote.rate, fxRateAt: new Date() };
-    } catch (error) {
-      if (error instanceof FxUnavailableError) return simpleError("FX_UNAVAILABLE");
-      throw error;
+  if (dynamic) {
+    // Mismo cálculo que la cotización y el reajuste (plan común o combo): plan
+    // en dólares → pesos al dólar oficial; en pesos con extras → sin cotización.
+    const charge = await computeCharge(plan, interval, extras);
+    if (!charge.ok) {
+      if (charge.error === "FX_UNAVAILABLE") return simpleError("FX_UNAVAILABLE");
+      if (charge.error === "EXTRA_USERS_NOT_AVAILABLE") return simpleError("EXTRA_USERS_NOT_AVAILABLE");
+      return simpleError("PLAN_NOT_SYNCED");
     }
-  } else if (dynamic) {
-    // Plan en pesos con usuarios extra: sin cotización, el monto ya está en ARS.
-    fx = { arsAmount: listAmount, fxRate: null, fxRateAt: null };
+    fx = { arsAmount: charge.arsAmount, fxRate: charge.rate ?? null, fxRateAt: charge.rate !== undefined ? new Date() : null };
   }
 
   let preapproval;
@@ -277,7 +294,7 @@ async function runCheckout(input: CheckoutInput): Promise<CheckoutResult> {
 
   const now = new Date();
   const result = await assignSubscription(input.businessId, {
-    planId: input.planId,
+    planId: plan.id,
     status: internalStatus,
     currentPeriodStart: now,
     currentPeriodEnd: null,

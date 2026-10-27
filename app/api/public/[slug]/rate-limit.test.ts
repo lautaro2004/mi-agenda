@@ -7,6 +7,10 @@ vi.mock("@/modules/appointments/service", () => ({
   getResourceAvailabilityForSlot: async () => [],
   createAppointment: vi.fn(),
 }));
+vi.mock("@/modules/smart-booking/booking", () => ({
+  getSmartAvailability: async () => null,
+  evaluateBooking: async () => ({ ok: true, decision: "confirm", approvalExpiresAt: null }),
+}));
 vi.mock("@/modules/payments/service", () => ({
   PaymentProofValidationError: class extends Error {},
   submitProofForAppointment: vi.fn(),

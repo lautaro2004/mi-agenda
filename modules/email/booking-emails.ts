@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { appointmentReminderEmail, bookingConfirmationEmail, type BookingEmailData } from "./templates";
+import { appointmentReminderEmail, bookingConfirmationEmail, bookingDeclinedEmail, type BookingEmailData } from "./templates";
 import { sendBusinessEmail } from "./send";
 import { getEmailSettings, EMAIL_SETTINGS_DEFAULTS } from "./settings";
 import { addDays, appointmentStart, getLocalNow } from "./time";
@@ -78,6 +78,37 @@ export async function sendBookingConfirmation(appointmentId: string): Promise<"s
     return "sent";
   } catch (error) {
     console.error("[email] Error enviando la confirmación de reserva:", error instanceof Error ? error.message : "desconocido");
+    return "failed";
+  }
+}
+
+// Aviso al cliente de que su solicitud (agenda inteligente) no se confirmó:
+// el dueño la rechazó o venció sin respuesta. Nunca lanza. La clave de
+// idempotencia evita duplicados si el barrido se repite.
+export async function sendBookingDeclined(appointmentId: string, reason: "rejected" | "expired"): Promise<"sent" | "skipped" | "failed"> {
+  try {
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: { business: { select: { name: true } } },
+    });
+    if (!appointment?.customerEmail) return "skipped";
+    const settings = await getEmailSettings(appointment.businessId);
+    if (!settings.bookingConfirmationEnabled) return "skipped";
+
+    const email = bookingDeclinedEmail({ ...toEmailData(appointment, appointment.business.name), reason });
+    const result = await sendBusinessEmail({
+      businessId: appointment.businessId,
+      to: appointment.customerEmail,
+      ...email,
+      idempotencyKey: `booking-declined/${appointment.id}`,
+    });
+    if (!result.ok) {
+      console.error("[email] Falló el aviso de solicitud no confirmada:", result.error);
+      return "failed";
+    }
+    return "sent";
+  } catch (error) {
+    console.error("[email] Error enviando el aviso de solicitud no confirmada:", error instanceof Error ? error.message : "desconocido");
     return "failed";
   }
 }

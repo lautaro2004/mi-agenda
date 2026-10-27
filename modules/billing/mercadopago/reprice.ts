@@ -1,7 +1,9 @@
 import { priceWithExtras } from "@/lib/billing-seats";
-import { FxUnavailableError, convertToArs, getUsdArsRate, needsConversion, relativeChange } from "@/lib/fx";
+import { FxUnavailableError, getUsdArsRate, needsConversion, relativeChange } from "@/lib/fx";
 import { prisma } from "@/lib/prisma";
+import { computeCharge, isComboPlan } from "@/modules/billing/pricing";
 import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago/client";
+import { sendRepriceNotice } from "@/modules/billing/mercadopago/reprice-notice";
 import { getPreapproval, updatePreapprovalAmount } from "@/modules/billing/mercadopago/subscriptions";
 
 // ── Reajuste por cotización (planes con precio de lista en USD) ──────────
@@ -42,13 +44,12 @@ export async function repriceFxSubscriptions(now = new Date()): Promise<RepriceS
       arsAmount: { not: null },
       fxRateAt: { not: null },
     },
-    include: { plan: true, planPrice: true },
+    include: { plan: { include: { prices: true } }, planPrice: true },
   });
   if (candidates.length === 0) return summary;
 
-  let rate: number;
   try {
-    rate = (await getUsdArsRate()).rate;
+    await getUsdArsRate();
   } catch (error) {
     if (error instanceof FxUnavailableError) {
       console.error("[reprice] Sin cotización disponible: se reintenta en la próxima corrida.");
@@ -64,8 +65,10 @@ export async function repriceFxSubscriptions(now = new Date()): Promise<RepriceS
       const listCurrency = yearly ? (sub.planPrice?.currency ?? sub.plan.currency) : sub.plan.currency;
       const baseAmount = yearly ? (sub.planPrice?.amount ?? 0) : sub.plan.monthlyPrice;
       const extraUnit = yearly ? sub.plan.extraUserYearlyPrice : sub.plan.extraUserMonthlyPrice;
-      const listAmount = priceWithExtras(baseAmount, extraUnit, sub.extraUsers);
-      if (!needsConversion(listCurrency) || !(listAmount > 0) || sub.arsAmount === null || !sub.fxRateAt) {
+      const isCombo = isComboPlan(sub.plan);
+      // Combo: el precio se calcula al momento (ver pricing.ts); sin lista fija.
+      const listAmount = isCombo ? 1 : priceWithExtras(baseAmount, extraUnit, sub.extraUsers);
+      if ((!isCombo && (!needsConversion(listCurrency) || !(listAmount > 0))) || sub.arsAmount === null || !sub.fxRateAt) {
         summary.skipped++;
         continue;
       }
@@ -89,9 +92,16 @@ export async function repriceFxSubscriptions(now = new Date()): Promise<RepriceS
         continue;
       }
 
-      const newAmount = convertToArs(listAmount, rate);
+      // Mismo cálculo que la cotización y el checkout (plan común o combo).
+      const charge = await computeCharge(sub.plan, yearly ? "year" : "month", sub.extraUsers);
+      if (!charge.ok || !charge.converted || charge.rate === undefined) {
+        summary.skipped++;
+        continue;
+      }
+      const newAmount = charge.arsAmount;
+      const usedRate = charge.rate;
       if (relativeChange(sub.arsAmount, newAmount) < MIN_CHANGE) {
-        await prisma.subscription.update({ where: { id: sub.id }, data: { fxRate: rate, fxRateAt: now } });
+        await prisma.subscription.update({ where: { id: sub.id }, data: { fxRate: usedRate, fxRateAt: now } });
         summary.unchanged++;
         continue;
       }
@@ -99,10 +109,21 @@ export async function repriceFxSubscriptions(now = new Date()): Promise<RepriceS
       await updatePreapprovalAmount(sub.providerSubscriptionId!, newAmount);
       await prisma.subscription.update({
         where: { id: sub.id },
-        data: { arsAmount: newAmount, fxRate: rate, fxRateAt: now },
+        data: { arsAmount: newAmount, fxRate: usedRate, fxRateAt: now },
       });
-      console.log(`[reprice] negocio ${sub.businessId}: ${sub.arsAmount} → ${newAmount} ARS (cotización ${rate}).`);
+      console.log(`[reprice] negocio ${sub.businessId}: ${sub.arsAmount} → ${newAmount} ARS (cotización ${usedRate}).`);
       summary.updated++;
+      // Aviso al dueño (best-effort: no afecta al reajuste ya hecho).
+      await sendRepriceNotice({
+        businessId: sub.businessId,
+        planName: sub.plan.name,
+        oldAmount: sub.arsAmount,
+        newAmount,
+        listAmount: charge.listAmount,
+        listCurrency: charge.listCurrency,
+        rate: usedRate,
+        nextCharge,
+      });
     } catch (error) {
       summary.errors++;
       console.error(`[reprice] Falló el reajuste del negocio ${sub.businessId}:`, error instanceof Error ? error.message : error);

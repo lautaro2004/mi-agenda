@@ -2,20 +2,16 @@ import { NextResponse } from "next/server";
 
 import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
-import { createAppointment } from "@/modules/appointments/service";
-import { computeDepositAmount } from "@/modules/business/deposit";
+import { createPublicBooking } from "@/modules/appointments/public-booking";
 import { getClientIp, isRateLimited, RATE_LIMIT_MESSAGE } from "@/lib/rate-limit";
 import { manualAppointmentSchema } from "@/lib/schemas";
-import { isBookableService } from "@/lib/types";
 
 // Reserva desde el sitio público. Mismo contrato (manualAppointmentSchema) y
 // misma función (createAppointment) que usa el turno manual del dashboard —
 // termina en el mismo tipo de Appointment que una reserva por WhatsApp o por
-// dashboard, no en una entidad paralela. Igual que el Booking Flow de
-// WhatsApp (ver modules/ai/booking/flow.ts): si el negocio pide seña, el
-// turno nace en pending_payment en vez de confirmado — antes de esta
-// función, esta ruta ignoraba por completo la configuración de seña y
-// siempre confirmaba directo, algo que WhatsApp ya no hacía.
+// dashboard, no en una entidad paralela. La decisión de estado (confirmado,
+// seña, pendiente de aprobación) vive en createPublicBooking, compartida con
+// el chat web con IA.
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const businessId = await getPublicBusinessIdBySlug(slug);
@@ -34,34 +30,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: "Revisá los datos de la reserva." }, { status: 400 });
   }
 
-  const { business, services } = await getBusinessState(businessId);
-  const service = services.find((s) => s.id === parsed.data.serviceId);
-  if (!service || !isBookableService(service)) {
-    return NextResponse.json({ error: "Ese servicio no está disponible para reservar." }, { status: 400 });
-  }
+  const { business, services, schedule } = await getBusinessState(businessId);
 
-  const depositQuote = computeDepositAmount(business, service);
-
-  const result = await createAppointment({
+  const result = await createPublicBooking({
     businessId,
-    businessName: business.name,
-    serviceId: service.id,
-    serviceName: service.name,
+    business,
+    services,
+    schedule,
+    serviceId: parsed.data.serviceId,
     customerName: parsed.data.customerName,
     customerPhone: parsed.data.customerPhone,
     customerEmail: parsed.data.customerEmail || null,
     date: parsed.data.date,
     startTime: parsed.data.startTime,
-    durationMinutes: service.durationMinutes,
     notes: parsed.data.notes,
     resourceId: parsed.data.resourceId,
-    status: depositQuote ? "pending_payment" : "confirmed",
-    depositAmount: depositQuote?.depositAmount,
-    totalAmount: depositQuote?.totalAmount,
-    source: "customer",
   });
 
-  if ("error" in result) {
+  if (!result.ok) {
+    if (result.error === "service_unavailable") {
+      return NextResponse.json({ error: "Ese servicio no está disponible para reservar." }, { status: 400 });
+    }
     const message =
       result.error === "invalid_resource"
         ? "El recurso seleccionado no es válido."
@@ -69,5 +58,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: message }, { status: 409 });
   }
 
-  return NextResponse.json({ appointment: result.appointment }, { status: 201 });
+  return NextResponse.json({ appointment: result.appointment, pendingApproval: result.pendingApproval }, { status: 201 });
 }

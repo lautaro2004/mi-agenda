@@ -14,6 +14,8 @@ const sendDueReminders = vi.fn();
 const sendDailySummaries = vi.fn();
 vi.mock("@/modules/email/booking-emails", () => ({ sendDueReminders: (...a: unknown[]) => sendDueReminders(...a) }));
 vi.mock("@/modules/email/daily-summary", () => ({ sendDailySummaries: (...a: unknown[]) => sendDailySummaries(...a) }));
+const expirePendingApprovals = vi.fn();
+vi.mock("@/modules/appointments/approval", () => ({ expirePendingApprovals: (...a: unknown[]) => expirePendingApprovals(...a) }));
 
 const settingsRoute = await import("./business/email-notifications/route");
 const cronRoute = await import("./cron/email-notifications/route");
@@ -72,12 +74,17 @@ describe("POST /api/cron/email-notifications", () => {
     expect(sendDueReminders).not.toHaveBeenCalled();
   });
 
-  it("con el token correcto corre recordatorios y resúmenes", async () => {
+  it("con el token correcto corre recordatorios, resúmenes y el vencimiento de solicitudes", async () => {
     vi.stubEnv("CRON_SECRET", "secreto");
     sendDueReminders.mockResolvedValue({ sent: 2, failed: 0 });
     sendDailySummaries.mockResolvedValue({ sent: 1, failed: 0 });
+    expirePendingApprovals.mockResolvedValue({ expired: 3 });
     const res = await call("Bearer secreto");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ reminders: { sent: 2, failed: 0 }, dailySummaries: { sent: 1, failed: 0 } });
+    expect(await res.json()).toEqual({
+      reminders: { sent: 2, failed: 0 },
+      dailySummaries: { sent: 1, failed: 0 },
+      approvals: { expired: 3 },
+    });
   });
 });
