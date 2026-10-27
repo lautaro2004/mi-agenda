@@ -55,6 +55,8 @@ interface PlanLike {
   statsEnabled: boolean;
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
+  smartBookingEnabled?: boolean;
+  webAiChatEnabled?: boolean;
   active: boolean;
   id?: string;
   products?: string[];
@@ -96,6 +98,8 @@ export function PlanDialog({ trigger, plan, allPlans = [], onSubmit }: PlanDialo
     statsEnabled: plan?.statsEnabled ?? true,
     galleryEnabled: plan?.galleryEnabled ?? true,
     digitalMenuEnabled: plan?.digitalMenuEnabled ?? true,
+    smartBookingEnabled: plan?.smartBookingEnabled ?? false,
+    webAiChatEnabled: plan?.webAiChatEnabled ?? false,
     active: plan?.active ?? true,
     products: (plan?.products as ("nexo" | "crm")[] | undefined) ?? ["nexo"],
     crmMaxUsers: plan?.crmMaxUsers ?? null,
@@ -502,6 +506,22 @@ export function PlanDialog({ trigger, plan, allPlans = [], onSubmit }: PlanDialo
                     control={control}
                     name="digitalMenuEnabled"
                     render={({ field }) => <Switch id="plan-menu" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-smart">Agenda inteligente (reglas y prioridad de horarios)</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="smartBookingEnabled"
+                    render={({ field }) => <Switch id="plan-smart" checked={field.value} onCheckedChange={field.onChange} />}
+                  />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="plan-webchat">Chat web con IA para turnos</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="webAiChatEnabled"
+                    render={({ field }) => <Switch id="plan-webchat" checked={field.value} onCheckedChange={field.onChange} />}
                   />
                 </Field>
               </div>

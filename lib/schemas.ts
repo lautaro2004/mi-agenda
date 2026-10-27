@@ -506,6 +506,8 @@ export const planSchema = z.object({
   statsEnabled: z.boolean().default(true),
   galleryEnabled: z.boolean().default(true),
   digitalMenuEnabled: z.boolean().default(true),
+  smartBookingEnabled: z.boolean().default(false),
+  webAiChatEnabled: z.boolean().default(false),
   active: z.boolean().default(true),
   // ── Facturación unificada Nexo + Nodo ───────────────────────────────────
   // Qué habilita el plan. Default ["nexo"] = comportamiento de siempre.

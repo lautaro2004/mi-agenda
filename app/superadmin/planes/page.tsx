@@ -43,6 +43,8 @@ interface PlanWithUsage {
   statsEnabled: boolean;
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
+  smartBookingEnabled?: boolean;
+  webAiChatEnabled?: boolean;
   active: boolean;
   businessCount: number;
   mercadoPagoPlanId: string | null;
@@ -156,7 +158,7 @@ function SavingsLine({ label, savings }: { label: string; savings: PackSavings }
 }
 
 const FEATURE_LABEL: Record<
-  "publicWebEnabled" | "whatsappEnabled" | "depositsEnabled" | "customTrainingEnabled" | "statsEnabled" | "galleryEnabled" | "digitalMenuEnabled",
+  "publicWebEnabled" | "whatsappEnabled" | "depositsEnabled" | "customTrainingEnabled" | "statsEnabled" | "galleryEnabled" | "digitalMenuEnabled" | "smartBookingEnabled" | "webAiChatEnabled",
   string
 > = {
   publicWebEnabled: "Web pública",
@@ -166,6 +168,8 @@ const FEATURE_LABEL: Record<
   statsEnabled: "Estadísticas",
   galleryEnabled: "Galería",
   digitalMenuEnabled: "Carta + QR",
+  smartBookingEnabled: "Agenda inteligente",
+  webAiChatEnabled: "Chat web IA",
 };
 
 const numberFormatter = new Intl.NumberFormat("es-AR");

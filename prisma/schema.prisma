@@ -851,6 +851,12 @@ model Plan {
   // que es el switch propio del dueño (independiente del plan).
   galleryEnabled        Boolean @default(true)
   digitalMenuEnabled    Boolean @default(true)
+  // Agenda inteligente (reglas de agenda + priorización de horarios) y chat web
+  // con IA para pedir turnos desde el sitio público. A diferencia de las demás,
+  // estas dos son opt-in: default false, así ningún plan existente las gana solo.
+  // WhatsApp + IA sigue siendo whatsappEnabled (independiente de estas).
+  smartBookingEnabled   Boolean @default(false)
+  webAiChatEnabled      Boolean @default(false)
 
   // ── Productos (facturación unificada Nexo + Nodo) ───────────────────────
   // Qué habilita el plan: ["nexo"], ["crm"] (Nodo) o ["nexo","crm"] (pack).

@@ -54,6 +54,8 @@ export interface PlanSummary {
   statsEnabled: boolean;
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
+  smartBookingEnabled: boolean;
+  webAiChatEnabled: boolean;
   active: boolean;
   // Ver modules/billing/mercadopago/sync-plan.ts — null = Agenda interna (nunca
   // sincroniza) o un plan pago que todavía no se sincronizó ni una vez.
@@ -164,6 +166,8 @@ function emptyNexoTier(row: PlanRow): PlanSummary {
     statsEnabled: false,
     galleryEnabled: false,
     digitalMenuEnabled: false,
+    smartBookingEnabled: false,
+    webAiChatEnabled: false,
   };
 }
 
@@ -320,6 +324,8 @@ export interface PlanFeatures {
   statsEnabled: boolean;
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
+  smartBookingEnabled: boolean;
+  webAiChatEnabled: boolean;
 }
 
 const UNGATED_FEATURES: PlanFeatures = {
@@ -331,6 +337,9 @@ const UNGATED_FEATURES: PlanFeatures = {
   statsEnabled: true,
   galleryEnabled: true,
   digitalMenuEnabled: true,
+  // Funciones nuevas y opt-in: sin suscripción (fallback legacy) no se habilitan.
+  smartBookingEnabled: false,
+  webAiChatEnabled: false,
 };
 
 export function resolvePlanFeatures(sub: BusinessSubscription | null): PlanFeatures {
@@ -344,6 +353,8 @@ export function resolvePlanFeatures(sub: BusinessSubscription | null): PlanFeatu
     statsEnabled: sub.nexoPlan.statsEnabled,
     galleryEnabled: sub.nexoPlan.galleryEnabled,
     digitalMenuEnabled: sub.nexoPlan.digitalMenuEnabled,
+    smartBookingEnabled: sub.nexoPlan.smartBookingEnabled,
+    webAiChatEnabled: sub.nexoPlan.webAiChatEnabled,
   };
 }
 
@@ -353,6 +364,22 @@ export function resolvePlanFeatures(sub: BusinessSubscription | null): PlanFeatu
 export async function resolveBusinessPlanFeatures(businessId: string): Promise<PlanFeatures> {
   const sub = await getSubscriptionWithPlan(businessId);
   return resolvePlanFeatures(sub);
+}
+
+// Gates de la agenda inteligente. Se validan en el SERVIDOR (rutas de API,
+// server actions y herramientas de IA), nunca solo ocultando botones. Usan el
+// plan EFECTIVO (nexoPlan): si la suscripción vence o queda impaga, el acceso
+// ya cae al nivel base por la política existente de billing-access.
+// Perder el plan NO borra reglas ni conversaciones: solo deja de aplicarlas.
+export async function canUseSmartBooking(businessId: string): Promise<boolean> {
+  return (await resolveBusinessPlanFeatures(businessId)).smartBookingEnabled;
+}
+
+// El chat web vive en el sitio público: además del permiso propio exige que el
+// plan tenga sitio público (publicWebEnabled).
+export async function canUseWebAiChat(businessId: string): Promise<boolean> {
+  const features = await resolveBusinessPlanFeatures(businessId);
+  return features.webAiChatEnabled && features.publicWebEnabled;
 }
 
 // ¿Este negocio tiene sitio público? (plan con publicWebEnabled). Usado por
@@ -492,6 +519,8 @@ export interface PlanInput {
   statsEnabled?: boolean;
   galleryEnabled?: boolean;
   digitalMenuEnabled?: boolean;
+  smartBookingEnabled?: boolean;
+  webAiChatEnabled?: boolean;
   active?: boolean;
   products?: string[];
   crmMaxUsers?: number | null;
@@ -564,6 +593,8 @@ export async function createPlan(data: PlanInput): Promise<PlanWithUsage> {
       statsEnabled: data.statsEnabled ?? true,
       galleryEnabled: data.galleryEnabled ?? true,
       digitalMenuEnabled: data.digitalMenuEnabled ?? true,
+      smartBookingEnabled: data.smartBookingEnabled ?? false,
+      webAiChatEnabled: data.webAiChatEnabled ?? false,
       active: data.active ?? true,
       products: data.products ?? ["nexo"],
       crmMaxUsers: data.products?.includes("crm") ? (data.crmMaxUsers ?? null) : null,
@@ -602,6 +633,8 @@ export async function updatePlan(id: string, data: Partial<PlanInput>): Promise<
       ...(data.statsEnabled !== undefined ? { statsEnabled: data.statsEnabled } : {}),
       ...(data.galleryEnabled !== undefined ? { galleryEnabled: data.galleryEnabled } : {}),
       ...(data.digitalMenuEnabled !== undefined ? { digitalMenuEnabled: data.digitalMenuEnabled } : {}),
+      ...(data.smartBookingEnabled !== undefined ? { smartBookingEnabled: data.smartBookingEnabled } : {}),
+      ...(data.webAiChatEnabled !== undefined ? { webAiChatEnabled: data.webAiChatEnabled } : {}),
       ...(data.active !== undefined ? { active: data.active } : {}),
       ...(data.products !== undefined ? { products: data.products } : {}),
       ...(data.crmMaxUsers !== undefined ? { crmMaxUsers: data.crmMaxUsers } : {}),
@@ -672,6 +705,8 @@ function planToSummary(plan: {
   statsEnabled: boolean;
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
+  smartBookingEnabled: boolean;
+  webAiChatEnabled: boolean;
   active: boolean;
   mercadoPagoPlanId: string | null;
   mercadoPagoSyncStatus: string | null;
@@ -712,6 +747,8 @@ function planToSummary(plan: {
     statsEnabled: plan.statsEnabled,
     galleryEnabled: plan.galleryEnabled,
     digitalMenuEnabled: plan.digitalMenuEnabled,
+    smartBookingEnabled: plan.smartBookingEnabled,
+    webAiChatEnabled: plan.webAiChatEnabled,
     active: plan.active,
     mercadoPagoPlanId: plan.mercadoPagoPlanId,
     mercadoPagoSyncStatus: plan.mercadoPagoSyncStatus,

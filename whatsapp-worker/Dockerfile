@@ -8,6 +8,9 @@ COPY prisma ./prisma
 COPY prisma.config.ts ./
 RUN npm ci --ignore-scripts && npm i --no-save tsx@4 && npx prisma generate
 COPY . .
+# Baileys depende de whatsapp-rust-bridge, que es SOLO ESM (exports "import"). Dentro de la
+# imagen el worker corre como ESM; el package.json del repo (app Next) no se toca.
+RUN npm pkg set type=module
 ENV NODE_ENV=production \
     WHATSAPP_SESSIONS_DIR=/data/whatsapp-sessions
 EXPOSE 8080

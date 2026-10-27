@@ -30,6 +30,9 @@ export interface SubscriptionPlanInfo {
   statsEnabled: boolean;
   galleryEnabled: boolean;
   digitalMenuEnabled: boolean;
+  // Opcionales: planes/respuestas anteriores a la agenda inteligente no los traen.
+  smartBookingEnabled?: boolean;
+  webAiChatEnabled?: boolean;
   active: boolean;
   // null = Agenda interna, o un plan pago que Superadmin todavía no sincronizó con
   // Mercado Pago (ver modules/billing/mercadopago/sync-plan.ts) — en ambos
@@ -131,6 +134,8 @@ export function buildPlanFeatureLines(plan: SubscriptionPlanInfo): string[] {
   if (plan.customTrainingEnabled) lines.push("Entrenamiento y memoria del asistente");
   if (plan.depositsEnabled) lines.push("Señas y comprobantes de pago");
   if (plan.digitalMenuEnabled) lines.push("Carta digital + QR");
+  if (plan.smartBookingEnabled) lines.push("Agenda inteligente: reglas y horarios priorizados");
+  if (plan.webAiChatEnabled) lines.push("Chat con IA en tu web para pedir turnos");
   lines.push(plan.maxServices !== null ? `Hasta ${plan.maxServices} servicios` : "Servicios ilimitados");
   lines.push(
     plan.aiCredits > 0
