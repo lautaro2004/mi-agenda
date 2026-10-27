@@ -309,7 +309,7 @@ export default function SmartBookingPage() {
               </Button>
               {proposal && (
                 <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-                  <p className="font-medium text-foreground">Propuesta (sin guardar). Revisala y tocá "Guardar cambios":</p>
+                  <p className="font-medium text-foreground">Propuesta (sin guardar). Revisala y tocá &ldquo;Guardar cambios&rdquo;:</p>
                   <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-muted-foreground">
                     {proposal.map((c) => (
                       <li key={c}>{c}</li>
