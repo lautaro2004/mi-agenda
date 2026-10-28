@@ -62,16 +62,16 @@ export function BookingModal({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Backdrop
           className={cn(
-            "fixed inset-0 z-50 bg-black/30 transition-opacity duration-150",
+            "fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] transition-opacity duration-150",
             "data-starting-style:opacity-0 data-ending-style:opacity-0"
           )}
         />
         <DialogPrimitive.Popup
           className={cn(
-            "fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-border bg-popover shadow-xl outline-none",
+            "fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-[1.75rem] border-t border-border bg-popover shadow-2xl outline-none",
             "data-open:animate-in data-open:slide-in-from-bottom data-open:duration-200",
             "data-closed:animate-out data-closed:slide-out-to-bottom data-closed:duration-150",
-            "sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-[560px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border",
+            "sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-full sm:max-w-[560px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border",
             "sm:data-open:slide-in-from-bottom-0 sm:data-open:zoom-in-95 sm:data-open:fade-in-0",
             "sm:data-closed:slide-out-to-bottom-0 sm:data-closed:zoom-out-95 sm:data-closed:fade-out-0"
           )}
@@ -81,7 +81,7 @@ export function BookingModal({
           <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border sm:hidden" />
 
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3.5 sm:px-5">
-            <DialogPrimitive.Title className="text-base font-semibold text-foreground">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="text-lg font-semibold tracking-tight text-foreground">{title}</DialogPrimitive.Title>
             <DialogPrimitive.Close
               render={<Button variant="ghost" size="icon-sm" aria-label="Cerrar" />}
             >

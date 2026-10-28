@@ -64,7 +64,7 @@ export function SlotPicker({ slots, loading, value, onChange }: SlotPickerProps)
   }
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+    <div role="group" aria-label="Horarios disponibles" className="grid grid-cols-3 gap-2 sm:grid-cols-4">
       {slots.map((slot) => (
         <button
           key={slot}
@@ -72,7 +72,7 @@ export function SlotPicker({ slots, loading, value, onChange }: SlotPickerProps)
           onClick={() => onChange(slot)}
           aria-pressed={value === slot}
           className={cn(
-            "rounded-lg border px-2 py-2 text-sm font-medium transition-colors",
+            "min-h-11 rounded-xl border px-2 py-2 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-safe:transition-colors",
             value === slot
               ? "border-[var(--brand-primary,var(--primary))] bg-[var(--brand-primary,var(--primary))] text-primary-foreground"
               : "border-border bg-background text-foreground hover:border-[var(--brand-primary,var(--primary))]/50"

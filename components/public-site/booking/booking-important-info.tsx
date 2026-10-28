@@ -1,4 +1,4 @@
-import { CreditCard, MessageCircleQuestion } from "lucide-react";
+import { CalendarClock, CreditCard, MapPin, MessageCircleQuestion } from "lucide-react";
 
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import type { Business } from "@/lib/types";
@@ -7,6 +7,8 @@ interface BookingImportantInfoProps {
   business: Business;
   whatsappHref: string | null;
 }
+
+const BRAND = "var(--brand-primary,var(--primary))";
 
 function formatDepositLabel(business: Business): string | null {
   if (!business.depositRequired) return null;
@@ -19,51 +21,69 @@ function formatDepositLabel(business: Business): string | null {
   return "Para confirmar tu reserva pedimos una seña por transferencia.";
 }
 
-// Información real del negocio, nunca texto institucional de relleno (ver
-// sección 15 de la tarea) — si no hay seña configurada y no hay WhatsApp, la
-// sección directamente no se renderiza.
+function InfoItem({ icon: Icon, title, children }: { icon: typeof MapPin; title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-4 rounded-2xl border border-border bg-card p-5">
+      <span
+        className="flex size-10 shrink-0 items-center justify-center rounded-xl text-primary-foreground"
+        style={{ background: BRAND }}
+        aria-hidden
+      >
+        <Icon className="size-5" />
+      </span>
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
+        <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// Información real del negocio, nunca texto de relleno: cada ítem aparece
+// solo si hay dato (ubicación, seña configurada, WhatsApp). Sin ninguno, la
+// sección no se renderiza.
 export function BookingImportantInfo({ business, whatsappHref }: BookingImportantInfoProps) {
   const depositLabel = formatDepositLabel(business);
+  const address = business.address?.trim();
   const doubtsHref = buildWhatsappHref(
     business.whatsappNumber,
     "Hola, tengo una duda sobre disponibilidad, precios o el servicio."
   );
-  if (!depositLabel && !whatsappHref) return null;
+  if (!depositLabel && !whatsappHref && !address) return null;
 
   return (
-    <section className="border-y border-border bg-muted/20 px-4 py-10 sm:px-6">
-      <div className="mx-auto max-w-3xl">
-        <h2 className="text-center text-lg font-semibold text-foreground">Información importante</h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+    <section className="border-y border-border bg-muted/30 px-4 py-14 sm:px-6 sm:py-20">
+      <div className="mx-auto max-w-6xl">
+        <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Antes de reservar</h2>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {address && (
+            <InfoItem icon={MapPin} title="Dónde estamos">
+              {address}
+            </InfoItem>
+          )}
           {depositLabel && (
-            <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
-              <CreditCard className="mt-0.5 size-5 shrink-0 text-[var(--brand-primary,var(--primary))]" />
-              <p className="text-sm text-muted-foreground">{depositLabel}</p>
-            </div>
+            <InfoItem icon={CreditCard} title="Seña">
+              {depositLabel}
+            </InfoItem>
           )}
           {doubtsHref && (
-            <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
-              <MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-[var(--brand-primary,var(--primary))]" />
-              <p className="text-sm text-muted-foreground">
-                ¿Tenés dudas sobre disponibilidad, precios o el servicio?{" "}
-                <a
-                  href={doubtsHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-[var(--brand-primary,var(--primary))] underline underline-offset-2"
-                >
-                  Consultar por WhatsApp
-                </a>
-              </p>
-            </div>
+            <InfoItem icon={MessageCircleQuestion} title="Dudas">
+              ¿Sobre disponibilidad, precios o el servicio?{" "}
+              <a
+                href={doubtsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                style={{ color: BRAND }}
+              >
+                Consultar por WhatsApp
+              </a>
+            </InfoItem>
           )}
           {whatsappHref && (
-            <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
-              <MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-[var(--brand-primary,var(--primary))]" />
-              <p className="text-sm text-muted-foreground">
-                ¿Necesitás cancelar o cambiar el horario? Escribinos por WhatsApp y te ayudamos.
-              </p>
-            </div>
+            <InfoItem icon={CalendarClock} title="Cambios y cancelaciones">
+              ¿Necesitás cancelar o cambiar el horario? Escribinos por WhatsApp y te ayudamos.
+            </InfoItem>
           )}
         </div>
       </div>
