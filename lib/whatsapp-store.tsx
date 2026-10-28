@@ -59,6 +59,12 @@ export function WhatsAppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Estado completo desde el servidor. Se usa al cargar, cada vez que el
+  // stream de eventos se (re)conecta y como respaldo periódico: el stream pasa
+  // por una función serverless que corta las conexiones largas, y lo que
+  // ocurre mientras está caído no se reenvía.
+  const refreshRef = React.useRef<() => Promise<void>>(async () => {});
+
   React.useEffect(() => {
     let cancelled = false;
 
@@ -82,13 +88,18 @@ export function WhatsAppProvider({ children }: { children: React.ReactNode }) {
         // de corromperlo.
         const connection = statusRes.ok
           ? ((await statusRes.json()) as { connection: WhatsAppConnection }).connection
-          : initialConnection;
+          : null;
         const conversations = conversationsRes.ok
           ? ((await conversationsRes.json()) as { conversations: Conversation[] }).conversations
-          : [];
+          : null;
 
         if (cancelled) return;
-        setState({ connection, conversations });
+        // Una respuesta fallida (transitoria) conserva lo que ya había en
+        // pantalla en vez de vaciarlo.
+        setState((prev) => ({
+          connection: connection ?? prev.connection,
+          conversations: conversations ?? prev.conversations,
+        }));
       } catch (error) {
         console.error("[whatsapp-store] No se pudo cargar el estado de WhatsApp:", error);
       } finally {
@@ -96,6 +107,7 @@ export function WhatsAppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    refreshRef.current = load;
     load();
     return () => {
       cancelled = true;
@@ -104,6 +116,23 @@ export function WhatsAppProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     const source = new EventSource("/api/whatsapp/events");
+    let opened = false;
+
+    source.onopen = () => {
+      // Primera apertura: el load() inicial ya trajo todo. En reconexiones, se
+      // recupera lo que pasó mientras el stream estaba caído.
+      if (opened) void refreshRef.current();
+      opened = true;
+    };
+
+    // Respaldo: sincroniza cada 10 s mientras la pestaña está visible.
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshRef.current();
+    }, 10_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshRef.current();
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     source.onmessage = (event) => {
       const data = JSON.parse(event.data) as WhatsAppEvent;
@@ -116,6 +145,8 @@ export function WhatsAppProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       source.close();
+      window.clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [upsertConversation]);
 

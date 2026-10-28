@@ -5,7 +5,7 @@ import { classifyIntent } from "@/modules/ai/classifier";
 import type { MessageIntent } from "@/modules/ai/types";
 import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
 
-import { extractMessageText, formatPhoneFromJid } from "./sync";
+import { extractMessageText, fallbackContactName, formatPhoneFromJid } from "./sync";
 
 const BUSINESS_INTENTS = new Set<MessageIntent>([
   "appointment",
@@ -66,7 +66,7 @@ export function syncHistoricalMessages(businessId: string, messages: WAMessage[]
     const conversation = conversationRepository.importConversation({
       id: jid,
       businessId,
-      contactName: firstMsg.pushName || formatPhoneFromJid(jid),
+      contactName: firstMsg.pushName || fallbackContactName(jid),
       contactPhone: formatPhoneFromJid(jid),
     });
 

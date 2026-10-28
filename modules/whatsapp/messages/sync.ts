@@ -30,10 +30,45 @@ export function extractMessageText(message: WAMessage): string {
   }
 }
 
+// WhatsApp (multi-dispositivo) identifica a algunos contactos con un "LID":
+// un identificador interno que NO es su teléfono. Si se lo formatea como
+// número queda un valor largo y falso (ej. +128969311527129).
+export function isLidJid(jid: string): boolean {
+  return jid.endsWith("@lid") || jid.endsWith("@hosted.lid");
+}
+
+// Teléfono legible del contacto, o "" si el JID no corresponde a uno real
+// (LID sin resolver): nunca se muestra un número inventado.
 export function formatPhoneFromJid(jid: string): string {
+  if (isLidJid(jid)) return "";
   const normalized = jidNormalizedUser(jid);
   const number = normalized.split("@")[0];
   return `+${number}`;
+}
+
+export function fallbackContactName(jid: string): string {
+  return formatPhoneFromJid(jid) || "Contacto de WhatsApp";
+}
+
+// Si el chat viene identificado por LID, lo reemplaza por el JID con el
+// teléfono real cuando WhatsApp lo informa (remoteJidAlt) o cuando el mapeo
+// LID→teléfono ya está guardado en la sesión. Sin resolver, queda el LID.
+export async function resolvePhoneJid(
+  waMessage: WAMessage,
+  lookup?: (lid: string) => Promise<string | null | undefined>
+): Promise<void> {
+  const jid = waMessage.key.remoteJid;
+  if (!jid || !isLidJid(jid)) return;
+
+  let pn: string | null | undefined = waMessage.key.remoteJidAlt;
+  if (!pn && lookup) {
+    try {
+      pn = await lookup(jid);
+    } catch {
+      pn = null;
+    }
+  }
+  if (pn && pn.endsWith("@s.whatsapp.net")) waMessage.key.remoteJid = jidNormalizedUser(pn);
 }
 
 // Inversa de formatPhoneFromJid: reconstruye el JID a partir del teléfono
@@ -63,7 +98,7 @@ export function syncIncomingMessage(businessId: string, waMessage: WAMessage): v
   const conversation = conversationRepository.ensureConversation({
     id: jid,
     businessId,
-    contactName: waMessage.pushName || formatPhoneFromJid(jid),
+    contactName: waMessage.pushName || fallbackContactName(jid),
     contactPhone: formatPhoneFromJid(jid),
   });
 

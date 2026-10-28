@@ -14,12 +14,38 @@ import type { MessageSender, WhatsAppConnection } from "@/lib/types";
 import { whatsappEvents } from "@/modules/whatsapp/events";
 import { withAiDisclosure } from "@/modules/whatsapp/ai-disclosure";
 import { conversationRepository } from "@/modules/whatsapp/conversations/repository";
-import { extractMessageText, syncIncomingMessage } from "@/modules/whatsapp/messages/sync";
+import { extractMessageText, resolvePhoneJid, syncIncomingMessage } from "@/modules/whatsapp/messages/sync";
 import { syncHistoricalMessages } from "@/modules/whatsapp/messages/history-sync";
 import { getSessionsDir } from "@/modules/whatsapp/sessions/dir";
 import { getAuthState, sessionRepository } from "@/modules/whatsapp/sessions/store";
 
 const RECONNECT_DELAY_MS = 3000;
+
+// fetchLatestBaileysVersion() consulta GitHub en CADA conexión: si responde
+// lento (o no responde), el QR tarda lo mismo. Se cachea y tiene un tope de
+// espera; si falla se usa la versión incluida en Baileys.
+const VERSION_TTL_MS = 6 * 60 * 60 * 1000;
+const VERSION_TIMEOUT_MS = 3000;
+type WaVersion = Awaited<ReturnType<typeof fetchLatestBaileysVersion>>["version"];
+let cachedVersion: { version: WaVersion; at: number } | null = null;
+
+async function resolveWaVersion(): Promise<WaVersion | undefined> {
+  if (cachedVersion && Date.now() - cachedVersion.at < VERSION_TTL_MS) return cachedVersion.version;
+  try {
+    const result = await Promise.race([
+      fetchLatestBaileysVersion(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), VERSION_TIMEOUT_MS)),
+    ]);
+    if (result?.version) {
+      cachedVersion = { version: result.version, at: Date.now() };
+      return result.version;
+    }
+    console.warn("[WhatsApp] No se pudo consultar la última versión a tiempo; uso la incluida en Baileys.");
+  } catch (error) {
+    console.warn("[WhatsApp] Error consultando la versión de WhatsApp Web; uso la incluida:", error);
+  }
+  return cachedVersion?.version;
+}
 
 // "warn" por defecto (antes "silent"): si WhatsApp rechaza la conexión, queda
 // registrado en los logs del worker en vez de fallar en silencio. Se puede
@@ -96,14 +122,15 @@ class WhatsAppConnectionManager {
     await this.loadAiEnabled(businessId);
 
     try {
-      const { state, saveCreds } = await getAuthState(businessId);
-      const { version } = await fetchLatestBaileysVersion();
+      const startedAt = Date.now();
+      const [{ state, saveCreds }, version] = await Promise.all([getAuthState(businessId), resolveWaVersion()]);
 
       const sock = makeWASocket({
-        version,
+        ...(version ? { version } : {}),
         auth: state,
         logger,
       });
+      console.log(`[WhatsApp] Socket creado negocio=${businessId} en ${Date.now() - startedAt}ms`);
 
       this.sockets.set(businessId, sock);
 
@@ -113,23 +140,33 @@ class WhatsAppConnectionManager {
         void this.handleConnectionUpdate(businessId, update);
       });
 
+      // Contactos identificados por LID → se resuelven al teléfono real antes
+      // de crear la conversación (así el número se ve bien y el ID de la
+      // conversación es estable).
+      const lookupPhone = async (lid: string) => sock.signalRepository?.lidMapping?.getPNForLID(lid);
+
       sock.ev.on("messages.upsert", ({ messages, type }) => {
-        if (type === "notify") {
-          for (const message of messages) {
-            syncIncomingMessage(businessId, message);
-            if (!message.key.fromMe) {
-              void this.handleCustomerMessage(businessId, message.key.remoteJid ?? "", message);
+        void (async () => {
+          await Promise.all(messages.map((m) => resolvePhoneJid(m, lookupPhone)));
+          if (type === "notify") {
+            for (const message of messages) {
+              syncIncomingMessage(businessId, message);
+              if (!message.key.fromMe) {
+                void this.handleCustomerMessage(businessId, message.key.remoteJid ?? "", message);
+              }
             }
+          } else if (type === "append") {
+            syncHistoricalMessages(businessId, messages);
           }
-        } else if (type === "append") {
-          syncHistoricalMessages(businessId, messages);
-        }
+        })().catch((error) => console.error("[WhatsApp] Error procesando mensajes entrantes:", error));
       });
 
       sock.ev.on("messaging-history.set", ({ messages }) => {
         if (this.historySynced.has(businessId)) return;
         this.historySynced.add(businessId);
-        syncHistoricalMessages(businessId, messages);
+        void Promise.all(messages.map((m) => resolvePhoneJid(m, lookupPhone)))
+          .then(() => syncHistoricalMessages(businessId, messages))
+          .catch((error) => console.error("[WhatsApp] Error importando historial:", error));
       });
     } catch (error) {
       console.error(`[WhatsApp] No se pudo iniciar la conexión negocio=${businessId}:`, error);
@@ -153,6 +190,7 @@ class WhatsAppConnectionManager {
     const { connection, qr, lastDisconnect } = update;
 
     if (qr) {
+      console.log(`[WhatsApp] QR generado negocio=${businessId}`);
       const qrDataUrl = await QRCode.toDataURL(qr);
       this.updateConnection(businessId, { status: "connecting", qr: qrDataUrl, lastError: null });
       sessionRepository.setStatus(businessId, "connecting");
@@ -374,10 +412,15 @@ class WhatsAppConnectionManager {
 
     try {
       const { processMessage } = await import("@/modules/ai/gateway");
+      const aiStart = Date.now();
       const response = await processMessage({ conversationId: jid, businessId, message: text });
+      const aiMs = Date.now() - aiStart;
       if (!response) return;
 
+      const sendStart = Date.now();
       await this.sendMessage(businessId, jid, withAiDisclosure(conversation, response.text), "ai");
+      // Tiempos separados para saber dónde está la demora (IA vs. envío).
+      console.log(`[WhatsApp] Respuesta negocio=${businessId} ia=${aiMs}ms envio=${Date.now() - sendStart}ms`);
 
       if (response.escalateToHuman) {
         conversationRepository.setManualMode(businessId, jid, true);

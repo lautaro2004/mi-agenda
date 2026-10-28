@@ -81,7 +81,11 @@ export default function ConversationDetailPage() {
         <div className="flex h-[calc(100vh-13rem)] flex-col rounded-2xl border border-border bg-card">
           <div className="border-b border-border px-5 py-3.5">
             <h2 className="text-base font-semibold text-foreground">{conversation.contactName}</h2>
-            <p className="text-sm text-muted-foreground">{conversation.contactPhone}</p>
+            {conversation.contactPhone ? (
+              <p className="text-sm text-muted-foreground">{conversation.contactPhone}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Número no disponible todavía</p>
+            )}
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
