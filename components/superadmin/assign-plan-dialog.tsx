@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { PlanPairFields, type AdminPlanOption } from "@/components/superadmin/plan-pair-fields";
 import { requestJson } from "@/lib/api-client";
 import { assignSubscriptionSchema, type AssignSubscriptionValues } from "@/lib/schemas";
 import { BILLING_SUBSCRIPTION_STATUSES, type BillingSubscriptionStatus } from "@/lib/types";
@@ -28,12 +29,6 @@ const STATUS_LABEL: Record<BillingSubscriptionStatus, string> = {
   canceled: "Cancelada",
   expired: "Expirada",
 };
-
-interface PlanOption {
-  id: string;
-  name: string;
-  active: boolean;
-}
 
 function toDateInputValue(iso: string | null): string {
   if (!iso) return "";
@@ -58,11 +53,12 @@ interface AssignPlanDialogProps {
 // base, el server siempre hace upsert (ver /api/superadmin/empresas/[id]/subscription).
 export function AssignPlanDialog({ trigger, businessId, current, onAssigned }: AssignPlanDialogProps) {
   const [open, setOpen] = React.useState(false);
-  const [plans, setPlans] = React.useState<PlanOption[] | null>(null);
+  const [plans, setPlans] = React.useState<AdminPlanOption[] | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
   const defaults: AssignSubscriptionValues = {
-    planId: current.planId ?? "",
+    planId: "",
+    crmPlanId: "",
     status: current.status === "none" ? "active" : current.status,
     currentPeriodStart: toDateInputValue(current.currentPeriodStart) || new Date().toISOString().slice(0, 10),
     currentPeriodEnd: toDateInputValue(current.currentPeriodEnd),
@@ -73,17 +69,22 @@ export function AssignPlanDialog({ trigger, businessId, current, onAssigned }: A
     handleSubmit,
     control,
     reset,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<AssignSubscriptionValues>({
     resolver: zodResolver(assignSubscriptionSchema),
     defaultValues: defaults,
   });
 
+  const nexoPlanId = watch("planId") ?? "";
+  const crmPlanId = watch("crmPlanId") ?? "";
+
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
       reset(defaults);
-      requestJson<{ plans: PlanOption[] }>("/api/superadmin/planes")
+      requestJson<{ plans: AdminPlanOption[] }>("/api/superadmin/planes")
         .then(({ plans }) => setPlans(plans))
         .catch(() => setPlans([]));
     }
@@ -112,36 +113,23 @@ export function AssignPlanDialog({ trigger, businessId, current, onAssigned }: A
         <DialogHeader>
           <DialogTitle>Asignar plan</DialogTitle>
           <DialogDescription>
-            Asignación manual — todavía no hay checkout de Mercado Pago. Reemplaza cualquier suscripción existente de
-            este negocio.
+            Asignación manual — todavía no hay checkout de Mercado Pago. Elegí el plan de Nexo, el de Nodo o
+            ambos: lo que no elijas se mantiene.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(submit)} id="assign-plan-form">
           <FieldGroup>
-            <Field data-invalid={!!errors.planId}>
-              <FieldLabel htmlFor="assign-plan">Plan</FieldLabel>
-              <Controller
-                control={control}
-                name="planId"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={(v) => field.onChange(v ?? "")}>
-                    <SelectTrigger id="assign-plan" className="w-full" aria-invalid={!!errors.planId}>
-                      <SelectValue placeholder={plans === null ? "Cargando..." : "Elegí un plan"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(plans ?? []).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                          {!p.active ? " (inactivo)" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              <FieldError errors={[errors.planId]} />
-            </Field>
+            <PlanPairFields
+              plans={plans}
+              nexoPlanId={nexoPlanId}
+              crmPlanId={crmPlanId}
+              onNexoChange={(id) => setValue("planId", id, { shouldValidate: true })}
+              onCrmChange={(id) => setValue("crmPlanId", id, { shouldValidate: true })}
+              includeBase
+              includeInactive
+              error={errors.planId}
+            />
 
             <Field data-invalid={!!errors.status}>
               <FieldLabel htmlFor="assign-status">Estado</FieldLabel>

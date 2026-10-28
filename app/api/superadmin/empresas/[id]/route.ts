@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSuperadminSession } from "@/lib/auth/superadmin";
 import { getBusinessDetailForAdmin, type SuperadminPeriod } from "@/lib/superadmin/queries";
+import { deleteBusinessForAdmin } from "@/modules/admin/delete-business";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -34,4 +35,25 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   return NextResponse.json({ business: detail });
+}
+
+// Borrado definitivo de una empresa (pensado para limpiar negocios de prueba).
+// Exige que el cliente reenvíe el nombre exacto: el servidor lo vuelve a
+// comparar contra la base, no confía en el botón deshabilitado de la pantalla.
+export async function DELETE(request: Request, { params }: RouteParams) {
+  const admin = await getSuperadminSession();
+  if (!admin) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const body = (await request.json().catch(() => null)) as { confirmName?: unknown } | null;
+  const confirmName = typeof body?.confirmName === "string" ? body.confirmName : "";
+
+  const result = await deleteBusinessForAdmin({ businessId: id, confirmName, actorEmail: admin.email });
+  if (!result.ok) {
+    const status = result.error === "not_found" ? 404 : 400;
+    return NextResponse.json({ error: result.message }, { status });
+  }
+  return NextResponse.json({ ok: true });
 }

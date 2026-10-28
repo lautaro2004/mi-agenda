@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSuperadminSession } from "@/lib/auth/superadmin";
 import { grantBenefitSchema } from "@/lib/schemas";
 import { grantTemporaryPlan } from "@/modules/billing/subscription";
+import { resolvePlanSelection } from "@/modules/billing/combo";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -33,7 +34,12 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "La fecha de vencimiento debe ser futura." }, { status: 400 });
   }
 
-  const result = await grantTemporaryPlan({ businessId, planId: parsed.data.planId, expiresAt });
+  // Nexo y/o Nodo: si corresponden ambos, se usa el combo (los dos productos
+  // quedan activos); lo que no se elige se mantiene.
+  const selection = await resolvePlanSelection({ businessId, nexoPlanId: parsed.data.planId, crmPlanId: parsed.data.crmPlanId });
+  if (!selection.ok) return NextResponse.json({ error: selection.error }, { status: 400 });
+
+  const result = await grantTemporaryPlan({ businessId, planId: selection.planId, expiresAt });
   if (!result.ok) {
     const message = result.error === "plan_not_found" ? "Plan no encontrado." : "Ese plan está desactivado.";
     return NextResponse.json({ error: message }, { status: 400 });

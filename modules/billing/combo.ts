@@ -52,9 +52,16 @@ function comboData(nexo: PlanRow, crm: PlanRow) {
 }
 
 /** Devuelve (creando o actualizando) el plan combo de esta combinación. */
-export async function getOrCreateComboPlan(nexoPlanId: string, crmPlanId: string): Promise<ComboPlanResult> {
+export async function getOrCreateComboPlan(
+  nexoPlanId: string,
+  crmPlanId: string,
+  options: { allowFreeNexo?: boolean } = {}
+): Promise<ComboPlanResult> {
   const [nexo, crm] = await Promise.all([prisma.plan.findUnique({ where: { id: nexoPlanId } }), prisma.plan.findUnique({ where: { id: crmPlanId } })]);
-  if (!nexo || !nexo.active || nexo.slug === BASE_PLAN_SLUG || !onlyProduct(nexo, "nexo") || !(nexo.monthlyPrice > 0)) {
+  // Un combo COBRADO exige un plan de Nexo pago. Los otorgamientos manuales
+  // (Superadmin) pueden combinar también el plan base: no se cobra nada.
+  const nexoPaid = options.allowFreeNexo || (nexo?.slug !== BASE_PLAN_SLUG && (nexo?.monthlyPrice ?? 0) > 0);
+  if (!nexo || !nexo.active || !nexoPaid || !onlyProduct(nexo, "nexo")) {
     return { ok: false, error: "NEXO_PLAN_INVALID" };
   }
   if (!crm || !crm.active || !onlyProduct(crm, "crm") || !crm.crmMaxUsers) return { ok: false, error: "CRM_PLAN_INVALID" };
@@ -102,4 +109,69 @@ export async function syncCombosFor(planId: string): Promise<void> {
   } catch (error) {
     console.error("[combo] No se pudieron sincronizar los combos:", error instanceof Error ? error.message : error);
   }
+}
+
+export type PlanSelectionResult = { ok: true; planId: string } | { ok: false; error: string };
+
+/**
+ * Superadmin elige un plan de Nexo y/o uno de Nodo. Una suscripción guarda UN
+ * plan, así que cuando corresponden los dos productos se usa el combo interno
+ * (que habilita ambos). Lo que no se elige se MANTIENE de lo que el negocio ya
+ * tiene: dar Nodo a quien tiene Nexo no le quita Nexo, y al revés.
+ */
+export async function resolvePlanSelection(input: {
+  businessId: string;
+  nexoPlanId?: string | null;
+  crmPlanId?: string | null;
+}): Promise<PlanSelectionResult> {
+  const nexoId = input.nexoPlanId || null;
+  const crmId = input.crmPlanId || null;
+  if (!nexoId && !crmId) return { ok: false, error: "Elegí al menos un plan." };
+
+  const [chosenNexo, chosenCrm] = await Promise.all([
+    nexoId ? prisma.plan.findUnique({ where: { id: nexoId } }) : null,
+    crmId ? prisma.plan.findUnique({ where: { id: crmId } }) : null,
+  ]);
+  if (nexoId && !chosenNexo) return { ok: false, error: "Plan de Nexo no encontrado." };
+  if (crmId && !chosenCrm) return { ok: false, error: "Plan de Nodo no encontrado." };
+  if (chosenCrm && !onlyProduct(chosenCrm, "crm")) return { ok: false, error: "El plan elegido para Nodo no es un plan de Nodo." };
+
+  // Un plan que ya incluye ambos productos (combo o pack armado a mano) se
+  // asigna tal cual: no se combina con otro.
+  if (chosenNexo && chosenNexo.products.includes("crm")) {
+    if (crmId) return { ok: false, error: "El plan de Nexo elegido ya incluye Nodo." };
+    return { ok: true, planId: chosenNexo.id };
+  }
+  if (chosenNexo && !onlyProduct(chosenNexo, "nexo")) return { ok: false, error: "El plan elegido para Nexo no es un plan de Nexo." };
+
+  // Lo que ya tiene hoy (para mantener el producto que no se está tocando).
+  let currentNexo: string | null = null;
+  let currentCrm: string | null = null;
+  const sub = await prisma.subscription.findUnique({ where: { businessId: input.businessId }, select: { planId: true } });
+  const current = sub ? await prisma.plan.findUnique({ where: { id: sub.planId } }) : null;
+  if (current) {
+    if (current.packNexoPlanId && current.packCrmPlanId) {
+      currentNexo = current.packNexoPlanId;
+      currentCrm = current.packCrmPlanId;
+    } else if (onlyProduct(current, "nexo")) {
+      currentNexo = current.id;
+    } else if (onlyProduct(current, "crm")) {
+      currentCrm = current.id;
+    }
+  }
+
+  const nexo = nexoId ?? currentNexo;
+  const crm = crmId ?? currentCrm;
+
+  if (nexo && crm) {
+    const combo = await getOrCreateComboPlan(nexo, crm, { allowFreeNexo: true });
+    if (!combo.ok) {
+      return {
+        ok: false,
+        error: combo.error === "NEXO_PLAN_INVALID" ? "El plan de Nexo no es válido o está desactivado." : "El plan de Nodo no es válido o está desactivado.",
+      };
+    }
+    return { ok: true, planId: combo.planId };
+  }
+  return { ok: true, planId: (nexo ?? crm) as string };
 }

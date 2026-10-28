@@ -11,7 +11,7 @@ export interface AdminAuditEntry {
   actorEmail: string;
   // ej. "plan.create", "plan.update", "subscription.assign", "subscription.benefit"
   action: string;
-  entityType: "plan" | "subscription" | "promo_code";
+  entityType: "plan" | "subscription" | "promo_code" | "business";
   entityId: string;
   businessId?: string | null;
   reason?: string | null;

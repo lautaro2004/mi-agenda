@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlanPairFields, type AdminPlanOption } from "@/components/superadmin/plan-pair-fields";
 import {
   Dialog,
   DialogContent,
@@ -19,14 +20,6 @@ import {
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { requestJson } from "@/lib/api-client";
 import { grantBenefitSchema, type GrantBenefitValues } from "@/lib/schemas";
-import { BASE_PLAN_SLUG } from "@/lib/types";
-
-interface PlanOption {
-  id: string;
-  slug: string;
-  name: string;
-  active: boolean;
-}
 
 const DURATION_PRESETS = [
   { months: 1, label: "1 mes" },
@@ -54,16 +47,15 @@ interface GrantBenefitDialogProps {
 // /api/superadmin/planes), un solo fetch de planes para todo Superadmin.
 export function GrantBenefitDialog({ trigger, businessId, businessName, onGranted }: GrantBenefitDialogProps) {
   const [open, setOpen] = React.useState(false);
-  const [plans, setPlans] = React.useState<PlanOption[] | null>(null);
+  const [plans, setPlans] = React.useState<AdminPlanOption[] | null>(null);
   const [durationMode, setDurationMode] = React.useState<string>("1");
   const [submitting, setSubmitting] = React.useState(false);
 
-  const defaults: GrantBenefitValues = { planId: "", expiresAt: addMonths(new Date(), 1) };
+  const defaults: GrantBenefitValues = { planId: "", crmPlanId: "", expiresAt: addMonths(new Date(), 1) };
 
   const {
     register,
     handleSubmit,
-    control,
     reset,
     setValue,
     watch,
@@ -74,14 +66,16 @@ export function GrantBenefitDialog({ trigger, businessId, businessName, onGrante
   });
 
   const expiresAt = watch("expiresAt");
+  const nexoPlanId = watch("planId") ?? "";
+  const crmPlanId = watch("crmPlanId") ?? "";
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
       reset(defaults);
       setDurationMode("1");
-      requestJson<{ plans: PlanOption[] }>("/api/superadmin/planes")
-        .then(({ plans }) => setPlans(plans.filter((p) => p.active && p.slug !== BASE_PLAN_SLUG)))
+      requestJson<{ plans: AdminPlanOption[] }>("/api/superadmin/planes")
+        .then(({ plans }) => setPlans(plans))
         .catch(() => setPlans([]));
     }
   }
@@ -117,34 +111,22 @@ export function GrantBenefitDialog({ trigger, businessId, businessName, onGrante
         <DialogHeader>
           <DialogTitle>Otorgar plan temporal</DialogTitle>
           <DialogDescription>
-            {businessName} pasa a ese plan de inmediato. Al vencer, vuelve solo al plan que tenía antes.
+            {businessName} pasa a esos planes de inmediato (Nexo y/o Nodo; si queda con los dos, se activa el combo). Al vencer, vuelve solo a lo que tenía antes.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(submit)} id="grant-benefit-form">
           <FieldGroup>
-            <Field data-invalid={!!errors.planId}>
-              <FieldLabel htmlFor="benefit-plan">Plan</FieldLabel>
-              <Controller
-                control={control}
-                name="planId"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={(v) => field.onChange(v ?? "")}>
-                    <SelectTrigger id="benefit-plan" className="w-full" aria-invalid={!!errors.planId}>
-                      <SelectValue placeholder={plans === null ? "Cargando..." : "Elegí un plan"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(plans ?? []).map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              <FieldError errors={[errors.planId]} />
-            </Field>
+            <PlanPairFields
+              plans={plans}
+              nexoPlanId={nexoPlanId}
+              crmPlanId={crmPlanId}
+              onNexoChange={(id) => setValue("planId", id, { shouldValidate: true })}
+              onCrmChange={(id) => setValue("crmPlanId", id, { shouldValidate: true })}
+              includeBase={false}
+              includeInactive={false}
+              error={errors.planId}
+            />
 
             <Field data-invalid={!!errors.expiresAt}>
               <FieldLabel htmlFor="benefit-duration">Duración</FieldLabel>

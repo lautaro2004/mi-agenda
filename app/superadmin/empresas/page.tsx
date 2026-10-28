@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GrantBenefitDialog } from "@/components/superadmin/grant-benefit-dialog";
+import { DeleteBusinessDialog } from "@/components/superadmin/delete-business-dialog";
 import { requestJson } from "@/lib/api-client";
 
 interface PlanUsageInfo {
@@ -76,6 +77,7 @@ export default function SuperadminEmpresasPage() {
   const [planSlug, setPlanSlug] = React.useState<string | null>(null);
   const [businesses, setBusinesses] = React.useState<AdminBusinessListItem[] | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [toDelete, setToDelete] = React.useState<AdminBusinessListItem | null>(null);
 
   // Se lee de window.location en vez de useSearchParams() para no forzar un
   // boundary de Suspense en esta página — mismo criterio que
@@ -231,6 +233,7 @@ export default function SuperadminEmpresasPage() {
                     {b.lastActivityAt ? dateFormatter.format(new Date(b.lastActivityAt)) : "—"}
                   </td>
                   <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
                     <GrantBenefitDialog
                       businessId={b.id}
                       businessName={b.name}
@@ -245,6 +248,16 @@ export default function SuperadminEmpresasPage() {
                         reload();
                       }}
                     />
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      aria-label={`Borrar ${b.name}`}
+                      onClick={() => setToDelete(b)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -252,6 +265,16 @@ export default function SuperadminEmpresasPage() {
           </tbody>
         </table>
       </div>
+
+      <DeleteBusinessDialog
+        business={toDelete}
+        onClose={() => setToDelete(null)}
+        onDeleted={(name) => {
+          setToDelete(null);
+          toast.success(`Empresa "${name}" borrada.`);
+          reload();
+        }}
+      />
     </div>
   );
 }

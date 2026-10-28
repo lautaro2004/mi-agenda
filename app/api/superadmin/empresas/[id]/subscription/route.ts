@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSuperadminSession } from "@/lib/auth/superadmin";
 import { assignSubscriptionSchema } from "@/lib/schemas";
 import { assignSubscription } from "@/modules/billing/subscription";
+import { resolvePlanSelection } from "@/modules/billing/combo";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -39,8 +40,11 @@ export async function POST(request: Request, { params }: RouteParams) {
     }
   }
 
+  const selection = await resolvePlanSelection({ businessId, nexoPlanId: parsed.data.planId, crmPlanId: parsed.data.crmPlanId });
+  if (!selection.ok) return NextResponse.json({ error: selection.error }, { status: 400 });
+
   const result = await assignSubscription(businessId, {
-    planId: parsed.data.planId,
+    planId: selection.planId,
     status: parsed.data.status,
     currentPeriodStart,
     currentPeriodEnd,

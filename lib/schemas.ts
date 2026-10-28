@@ -544,12 +544,17 @@ export type PlanUpdateValues = z.infer<typeof planUpdateSchema>;
 // sin Mercado Pago todavía (ver sección 12 del pedido original). Las fechas
 // llegan como string (input type="date", formato YYYY-MM-DD) y se parsean
 // en el server.
-export const assignSubscriptionSchema = z.object({
-  planId: z.string().min(1, "Elegí un plan"),
-  status: z.enum(BILLING_SUBSCRIPTION_STATUSES),
-  currentPeriodStart: z.string().min(1, "Falta la fecha de inicio"),
-  currentPeriodEnd: z.string().optional(),
-});
+export const assignSubscriptionSchema = z
+  .object({
+    // Plan de Nexo y plan de Nodo (ambos opcionales, al menos uno): lo que no
+    // se elige se mantiene — ver resolvePlanSelection() en modules/billing/combo.ts.
+    planId: z.string().optional(),
+    crmPlanId: z.string().optional(),
+    status: z.enum(BILLING_SUBSCRIPTION_STATUSES),
+    currentPeriodStart: z.string().min(1, "Falta la fecha de inicio"),
+    currentPeriodEnd: z.string().optional(),
+  })
+  .refine((v) => !!v.planId || !!v.crmPlanId, { message: "Elegí al menos un plan", path: ["planId"] });
 
 export type AssignSubscriptionValues = z.infer<typeof assignSubscriptionSchema>;
 
@@ -557,10 +562,13 @@ export type AssignSubscriptionValues = z.infer<typeof assignSubscriptionSchema>;
 // 1 del pedido) — a diferencia de assignSubscriptionSchema, siempre exige
 // una fecha de vencimiento (una bonificación sin fin no es una bonificación,
 // es simplemente asignar el plan a mano, que ya cubre el dialog existente).
-export const grantBenefitSchema = z.object({
-  planId: z.string().min(1, "Elegí un plan"),
-  expiresAt: z.string().min(1, "Falta la fecha de vencimiento"),
-});
+export const grantBenefitSchema = z
+  .object({
+    planId: z.string().optional(),
+    crmPlanId: z.string().optional(),
+    expiresAt: z.string().min(1, "Falta la fecha de vencimiento"),
+  })
+  .refine((v) => !!v.planId || !!v.crmPlanId, { message: "Elegí al menos un plan", path: ["planId"] });
 
 export type GrantBenefitValues = z.infer<typeof grantBenefitSchema>;
 
