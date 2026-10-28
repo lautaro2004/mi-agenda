@@ -52,6 +52,9 @@ export interface Business {
   address: string;
   instagramUrl: string;
   facebookUrl: string;
+  tiktokUrl: string;
+  youtubeUrl: string;
+  linkedinUrl: string;
   // URL pública en /s/[slug]. null hasta que se genera (ver
   // modules/business/slug.ts) — se crea una sola vez y después no cambia
   // solo, aunque el nombre del negocio cambie.

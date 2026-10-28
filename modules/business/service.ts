@@ -3,6 +3,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { defaultSchedule } from "@/lib/mock-data";
 import { WEEK_DAYS } from "@/lib/types";
+import { SOCIAL_FIELD, SOCIAL_PLATFORMS, normalizeSocialUrl } from "@/lib/social";
 import type { Business, BusinessSchedule, FAQ, Service } from "@/lib/types";
 import type { ServiceFormValues, FaqFormValues } from "@/lib/schemas";
 import type { Prisma } from "@prisma/client";
@@ -32,6 +33,9 @@ function toClientBusiness(
     address: row?.address ?? "",
     instagramUrl: row?.instagramUrl ?? "",
     facebookUrl: row?.facebookUrl ?? "",
+    tiktokUrl: row?.tiktokUrl ?? "",
+    youtubeUrl: row?.youtubeUrl ?? "",
+    linkedinUrl: row?.linkedinUrl ?? "",
     slug: row?.slug ?? null,
     siteTemplate: (row?.siteTemplate as Business["siteTemplate"]) ?? null,
     depositRequired: row?.depositRequired ?? false,
@@ -138,6 +142,9 @@ export interface BusinessUpdateInput {
   address?: string;
   instagramUrl?: string;
   facebookUrl?: string;
+  tiktokUrl?: string;
+  youtubeUrl?: string;
+  linkedinUrl?: string;
   siteTemplate?: string | null;
   depositRequired?: boolean;
   depositType?: string | null;
@@ -151,7 +158,29 @@ export interface BusinessUpdateInput {
   depositInstructions?: string | null;
 }
 
-export async function updateBusinessInfo(businessId: string, data: BusinessUpdateInput, db: Db = prisma) {
+// Defensa en profundidad: aunque los formularios ya validan, lo que llega por
+// otros caminos (ej. propuestas de la IA) se normaliza acá. Un valor vacío
+// borra la red; uno inválido se IGNORA (se conserva el anterior) en vez de
+// guardar basura que después no se podría mostrar.
+function sanitizeSocialInput(data: BusinessUpdateInput): BusinessUpdateInput {
+  const out: BusinessUpdateInput = { ...data };
+  for (const platform of SOCIAL_PLATFORMS) {
+    const field = SOCIAL_FIELD[platform];
+    const value = out[field];
+    if (value === undefined) continue;
+    if (value.trim() === "") {
+      out[field] = "";
+      continue;
+    }
+    const normalized = normalizeSocialUrl(platform, value);
+    if (normalized) out[field] = normalized;
+    else delete out[field];
+  }
+  return out;
+}
+
+export async function updateBusinessInfo(businessId: string, rawData: BusinessUpdateInput, db: Db = prisma) {
+  const data = sanitizeSocialInput(rawData);
   const row = await db.business.upsert({
     where: { id: businessId },
     update: data,

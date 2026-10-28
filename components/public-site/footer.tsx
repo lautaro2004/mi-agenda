@@ -1,13 +1,16 @@
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
 
+import { BrandIcon, SocialLinks } from "@/components/public-site/social-icons";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
+import type { SocialLink } from "@/lib/social";
 import type { Business } from "@/lib/types";
 
-export function PublicFooter({ business, slug }: { business: Business; slug: string }) {
+// "socials" ya viene filtrado (solo redes válidas) y es [] si el dueño las
+// sacó del footer en Sitio web > Navegación.
+export function PublicFooter({ business, slug, socials = [] }: { business: Business; slug: string; socials?: SocialLink[] }) {
   const contactLines = [business.phone, business.address].filter(Boolean);
   const whatsappHref = buildWhatsappHref(business.whatsappNumber);
-  const hasSocial = whatsappHref || business.instagramUrl || business.facebookUrl;
+  const hasSocial = !!whatsappHref || socials.length > 0;
 
   return (
     <footer className="border-t border-border px-4 py-12 sm:px-6">
@@ -47,31 +50,13 @@ export function PublicFooter({ business, slug }: { business: Business; slug: str
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="WhatsApp"
+                      title="WhatsApp"
                       className="text-muted-foreground transition-colors hover:text-foreground"
                     >
-                      <MessageCircle className="size-[18px]" />
+                      <BrandIcon name="whatsapp" />
                     </a>
                   )}
-                  {business.instagramUrl && (
-                    <a
-                      href={business.instagramUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      Instagram
-                    </a>
-                  )}
-                  {business.facebookUrl && (
-                    <a
-                      href={business.facebookUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      Facebook
-                    </a>
-                  )}
+                  <SocialLinks links={socials} />
                 </div>
               )}
             </div>

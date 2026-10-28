@@ -17,6 +17,8 @@ import { FloatingWhatsapp } from "@/components/public-site/floating-whatsapp";
 import { BookingWidget } from "@/components/public-site/booking-widget";
 import { BookingChat } from "@/components/public-site/booking-chat";
 import { canUseWebAiChat } from "@/modules/billing/subscription";
+import { getPublicNavForSubpage } from "@/modules/site/nav";
+import { buildSocialLinks } from "@/lib/social";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -67,6 +69,8 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
   const whatsappHref = buildWhatsappHref(business.whatsappNumber);
   const floatingWhatsappHref = buildWhatsappHref(business.whatsappNumber, "Hola, vi su sitio web y quería hacer una consulta.");
   const brandColor = sanitizeHexColor(getBrandColor(business));
+  const nav = await getPublicNavForSubpage({ business: { ...business, slug }, services, faqs, schedule });
+  const socials = buildSocialLinks(business);
 
   return (
     <div
@@ -83,9 +87,8 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
         <PublicHeader
           business={business}
           slug={slug}
-          intent={intent}
-          hasFaqs={faqs.length > 0}
-          hasSchedule={schedule.some((d) => d.enabled)}
+          nav={nav}
+          socials={socials}
           whatsappHref={whatsappHref}
         />
 
@@ -112,7 +115,7 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
           </div>
         </main>
 
-        <PublicFooter business={business} slug={slug} />
+        <PublicFooter business={business} slug={slug} socials={nav.socialsInFooter ? socials : []} />
         <FloatingWhatsapp href={floatingWhatsappHref} />
         {showChat && <BookingChat slug={slug} businessName={business.name} />}
       </BookingModalProvider>

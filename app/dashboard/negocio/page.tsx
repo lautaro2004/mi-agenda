@@ -70,6 +70,9 @@ export default function BusinessSettingsPage() {
       address: state.business.address,
       instagramUrl: state.business.instagramUrl,
       facebookUrl: state.business.facebookUrl,
+      tiktokUrl: state.business.tiktokUrl,
+      youtubeUrl: state.business.youtubeUrl,
+      linkedinUrl: state.business.linkedinUrl,
     },
   });
 
@@ -262,6 +265,39 @@ export default function BusinessSettingsPage() {
                     {...register("facebookUrl")}
                   />
                   <FieldError errors={[errors.facebookUrl]} />
+                </Field>
+
+                <Field data-invalid={!!errors.tiktokUrl}>
+                  <FieldLabel htmlFor="tiktokUrl">TikTok</FieldLabel>
+                  <Input
+                    id="tiktokUrl"
+                    placeholder="https://tiktok.com/@tu-negocio"
+                    aria-invalid={!!errors.tiktokUrl}
+                    {...register("tiktokUrl")}
+                  />
+                  <FieldError errors={[errors.tiktokUrl]} />
+                </Field>
+
+                <Field data-invalid={!!errors.youtubeUrl}>
+                  <FieldLabel htmlFor="youtubeUrl">YouTube</FieldLabel>
+                  <Input
+                    id="youtubeUrl"
+                    placeholder="https://youtube.com/@tu-canal"
+                    aria-invalid={!!errors.youtubeUrl}
+                    {...register("youtubeUrl")}
+                  />
+                  <FieldError errors={[errors.youtubeUrl]} />
+                </Field>
+
+                <Field data-invalid={!!errors.linkedinUrl}>
+                  <FieldLabel htmlFor="linkedinUrl">LinkedIn</FieldLabel>
+                  <Input
+                    id="linkedinUrl"
+                    placeholder="https://linkedin.com/company/tu-empresa"
+                    aria-invalid={!!errors.linkedinUrl}
+                    {...register("linkedinUrl")}
+                  />
+                  <FieldError errors={[errors.linkedinUrl]} />
                 </Field>
               </div>
             </FieldGroup>

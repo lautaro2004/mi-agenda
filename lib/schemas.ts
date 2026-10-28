@@ -1,5 +1,17 @@
 import { z } from "zod";
 import { HEX_COLOR_RE } from "@/lib/brand-color";
+import { SOCIAL_LABEL, normalizeSocialUrl, type SocialPlatform } from "@/lib/social";
+
+// Vacío = sin red. Con valor, tiene que ser un enlace real de ESA red
+// (o @usuario en Instagram/TikTok): nunca un link de otra plataforma.
+function socialUrlField(platform: SocialPlatform) {
+  return z
+    .string()
+    .max(300, "El enlace es demasiado largo")
+    .refine((value) => value.trim() === "" || normalizeSocialUrl(platform, value) !== null, {
+      message: `Ingresá un enlace válido de ${SOCIAL_LABEL[platform]}`,
+    });
+}
 import {
   AI_PROPOSABLE_SECTION_STATUSES,
   BUSINESS_CATEGORIES,
@@ -94,14 +106,11 @@ export const businessInfoSchema = z.object({
   phone: z.string().min(6, "Ingresá un teléfono válido").or(z.literal("")),
   whatsappNumber: z.string().min(6, "Ingresá un número de WhatsApp válido").or(z.literal("")),
   address: z.string().max(200, "La dirección es demasiado larga").or(z.literal("")),
-  instagramUrl: z
-    .string()
-    .url("Ingresá una URL válida")
-    .or(z.literal("")),
-  facebookUrl: z
-    .string()
-    .url("Ingresá una URL válida")
-    .or(z.literal("")),
+  instagramUrl: socialUrlField("instagram"),
+  facebookUrl: socialUrlField("facebook"),
+  tiktokUrl: socialUrlField("tiktok").optional(),
+  youtubeUrl: socialUrlField("youtube").optional(),
+  linkedinUrl: socialUrlField("linkedin").optional(),
 });
 
 export type BusinessInfoValues = z.infer<typeof businessInfoSchema>;
@@ -165,6 +174,9 @@ export const trainingBusinessUpdateSchema = z.object({
   address: z.string().max(200, "La dirección es demasiado larga").optional(),
   instagramUrl: z.string().optional(),
   facebookUrl: z.string().optional(),
+  tiktokUrl: z.string().optional(),
+  youtubeUrl: z.string().optional(),
+  linkedinUrl: z.string().optional(),
 });
 
 export type TrainingBusinessUpdateValues = z.infer<typeof trainingBusinessUpdateSchema>;

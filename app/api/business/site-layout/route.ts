@@ -5,6 +5,8 @@ import { getBusinessState } from "@/modules/business/service";
 import { listActiveGalleryBlocks } from "@/modules/business/gallery";
 import { listBanners } from "@/modules/site/banners";
 import { effectiveTemplate, getLayoutItems, saveLayout } from "@/modules/site/layout";
+import { getStoredNavConfig } from "@/modules/site/nav";
+import { navLabelsPointingTo } from "@/lib/site-nav";
 import { CONTACT_SECTION_KIND, SITE_SECTIONS, siteLayoutInputSchema } from "@/lib/site-sections";
 
 // businessId sale SIEMPRE de la sesión, nunca del body: un negocio no puede
@@ -53,7 +55,11 @@ export async function PUT(request: Request) {
   try {
     const result = await saveLayout(businessId, parsed.data.template, parsed.data.items);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
-    return NextResponse.json({ items: result.items });
+    // Si se ocultó una sección a la que apunta la navegación, se avisa para
+    // que el dueño la corrija (el sitio público ya no muestra ese enlace).
+    const hidden = new Set(result.items.filter((i) => !i.visible && i.kind !== "banner").map((i) => i.kind));
+    const navWarnings = navLabelsPointingTo(await getStoredNavConfig(businessId), hidden);
+    return NextResponse.json({ items: result.items, navWarnings });
   } catch (error) {
     console.error("[api/business/site-layout] Error al guardar:", error);
     return NextResponse.json({ error: "No pudimos guardar el orden de las secciones. Intentá de nuevo." }, { status: 500 });

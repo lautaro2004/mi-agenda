@@ -35,6 +35,9 @@ model Business {
   whatsappNumber String?
   instagramUrl   String?
   facebookUrl    String?
+  tiktokUrl      String?
+  youtubeUrl     String?
+  linkedinUrl    String?
   // URL pública en /s/[slug]. Se genera una sola vez a partir del nombre (ver
   // modules/business/slug.ts) y a propósito NUNCA se regenera sola si el
   // nombre cambia después — cambiar el slug rompería la URL pública ya
@@ -102,6 +105,7 @@ model Business {
   galleryBlocks         GalleryBlock[]
   siteBanners           SiteBanner[]
   siteLayouts           SiteLayout[]
+  siteNav               SiteNav?
   memberships           Membership[]
   invitations           Invitation[]
   memoryEntries         MemoryEntry[]
@@ -1361,4 +1365,18 @@ model Invitation {
   @@index([businessId])
   @@index([email])
   @@schema("public")
+}
+
+// Navegación configurable del sitio público (una por negocio). "config" es
+// un JSON validado con zod (lib/site-nav.ts) en cada escritura y de forma
+// tolerante en cada lectura. Sin fila, el sitio usa la navegación automática.
+model SiteNav {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  config     Json
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@schema("nexo")
 }

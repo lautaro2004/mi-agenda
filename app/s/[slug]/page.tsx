@@ -27,6 +27,9 @@ import { groupSchedule } from "@/lib/schedule-format";
 import { resolveBannerCta, sectionAnchor } from "@/lib/site-banners";
 import { fallbackPublicLayout, loadPublicLayout } from "@/modules/site/layout";
 import { SiteBannerView } from "@/components/public-site/site-banner";
+import { getStoredNavConfig } from "@/modules/site/nav";
+import { resolveRenderNav, type NavContext } from "@/lib/site-nav";
+import { buildSocialLinks } from "@/lib/social";
 
 import { BookingModalProvider } from "@/components/public-site/booking/booking-modal-context";
 import { PublicHeader } from "@/components/public-site/header";
@@ -272,12 +275,26 @@ export default async function PublicSitePage({ params }: PageProps) {
   // Primera pasada: qué secciones de la plantilla realmente se muestran
   // (visibles y con contenido). Los CTA de los banners que apuntan a una
   // sección oculta o vacía no se renderizan, en vez de quedar rotos.
+  const storedNav = await getStoredNavConfig(business.id);
   const sectionNodes = layout.items.flatMap((item) => {
     if (!item.visible || item.kind === "banner") return [];
     const node = renderers[item.kind]?.() ?? null;
     return node ? [{ item, node }] : [];
   });
   const visibleKinds = new Set(sectionNodes.map(({ item }) => item.kind));
+  // Navegación: solo enlaces activos y que hoy se pueden cumplir (secciones
+  // realmente visibles, WhatsApp/teléfono cargados, etc.).
+  const navContext: NavContext = {
+    slug,
+    template,
+    visibleKinds,
+    hasMenu,
+    hasBookable: bookableServices.length > 0,
+    whatsappNumber: business.whatsappNumber,
+    phone: business.phone,
+  };
+  const nav = resolveRenderNav(storedNav, navContext, intent);
+  const socials = buildSocialLinks(business);
   const nodeByItemId = new Map(sectionNodes.map(({ item, node }) => [item.id, node]));
 
   // Segunda pasada: en orden, secciones y banners activos. Un banner
@@ -316,10 +333,8 @@ export default async function PublicSitePage({ params }: PageProps) {
         <PublicHeader
           business={business}
           slug={slug}
-          intent={intent}
-          hasFaqs={faqs.length > 0}
-          hasSchedule={schedule.some((d) => d.enabled)}
-          hasMenu={hasMenu}
+          nav={nav}
+          socials={socials}
           whatsappHref={whatsappHref}
         />
 
@@ -332,7 +347,7 @@ export default async function PublicSitePage({ params }: PageProps) {
           {template === "leads" && <LeadsMobileCta label={leadsCopy.ctaLabel} tone={leadsTone} />}
         </main>
 
-        <PublicFooter business={business} slug={slug} />
+        <PublicFooter business={business} slug={slug} socials={nav.socialsInFooter ? socials : []} />
         <FloatingWhatsapp href={floatingWhatsappHref} liftedOnMobile={template === "booking" || template === "leads"} />
         {showChat && <BookingChat slug={slug} businessName={business.name} liftedOnMobile={template === "booking" || template === "leads"} />}
         {template === "booking" && <BookingStickyCta />}

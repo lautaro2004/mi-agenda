@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LandingCopyEditor } from "@/components/dashboard/landing-copy-editor";
 import { LeadFormEditor } from "@/components/dashboard/lead-form-editor";
 import { SiteSectionsEditor } from "@/components/dashboard/site-sections-editor";
+import { SiteNavEditor } from "@/components/dashboard/site-nav-editor";
 import { requestJson } from "@/lib/api-client";
 import { ASSET_LIMITS } from "@/lib/asset-limits";
 import { HEX_COLOR_RE } from "@/lib/brand-color";
@@ -309,6 +310,8 @@ export default function SitioPage() {
           <TemplateSection />
 
           <SiteSectionsEditor />
+
+          <SiteNavEditor />
 
           <AppearanceSection />
 

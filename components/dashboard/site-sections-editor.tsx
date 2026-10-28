@@ -74,12 +74,15 @@ export function SiteSectionsEditor() {
     setData({ ...data, items: next });
     setSaving(true);
     try {
-      const result = await requestJson<{ items: SectionItem[] }>("/api/business/site-layout", {
+      const result = await requestJson<{ items: SectionItem[]; navWarnings?: string[] }>("/api/business/site-layout", {
         method: "PUT",
         body: JSON.stringify({ template: data.template, items: next }),
       });
       setData((prev) => (prev ? { ...prev, items: result.items } : prev));
       if (message) setAnnounce(message);
+      if (result.navWarnings && result.navWarnings.length > 0) {
+        toast.warning(`Estos enlaces de la navegación apuntan a una sección oculta y no se muestran: ${result.navWarnings.join(", ")}. Corregilos en Navegación.`);
+      }
     } catch (error) {
       setData((prev) => (prev ? { ...prev, items: previous } : prev));
       toast.error(error instanceof Error ? error.message : "No pudimos guardar el cambio.");

@@ -7,40 +7,52 @@ import { Menu, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { BookingTrigger } from "@/components/public-site/booking/booking-trigger";
-import type { BookingIntent } from "@/lib/booking-intent";
+import { SocialLinks } from "@/components/public-site/social-icons";
+import type { RenderCta, RenderNav } from "@/lib/site-nav";
+import type { SocialLink } from "@/lib/social";
 import type { Business } from "@/lib/types";
 
 interface PublicHeaderProps {
   business: Business;
   slug: string;
-  intent: BookingIntent;
-  hasFaqs: boolean;
-  hasSchedule: boolean;
-  hasMenu?: boolean;
+  // Navegación ya resuelta en el servidor (lib/site-nav.ts): solo enlaces
+  // activos y que se pueden cumplir.
+  nav: RenderNav;
+  socials: SocialLink[];
   whatsappHref: string | null;
 }
 
-const CTA_LABEL: Record<BookingIntent, string> = {
-  booking: "Reservar",
-  meeting: "Agendar reunión",
-  contact: "Contactar",
-};
+const externalProps = (newTab: boolean) => (newTab ? { target: "_blank", rel: "noopener noreferrer" } : {});
 
-// Compartido entre /s/[slug] y /s/[slug]/reservar — a propósito los links de
-// sección apuntan siempre a /s/[slug]#ancla (ruta completa, no solo #ancla),
-// así funcionan igual estés parado en la página principal o en la de
-// reserva.
-export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, hasMenu, whatsappHref }: PublicHeaderProps) {
+const CTA_STYLE = "bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90";
+
+function CtaButton({ cta, className }: { cta: RenderCta; className?: string }) {
+  if (cta.booking) {
+    return (
+      <BookingTrigger size="sm" className={`${CTA_STYLE} ${className ?? ""}`}>
+        {cta.label}
+      </BookingTrigger>
+    );
+  }
+  return (
+    <Button
+      size="sm"
+      className={`${CTA_STYLE} ${className ?? ""}`}
+      render={<a href={cta.href} {...externalProps(cta.newTab)} />}
+      nativeButton={false}
+    >
+      {cta.label}
+    </Button>
+  );
+}
+
+// Compartido entre /s/[slug] y /s/[slug]/reservar. Los enlaces de sección ya
+// vienen como /s/[slug]#ancla (ruta completa), así funcionan igual desde la
+// página principal o la de reservas.
+export function PublicHeader({ business, slug, nav, socials, whatsappHref }: PublicHeaderProps) {
   const [open, setOpen] = React.useState(false);
   const base = `/s/${slug}`;
-  const hasBookable = intent !== "contact";
-
-  const links = [
-    { href: `${base}#servicios`, label: "Servicios" },
-    ...(hasMenu ? [{ href: `${base}/carta`, label: "Carta" }] : []),
-    ...(hasSchedule ? [{ href: `${base}#horarios`, label: "Horarios" }] : []),
-    ...(hasFaqs ? [{ href: `${base}#faq`, label: "Preguntas frecuentes" }] : []),
-  ];
+  const navSocials = nav.socialsInNav ? socials : [];
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
@@ -61,40 +73,29 @@ export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, has
           <span className="truncate">{business.name}</span>
         </Link>
 
-        <nav className="hidden items-center gap-8 text-[0.925rem] font-medium text-muted-foreground md:flex">
-          {links.map((link) => (
-            <a key={link.href} href={link.href} className="transition-colors hover:text-foreground">
-              {link.label}
-            </a>
-          ))}
-        </nav>
+        {nav.links.length > 0 && (
+          <nav aria-label="Principal" className="hidden items-center gap-8 text-[0.925rem] font-medium text-muted-foreground md:flex">
+            {nav.links.map((link) => (
+              <a key={link.id} href={link.href} {...externalProps(link.newTab)} className="transition-colors hover:text-foreground">
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        )}
 
-        <div className="hidden items-center gap-2 md:flex">
-          {whatsappHref && (
+        <div className="hidden items-center gap-3 md:flex">
+          {navSocials.length > 0 && <SocialLinks links={navSocials} />}
+          {nav.showWhatsappButton && whatsappHref && (
             <Button variant="outline" size="sm" render={<a href={whatsappHref} target="_blank" rel="noopener noreferrer" />} nativeButton={false}>
               <MessageCircle className="size-3.5" data-icon="inline-start" />
               WhatsApp
             </Button>
           )}
-          {hasBookable && (
-            <BookingTrigger
-              size="sm"
-              className="bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-            >
-              {CTA_LABEL[intent]}
-            </BookingTrigger>
-          )}
+          {nav.cta && <CtaButton cta={nav.cta} />}
         </div>
 
         <div className="flex items-center md:hidden">
-          {hasBookable && (
-            <BookingTrigger
-              size="sm"
-              className="mr-1 bg-[var(--brand-primary,var(--primary))] hover:bg-[var(--brand-primary,var(--primary))]/90"
-            >
-              {CTA_LABEL[intent]}
-            </BookingTrigger>
-          )}
+          {nav.cta && <CtaButton cta={nav.cta} className="mr-1" />}
           <Sheet open={open} onOpenChange={setOpen}>
             <Button size="icon" variant="ghost" aria-label="Abrir menú" onClick={() => setOpen(true)}>
               <Menu className="size-5" />
@@ -103,20 +104,27 @@ export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, has
               <SheetHeader>
                 <SheetTitle>{business.name}</SheetTitle>
               </SheetHeader>
-              <nav className="flex flex-col gap-1 px-4">
-                {links.map((link) => (
-                  <SheetClose
-                    key={link.href}
-                    render={
-                      <a href={link.href} className="rounded-lg px-2 py-2.5 text-base font-medium text-foreground hover:bg-muted" />
-                    }
-                  >
-                    {link.label}
-                  </SheetClose>
-                ))}
-              </nav>
-              {whatsappHref && (
-                <div className="mt-auto border-t border-border p-4">
+              {nav.links.length > 0 && (
+                <nav aria-label="Principal" className="flex flex-col gap-1 px-4">
+                  {nav.links.map((link) => (
+                    <SheetClose
+                      key={link.id}
+                      render={
+                        <a
+                          href={link.href}
+                          {...externalProps(link.newTab)}
+                          className="rounded-lg px-2 py-2.5 text-base font-medium text-foreground hover:bg-muted"
+                        />
+                      }
+                    >
+                      {link.label}
+                    </SheetClose>
+                  ))}
+                </nav>
+              )}
+              <div className="mt-auto flex flex-col gap-4 border-t border-border p-4">
+                {navSocials.length > 0 && <SocialLinks links={navSocials} className="justify-center" />}
+                {nav.showWhatsappButton && whatsappHref && (
                   <Button
                     variant="outline"
                     className="w-full"
@@ -126,8 +134,8 @@ export function PublicHeader({ business, slug, intent, hasFaqs, hasSchedule, has
                     <MessageCircle className="size-4" data-icon="inline-start" />
                     Hablar por WhatsApp
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
             </SheetContent>
           </Sheet>
         </div>
