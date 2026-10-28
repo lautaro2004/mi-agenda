@@ -16,7 +16,7 @@
 // un Business — reutiliza el mismo bucket/helpers de Storage (ver
 // lib/site-assets.ts) con el userId como prefijo del path en vez del
 // businessId, pero es la única variante que no cuelga de Business.
-export type SiteAssetKind = "logo" | "hero" | "service" | "gallery" | "menu" | "avatar";
+export type SiteAssetKind = "logo" | "hero" | "service" | "gallery" | "menu" | "avatar" | "banner";
 
 export const ASSET_LIMITS: Record<SiteAssetKind, { maxBytes: number; mimeTypes: string[] }> = {
   logo: {
@@ -37,6 +37,12 @@ export const ASSET_LIMITS: Record<SiteAssetKind, { maxBytes: number; mimeTypes: 
   },
   gallery: {
     maxBytes: 3 * 1024 * 1024,
+    mimeTypes: ["image/png", "image/jpeg", "image/webp"],
+  },
+  // Banners promocionales (escritorio y móvil): imágenes anchas, más pesadas
+  // que una foto de galería.
+  banner: {
+    maxBytes: 4 * 1024 * 1024,
     mimeTypes: ["image/png", "image/jpeg", "image/webp"],
   },
   // Mismo límite que ya usa lib/document-limits.ts para PDF (knowledge

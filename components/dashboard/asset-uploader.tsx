@@ -30,6 +30,7 @@ const LABEL: Record<SiteAssetKind, { change: string; upload: string }> = {
   gallery: { change: "Cambiar foto", upload: "Subir foto" },
   menu: { change: "Cambiar PDF", upload: "Subir PDF" },
   avatar: { change: "Cambiar foto", upload: "Subir foto" },
+  banner: { change: "Cambiar imagen", upload: "Subir imagen" },
 };
 
 // Persiste apenas se elige un archivo (sube, actualiza la referencia y

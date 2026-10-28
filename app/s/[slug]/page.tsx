@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
 
 import { notFound } from "next/navigation";
@@ -23,6 +23,10 @@ import {
 } from "@/lib/booking-intent";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import { isBookableService } from "@/lib/types";
+import { groupSchedule } from "@/lib/schedule-format";
+import { resolveBannerCta, sectionAnchor } from "@/lib/site-banners";
+import { fallbackPublicLayout, loadPublicLayout } from "@/modules/site/layout";
+import { SiteBannerView } from "@/components/public-site/site-banner";
 
 import { BookingModalProvider } from "@/components/public-site/booking/booking-modal-context";
 import { PublicHeader } from "@/components/public-site/header";
@@ -172,6 +176,129 @@ export default async function PublicSitePage({ params }: PageProps) {
     heroSubtitle: business.description ?? "",
   });
 
+  // Orden y visibilidad de las secciones (SiteLayout) + banners activos. Si
+  // la lectura falla (ej. migración sin aplicar), el sitio usa el orden de
+  // fábrica de la plantilla — nunca se cae por esto.
+  const layout = await loadPublicLayout(business.id, template).catch((error) => {
+    console.error("[sitio] No se pudo leer el orden de secciones; se usa el de fábrica:", error);
+    return fallbackPublicLayout(template);
+  });
+
+  // REGISTRO EXPLÍCITO de bloques por plantilla (ver lib/site-sections.ts):
+  // lo guardado en la base solo elige entre estos, nunca ejecuta nada. Un
+  // renderer devuelve null cuando no hay contenido → la sección no se
+  // renderiza ni deja un espacio vacío.
+  const hasGallery = galleryBlocks.length > 0;
+  const leadsRenderers: Record<string, () => ReactNode> = {
+    hero: () => (
+      <LeadsHero
+        business={business}
+        title={leadsCopy.heroTitle}
+        subtitle={leadsCopy.heroSubtitle}
+        ctaLabel={leadsCopy.ctaLabel}
+        services={visibleServices}
+        imageUrl={
+          // Portada → primera foto de la galería → foto del primer
+          // servicio que tenga. Sin ninguna, el hero usa tarjetas.
+          business.heroImageUrl ??
+          galleryBlocks.find((b) => b.images.length > 0)?.images[0]?.imageUrl ??
+          visibleServices.find((s) => s.imageUrl)?.imageUrl ??
+          null
+        }
+        tone={leadsTone}
+        whatsappHref={whatsappHref}
+      />
+    ),
+    steps: () => <LeadsStepsSection steps={leadsCopy.steps} tone={leadsTone} />,
+    services: () => <LeadsBenefitsSection services={visibleServices} title={leadsCopy.servicesTitle} description={leadsCopy.servicesIntro} />,
+    gallery: () => (hasGallery ? <GallerySection blocks={galleryBlocks} /> : null),
+    faq: () => (faqs.length > 0 ? <FaqSection faqs={faqs} /> : null),
+    form: () => (
+      <LeadsFinalCta
+        title={leadsCopy.closingTitle}
+        body={leadsCopy.closingBody}
+        reasons={leadsCopy.reasons}
+        formTitle={leadsCopy.formTitle}
+        formSubtitle={leadsCopy.formSubtitle}
+        ctaLabel={leadsCopy.ctaLabel}
+        formConfig={leadFormConfig ?? DEFAULT_LEAD_FORM}
+        tone={leadsTone}
+        slug={slug}
+        whatsappHref={whatsappHref}
+      />
+    ),
+  };
+  const bookingRenderers: Record<string, () => ReactNode> = {
+    hero: () => (
+      <BookingHero
+        business={business}
+        whatsappHref={whatsappHref}
+        heroImageUrl={business.heroImageUrl}
+        usesResources={featuredServiceResources.length > 0}
+      />
+    ),
+    services: () => <BookingServicesSection services={bookableServices} whatsappHref={whatsappHref} />,
+    info: () => <BookingImportantInfo business={business} whatsappHref={whatsappHref} />,
+    inquiry: () => <BookingInquirySection slug={slug} />,
+    menu: () => (hasMenu ? <MenuCallout slug={slug} /> : null),
+    gallery: () => (hasGallery ? <GallerySection blocks={galleryBlocks} /> : null),
+    schedule: () => (groupSchedule(schedule).length > 0 ? <ScheduleSection schedule={schedule} /> : null),
+    faq: () => (faqs.length > 0 ? <FaqSection faqs={faqs} limit={5} /> : null),
+  };
+  const institutionalRenderers: Record<string, () => ReactNode> = {
+    hero: () => (
+      <PublicHero
+        business={business}
+        seo={seo}
+        intent={intent}
+        whatsappHref={whatsappHref}
+        heroImageUrl={business.heroImageUrl}
+        featuredService={featuredService}
+        featuredServiceUsesResources={featuredServiceResources.length > 0}
+      />
+    ),
+    about: () => (business.description ? <AboutSection description={business.description} /> : null),
+    services: () => <ServicesSection services={visibleServices} whatsappNumber={business.whatsappNumber} />,
+    menu: () => (hasMenu ? <MenuCallout slug={slug} /> : null),
+    gallery: () => (hasGallery ? <GallerySection blocks={galleryBlocks} /> : null),
+    process: () => <ProcessSection intent={intent} />,
+    booking: () => <BookingSection services={bookableServices} intent={intent} whatsappHref={whatsappHref} />,
+    schedule: () => (groupSchedule(schedule).length > 0 ? <ScheduleSection schedule={schedule} /> : null),
+    faq: () => (faqs.length > 0 ? <FaqSection faqs={faqs} /> : null),
+    cta: () => <FinalCtaSection intent={intent} whatsappHref={whatsappHref} />,
+  };
+  const renderers = template === "leads" ? leadsRenderers : template === "booking" ? bookingRenderers : institutionalRenderers;
+
+  // Primera pasada: qué secciones de la plantilla realmente se muestran
+  // (visibles y con contenido). Los CTA de los banners que apuntan a una
+  // sección oculta o vacía no se renderizan, en vez de quedar rotos.
+  const sectionNodes = layout.items.flatMap((item) => {
+    if (!item.visible || item.kind === "banner") return [];
+    const node = renderers[item.kind]?.() ?? null;
+    return node ? [{ item, node }] : [];
+  });
+  const visibleKinds = new Set(sectionNodes.map(({ item }) => item.kind));
+  const nodeByItemId = new Map(sectionNodes.map(({ item, node }) => [item.id, node]));
+
+  // Segunda pasada: en orden, secciones y banners activos. Un banner
+  // referenciado en varias posiciones se renderiza desde el mismo registro.
+  const renderedItems = layout.items.flatMap((item): { key: { id: string; anchor?: string }; node: ReactNode }[] => {
+    if (!item.visible) return [];
+    if (item.kind === "banner") {
+      const banner = item.bannerId ? layout.banners.get(item.bannerId) : undefined;
+      if (!banner) return [];
+      const cta = resolveBannerCta(banner.cta, {
+        template,
+        whatsappNumber: business.whatsappNumber,
+        phone: business.phone,
+        visibleKinds,
+      });
+      return [{ key: { id: item.id }, node: <div className="py-6 sm:py-8"><SiteBannerView banner={banner} cta={cta} /></div> }];
+    }
+    const node = nodeByItemId.get(item.id);
+    return node ? [{ key: { id: item.id, anchor: sectionAnchor(item.kind) }, node }] : [];
+  });
+
   return (
     <div
       className={cn("min-h-screen bg-background", (template === "booking" || template === "leads") && "pb-16 sm:pb-0")}
@@ -196,85 +323,14 @@ export default async function PublicSitePage({ params }: PageProps) {
           whatsappHref={whatsappHref}
         />
 
-        {template === "leads" ? (
-          // Plantilla de captación: hero en el color de marca, pasos,
-          // servicios y panel final con el formulario (#contacto). Nunca se
-          // elige sola (resolveSiteTemplate solo auto-detecta
-          // booking/institutional) — solo a mano desde Configuración > Sitio.
-          <main>
-            <LeadsHero
-              business={business}
-              title={leadsCopy.heroTitle}
-              subtitle={leadsCopy.heroSubtitle}
-              ctaLabel={leadsCopy.ctaLabel}
-              services={visibleServices}
-              imageUrl={
-                // Portada → primera foto de la galería → foto del primer
-                // servicio que tenga. Sin ninguna, el hero usa tarjetas.
-                business.heroImageUrl ??
-                galleryBlocks.find((b) => b.images.length > 0)?.images[0]?.imageUrl ??
-                visibleServices.find((s) => s.imageUrl)?.imageUrl ??
-                null
-              }
-              tone={leadsTone}
-              whatsappHref={whatsappHref}
-            />
-            <LeadsStepsSection steps={leadsCopy.steps} tone={leadsTone} />
-            <LeadsBenefitsSection services={visibleServices} title={leadsCopy.servicesTitle} description={leadsCopy.servicesIntro} />
-            <GallerySection blocks={galleryBlocks} />
-            <FaqSection faqs={faqs} />
-            <LeadsFinalCta
-              title={leadsCopy.closingTitle}
-              body={leadsCopy.closingBody}
-              reasons={leadsCopy.reasons}
-              formTitle={leadsCopy.formTitle}
-              formSubtitle={leadsCopy.formSubtitle}
-              ctaLabel={leadsCopy.ctaLabel}
-              formConfig={leadFormConfig ?? DEFAULT_LEAD_FORM}
-              tone={leadsTone}
-              slug={slug}
-              whatsappHref={whatsappHref}
-            />
-            <LeadsMobileCta label={leadsCopy.ctaLabel} tone={leadsTone} />
-          </main>
-        ) : template === "booking" ? (
-          <main>
-            <BookingHero
-              business={business}
-              whatsappHref={whatsappHref}
-              heroImageUrl={business.heroImageUrl}
-              usesResources={featuredServiceResources.length > 0}
-            />
-            <BookingServicesSection services={bookableServices} whatsappHref={whatsappHref} />
-            <BookingImportantInfo business={business} whatsappHref={whatsappHref} />
-            <BookingInquirySection slug={slug} />
-            {hasMenu && <MenuCallout slug={slug} />}
-            <GallerySection blocks={galleryBlocks} />
-            <ScheduleSection schedule={schedule} />
-            <FaqSection faqs={faqs} limit={5} />
-          </main>
-        ) : (
-          <main>
-            <PublicHero
-              business={business}
-              seo={seo}
-              intent={intent}
-              whatsappHref={whatsappHref}
-              heroImageUrl={business.heroImageUrl}
-              featuredService={featuredService}
-              featuredServiceUsesResources={featuredServiceResources.length > 0}
-            />
-            <AboutSection description={business.description} />
-            <ServicesSection services={visibleServices} whatsappNumber={business.whatsappNumber} />
-            {hasMenu && <MenuCallout slug={slug} />}
-            <GallerySection blocks={galleryBlocks} />
-            <ProcessSection intent={intent} />
-            <BookingSection services={bookableServices} intent={intent} whatsappHref={whatsappHref} />
-            <ScheduleSection schedule={schedule} />
-            <FaqSection faqs={faqs} />
-            <FinalCtaSection intent={intent} whatsappHref={whatsappHref} />
-          </main>
-        )}
+        <main>
+          {renderedItems.map(({ key, node }) => (
+            <div key={key.id} id={key.anchor} className="scroll-mt-20">
+              {node}
+            </div>
+          ))}
+          {template === "leads" && <LeadsMobileCta label={leadsCopy.ctaLabel} tone={leadsTone} />}
+        </main>
 
         <PublicFooter business={business} slug={slug} />
         <FloatingWhatsapp href={floatingWhatsappHref} liftedOnMobile={template === "booking" || template === "leads"} />

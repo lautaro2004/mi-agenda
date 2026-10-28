@@ -100,6 +100,8 @@ model Business {
   employee              Employee?
   faqs                  FAQ[]
   galleryBlocks         GalleryBlock[]
+  siteBanners           SiteBanner[]
+  siteLayouts           SiteLayout[]
   memberships           Membership[]
   invitations           Invitation[]
   memoryEntries         MemoryEntry[]
@@ -257,6 +259,58 @@ model GalleryImage {
   block GalleryBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
 
   @@index([blockId])
+  @@schema("nexo")
+}
+
+// Banner promocional del sitio público (ver lib/site-banners.ts). Es una
+// entidad reutilizable: la página lo referencia por id desde SiteLayout.items
+// (un mismo banner puede aparecer en varias posiciones sin duplicarse).
+// Las imágenes son URLs públicas del bucket "site-assets" (kind "banner"),
+// nunca binarios. El CTA se guarda como tipo + valor y se valida en el
+// servidor (modules/site/banners.ts).
+model SiteBanner {
+  id              String   @id @default(cuid())
+  businessId      String
+  // Nombre interno, solo para identificarlo en el panel.
+  name            String
+  // "image" (la imagen ya es el diseño) | "text" (título/descr./CTA sobre la
+  // imagen) | "compact" (franja chica entre secciones).
+  variant         String   @default("text")
+  desktopImageUrl String
+  mobileImageUrl  String?
+  imageAlt        String
+  title           String?
+  description     String?
+  active          Boolean  @default(true)
+  // "contact_form" | "section" | "whatsapp" | "url" | "phone". Sin ctaType no
+  // hay botón. ctaValue: tipo de sección / mensaje de WhatsApp / URL.
+  ctaType         String?
+  ctaLabel        String?
+  ctaValue        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@schema("nexo")
+}
+
+// Orden y visibilidad de las secciones del sitio público, una fila por
+// negocio y plantilla (cambiar de plantilla no pierde el orden de las otras).
+// items es un arreglo JSON ordenado ({ id, kind, bannerId?, visible }) que se
+// reemplaza completo en una sola escritura: nunca quedan posiciones a medias.
+// Sin fila, el sitio usa el orden de fábrica de la plantilla.
+model SiteLayout {
+  id         String   @id @default(cuid())
+  businessId String
+  template   String
+  items      Json
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, template])
   @@schema("nexo")
 }
 

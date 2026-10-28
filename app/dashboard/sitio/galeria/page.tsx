@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { GalleryBlockDialog } from "@/components/dashboard/gallery-block-dialog";
 import { GalleryBlockCard } from "@/components/dashboard/gallery-block-card";
+import { BannersManager } from "@/components/dashboard/banners-manager";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requestJson } from "@/lib/api-client";
 import { useBusinessSubscription } from "@/lib/subscription-client";
@@ -122,6 +123,10 @@ export default function GalleryPage() {
           </Button>
         </div>
       )}
+
+      <BannersManager enabled={galleryEnabled} />
+
+      <h2 className="mb-4 text-base font-semibold text-foreground">Galerías de fotos</h2>
 
       {loadError ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">

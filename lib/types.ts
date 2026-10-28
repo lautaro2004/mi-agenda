@@ -171,6 +171,23 @@ export interface GalleryBlock {
   images: GalleryImage[];
 }
 
+export type SiteBannerVariant = "image" | "text" | "compact";
+export type SiteBannerCtaType = "contact_form" | "section" | "whatsapp" | "url" | "phone";
+
+export interface SiteBanner {
+  id: string;
+  businessId: string;
+  name: string;
+  variant: SiteBannerVariant;
+  desktopImageUrl: string;
+  mobileImageUrl: string | null;
+  imageAlt: string;
+  title: string | null;
+  description: string | null;
+  active: boolean;
+  cta: { type: SiteBannerCtaType; label: string; value: string | null } | null;
+}
+
 export interface FAQ {
   id: string;
   businessId: string;

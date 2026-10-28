@@ -21,7 +21,10 @@ import { getAuthState, sessionRepository } from "@/modules/whatsapp/sessions/sto
 
 const RECONNECT_DELAY_MS = 3000;
 
-const logger = pino({ level: "silent" });
+// "warn" por defecto (antes "silent"): si WhatsApp rechaza la conexión, queda
+// registrado en los logs del worker en vez de fallar en silencio. Se puede
+// subir a "info"/"debug" con WHATSAPP_LOG_LEVEL para diagnosticar.
+const logger = pino({ level: process.env.WHATSAPP_LOG_LEVEL || "warn" });
 
 class WhatsAppConnectionManager {
   private sockets = new Map<string, WASocket>();
@@ -129,6 +132,7 @@ class WhatsAppConnectionManager {
         syncHistoricalMessages(businessId, messages);
       });
     } catch (error) {
+      console.error(`[WhatsApp] No se pudo iniciar la conexión negocio=${businessId}:`, error);
       this.updateConnection(businessId, {
         status: "error",
         lastError: error instanceof Error ? error.message : "No se pudo iniciar la conexión.",
@@ -180,6 +184,8 @@ class WhatsAppConnectionManager {
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output
         ?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
+      const closeReason = (lastDisconnect?.error as { message?: string } | undefined)?.message ?? "sin detalle";
+      console.error(`[WhatsApp] Conexión cerrada negocio=${businessId} código=${statusCode ?? "?"} motivo="${closeReason}" cerradoPorUsuario=${loggedOut}`);
 
       this.cleanupSocket(businessId);
 
@@ -202,7 +208,10 @@ class WhatsAppConnectionManager {
         return;
       }
 
-      this.updateConnection(businessId, { status: "reconnecting" });
+      this.updateConnection(businessId, {
+        status: "reconnecting",
+        lastError: `WhatsApp cerró la conexión (código ${statusCode ?? "?"}): ${closeReason}`,
+      });
       sessionRepository.update(businessId, {
         status: "reconnecting",
         lastDisconnectedAt: new Date().toISOString(),
