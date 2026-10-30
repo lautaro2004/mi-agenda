@@ -25,6 +25,20 @@ export interface CaptureLeadInput {
   email?: string | null;
   need: string;
   summary?: string | null;
+  // Campaña de WhatsApp de origen (opcional): se guarda con snapshot del
+  // nombre y del método de atribución.
+  campaign?: {
+    id: string;
+    name: string;
+    method: string;
+    // Tipo de solicitud: "proposal" | "lead" | "handoff".
+    requestKind: "proposal" | "lead" | "handoff";
+    data?: Record<string, unknown>;
+    // false: no enviar a Nodo (la campaña lo desactivó).
+    syncNodo?: boolean;
+    // Estado inicial del interesado nuevo.
+    initialStatus?: "NEW" | "IN_PROGRESS";
+  };
 }
 
 export type CaptureLeadResult =
@@ -104,6 +118,17 @@ export async function captureLead(input: CaptureLeadInput): Promise<CaptureLeadR
           // Nunca se pisa lo que ya estaba cargado: solo se completan vacíos.
           ...(!existing.customerEmail && data.email ? { customerEmail: data.email } : {}),
           ...(!existing.conversationRef ? { conversationRef: input.conversationRef } : {}),
+          // La campaña de origen no se pisa; solo se completa si faltaba.
+          ...(input.campaign && !existing.campaignId
+            ? { campaignId: input.campaign.id, campaignName: input.campaign.name, attributionMethod: input.campaign.method }
+            : {}),
+          ...(input.campaign
+            ? {
+                // "proposal" gana sobre "lead": una solicitud de propuesta no se degrada.
+                ...(!existing.requestKind || (existing.requestKind !== "proposal" && input.campaign.requestKind === "proposal") ? { requestKind: input.campaign.requestKind } : {}),
+                ...(input.campaign.data ? { campaignData: input.campaign.data as object } : {}),
+              }
+            : {}),
         },
       });
       inquiryId = existing.id;
@@ -125,6 +150,16 @@ export async function captureLead(input: CaptureLeadInput): Promise<CaptureLeadR
           need: data.need,
           summary: data.summary,
           source: "whatsapp",
+          ...(input.campaign
+            ? {
+                campaignId: input.campaign.id,
+                campaignName: input.campaign.name,
+                attributionMethod: input.campaign.method,
+                requestKind: input.campaign.requestKind,
+                ...(input.campaign.data ? { campaignData: input.campaign.data as object } : {}),
+                ...(input.campaign.initialStatus ? { status: input.campaign.initialStatus } : {}),
+              }
+            : {}),
           ...(qualificationActive ? { qualificationStatus: "pending" } : {}),
         },
       });
@@ -139,6 +174,11 @@ export async function captureLead(input: CaptureLeadInput): Promise<CaptureLeadR
   if (created) {
     await notifyInquiryReceived({ businessId: input.businessId, inquiryId, customerName: data.name, channel: input.channel });
   }
-  const nodo = await syncInquiryToNodo(input.businessId, inquiryId);
+  // Un fallo de Nodo nunca pierde el interesado (ya está guardado arriba);
+  // syncInquiryToNodo deja el error en la propia fila para poder reintentar.
+  const nodo = input.campaign?.syncNodo === false ? "not_configured" : await syncInquiryToNodo(input.businessId, inquiryId);
+  if (input.campaign) {
+    console.log(`[campaigns] lead ${created ? "creado" : "actualizado"} inquiry=${inquiryId} campaña=${input.campaign.name} tipo=${input.campaign.requestKind} nodo=${nodo}`);
+  }
   return { ok: true, inquiryId, created, nodo };
 }

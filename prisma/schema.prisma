@@ -106,6 +106,8 @@ model Business {
   siteBanners           SiteBanner[]
   siteLayouts           SiteLayout[]
   siteNav               SiteNav?
+  whatsappCampaigns     WhatsappCampaign[]
+  whatsappAttributions  WhatsappCampaignAttribution[]
   memberships           Membership[]
   invitations           Invitation[]
   memoryEntries         MemoryEntry[]
@@ -180,8 +182,18 @@ model Inquiry {
   nodoSyncedAt     DateTime?
   nodoSyncError    String?
 
+  // ── Campaña de WhatsApp de origen (ver modules/whatsapp/campaigns). Snapshot
+  // del nombre y del método para conservar el historial aunque la campaña se
+  // edite o archive. requestKind: "proposal" | "lead" | "handoff".
+  campaignId        String?
+  campaignName      String?
+  attributionMethod String?
+  requestKind       String?
+  campaignData      Json?
+
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@index([businessId, campaignId])
   @@index([businessId, createdAt])
   @@index([businessId, channel, conversationRef])
   @@schema("nexo")
@@ -1378,5 +1390,72 @@ model SiteNav {
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@schema("nexo")
+}
+
+// Campaña publicitaria que dirige a WhatsApp (anuncios de Instagram/Facebook).
+// Define cómo se identifica (mensaje precargado, expresiones), el contexto
+// comercial que recibe el agente, el objetivo de conversión y qué datos
+// recopilar. Se ARCHIVA, no se borra.
+model WhatsappCampaign {
+  id                String   @id @default(cuid())
+  businessId        String
+  name              String
+  description       String?
+  // draft | active | paused | archived — ver CAMPAIGN_STATUSES.
+  status            String   @default("draft")
+  // instagram | facebook | other | unknown
+  channel           String   @default("unknown")
+  prefilledMessage  String   @default("")
+  messageVariants   String[] @default([])
+  keywords          String[] @default([])
+  adDescription     String?
+  promotedService   String?
+  targetAudience    String?
+  problemSolved     String?
+  agentKnowledge    String?
+  tone              String?
+  doNotPromise      String?
+  // lead_capture | proposal_request | booking | general_inquiry | human_handoff
+  goal              String   @default("lead_capture")
+  secondaryGoal     String?
+  // [{ key, required, label? }] — ver CampaignField en lib/campaigns.ts.
+  fields            Json     @default("[]")
+  syncNodo          Boolean  @default(true)
+  createOpportunity Boolean  @default(false)
+  initialLeadStatus String   @default("NEW")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  business     Business                      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  attributions WhatsappCampaignAttribution[]
+
+  @@index([businessId, status])
+  @@schema("nexo")
+}
+
+// Qué campaña originó cada conversación (una fila por conversación). La
+// primera evaluación manda: no se vuelve a calcular en cada mensaje.
+// campaignId null = evaluada, origen desconocido. confirmed solo para
+// asignación manual: lo demás es una inferencia por el texto del mensaje.
+model WhatsappCampaignAttribution {
+  id              String   @id @default(cuid())
+  businessId      String
+  campaignId      String?
+  campaignName    String?
+  conversationRef String
+  // prefilled_message | keyword_match | semantic_match | manual | unknown
+  method          String
+  confidence      Float    @default(0)
+  confirmed       Boolean  @default(false)
+  firstMessage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  campaign WhatsappCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, conversationRef])
+  @@index([campaignId])
   @@schema("nexo")
 }

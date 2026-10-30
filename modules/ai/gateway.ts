@@ -17,6 +17,8 @@ import { conversationRepository } from "@/modules/whatsapp/conversations/reposit
 import type { AssistantAction } from "@/modules/ai/actions";
 import { handoffOutcome, leadMissingDataOutcome, leadRegisteredOutcome, runAssistantTurn, type ActionExecutor } from "@/modules/ai/assistant-turn";
 import { captureLead, getOpenInquiryForConversation } from "@/modules/inquiries/capture";
+import type { CampaignConfig } from "@/lib/campaigns";
+import { resolveConversationCampaign } from "@/modules/whatsapp/campaigns/service";
 
 const ESCALATION_RESPONSE =
   "No tengo esa información disponible. Te voy a derivar con alguien de nuestro equipo para ayudarte.";
@@ -53,6 +55,18 @@ function whatsappExecutor(context: BusinessContext, conversation: Conversation, 
       email: data.email,
       need: data.necesidad ?? "",
       summary: data.resumen,
+      ...(context.campaign
+        ? {
+            campaign: {
+              id: context.campaign.config.id,
+              name: context.campaign.config.name,
+              method: context.campaign.method,
+              requestKind: "lead" as const,
+              syncNodo: context.campaign.config.syncNodo,
+              initialStatus: context.campaign.config.initialLeadStatus,
+            },
+          }
+        : {}),
     });
 
   return async (action) => {
@@ -187,6 +201,33 @@ function flowReminder(conversation: Conversation): string {
   return "";
 }
 
+// Campaña de origen de la conversación: la primera vez evalúa el PRIMER mensaje
+// de la persona y guarda el resultado (también "desconocido"); después solo lee
+// lo guardado. Nunca rompe la conversación: ante un error sigue sin campaña.
+async function loadConversationCampaign(businessId: string, conversation: Conversation, message: string): Promise<CampaignConfig | null> {
+  // Los chats importados del historial no vienen de un anuncio nuevo.
+  if (conversation.importedFromHistory && !conversation.campaign) return null;
+  try {
+    const firstInbound = conversation.messages.find((m) => m.sender === "customer")?.text ?? message;
+    const resolved = await resolveConversationCampaign({ businessId, conversationRef: conversation.id, firstMessage: firstInbound });
+    const cached = conversation.campaign;
+    if (!cached || cached.campaignId !== resolved.attribution.campaignId || cached.method !== resolved.attribution.method) {
+      conversationRepository.setCampaign(businessId, conversation.id, {
+        campaignId: resolved.attribution.campaignId,
+        campaignName: resolved.attribution.campaignName,
+        goal: resolved.campaign?.goal ?? null,
+        method: resolved.attribution.method,
+        confidence: resolved.attribution.confidence,
+        confirmed: resolved.attribution.confirmed,
+      });
+    }
+    return resolved.campaign;
+  } catch (error) {
+    console.error("[campaigns] No se pudo resolver la campaña de la conversación:", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 export async function processMessage(params: {
   conversationId: string;
   businessId: string;
@@ -199,6 +240,14 @@ export async function processMessage(params: {
   const conversation = conversationRepository.get(businessId, conversationId);
   if (!conversation) return null;
   if (conversation.manualMode || conversation.flowState === "HUMAN_HANDOFF") return null;
+
+  // ── CAMPAÑA DE ORIGEN ──────────────────────────────────────────────────────
+  // Se resuelve ANTES de elegir el flujo: la campaña aporta contexto comercial
+  // y el objetivo, pero no decide qué quiere hacer la persona.
+  const campaignConfig = await loadConversationCampaign(businessId, conversation, message);
+  const bookable = context.services.some(isBookableService);
+  const campaignInfo = conversationRepository.get(businessId, conversationId)?.campaign;
+  context.campaign = campaignConfig && campaignInfo ? { config: campaignConfig, method: campaignInfo.method, draft: conversation.proposalDraft ?? null, hasBookableServices: bookable } : null;
 
   // ── TRIAGE ─────────────────────────────────────────────────────────────────
   const triage = triageMessage(message, conversation, { hasBookableServices: context.services.some(isBookableService) });
@@ -235,6 +284,10 @@ export async function processMessage(params: {
     flowState: conversation.flowState,
     intent: classification.intent,
     isQuestion: looksLikeQuestion(message),
+    campaignGoal: campaignConfig?.goal ?? null,
+    campaignCaptured: conversation.campaignLeadCaptured,
+    isFirstMessage: conversation.messages.filter((m) => m.sender === "customer").length <= 1,
+    inquiryTopic: classification.topic ?? null,
   });
 
   let aiResponse: AIResponse;
@@ -261,10 +314,10 @@ export async function processMessage(params: {
     // servicio que el cliente había elegido (no se vuelve a preguntar) y la
     // reserva NO se ejecuta: queda sin confirmar.
     case "proposal_switch":
-      aiResponse = startProposalFlow(message, conversation, { service: conversation.bookingSession?.service ?? null });
+      aiResponse = startProposalFlow(message, conversation, { service: conversation.bookingSession?.service ?? null }, { campaign: campaignConfig, hasBookableServices: bookable });
       break;
     case "proposal_start":
-      aiResponse = startProposalFlow(message, conversation);
+      aiResponse = startProposalFlow(message, conversation, undefined, { campaign: campaignConfig, hasBookableServices: bookable });
       break;
     case "proposal_continue":
       aiResponse = await handleProposalFlow(message, conversation);

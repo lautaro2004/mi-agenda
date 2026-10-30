@@ -7,6 +7,8 @@ import type {
   Service,
   TrainingPlan,
 } from "@/lib/types";
+import type { AttributionMethod, CampaignConfig } from "@/lib/campaigns";
+import type { ProposalDraft } from "@/lib/types";
 import type { BuiltPrompt } from "@/modules/ai/prompt/builder";
 import type { AiUsageMeta } from "@/modules/ai/usage";
 
@@ -18,6 +20,13 @@ export interface BusinessContext {
   employee: EmployeeProfile;
   memory: MemoryEntry[];
   trainingPlan: TrainingPlan | null;
+  // Campaña de WhatsApp de origen de la conversación en curso (si la hay).
+  campaign?: {
+    config: CampaignConfig;
+    method: AttributionMethod;
+    draft?: ProposalDraft | null;
+    hasBookableServices: boolean;
+  } | null;
 }
 
 export interface AIProvider {

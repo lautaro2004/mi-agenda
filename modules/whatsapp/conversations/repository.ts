@@ -6,6 +6,7 @@ import type {
   ConversationMessage,
   ConversationStatus,
   ConversationTriage,
+  ConversationCampaignInfo,
   ProposalDraft,
 } from "@/lib/types";
 import { whatsappEvents } from "@/modules/whatsapp/events";
@@ -128,6 +129,18 @@ class ConversationRepository {
     const conversation = this.conversations.get(keyOf(businessId, id));
     if (!conversation) return undefined;
     return this.save({ ...conversation, proposalDraft: draft });
+  }
+
+  setCampaign(businessId: string, id: string, campaign: ConversationCampaignInfo): Conversation | undefined {
+    const conversation = this.conversations.get(keyOf(businessId, id));
+    if (!conversation) return undefined;
+    return this.save({ ...conversation, campaign });
+  }
+
+  markCampaignLeadCaptured(businessId: string, id: string): Conversation | undefined {
+    const conversation = this.conversations.get(keyOf(businessId, id));
+    if (!conversation) return undefined;
+    return this.save({ ...conversation, campaignLeadCaptured: true });
   }
 
   clearProposalDraft(businessId: string, id: string): Conversation | undefined {

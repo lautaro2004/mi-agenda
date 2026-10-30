@@ -389,7 +389,38 @@ export type BookingStep =
   | "reschedule_confirm";
 
 // Qué se preguntó en último lugar en la solicitud de propuesta.
-export type ProposalField = "need" | "email" | "name" | "extras" | "confirm" | "edit";
+export type ProposalField =
+  | "need"
+  | "email"
+  | "name"
+  | "extras"
+  | "confirm"
+  | "edit"
+  // Campos configurables por campaña (ver lib/campaigns.ts).
+  | "service"
+  | "lastName"
+  | "phone"
+  | "company"
+  | "industry"
+  | "location"
+  | "budget"
+  | "deadline"
+  | "custom";
+
+// Qué datos pide el flujo y cómo cierra. Sin campaña: DEFAULT_PLAN (draft.ts).
+export interface ProposalPlan {
+  required: import("@/lib/campaigns").CampaignFieldKey[];
+  optional: import("@/lib/campaigns").CampaignFieldKey[];
+  // Pregunta del campo personalizado.
+  customLabel?: string;
+  // proposal: solicitud de propuesta · lead: captación de contacto · handoff: deja la conversación a una persona.
+  goal?: "proposal" | "lead" | "handoff";
+  // Después de registrar, sugiere (sin agendar nada) coordinar una reunión.
+  offerMeeting?: boolean;
+  // Opciones de destino de la campaña de origen.
+  syncNodo?: boolean;
+  initialStatus?: "NEW" | "IN_PROGRESS";
+}
 
 export interface ProposalDraft {
   name?: string;
@@ -406,6 +437,22 @@ export interface ProposalDraft {
   extrasAsked: boolean;
   pending: ProposalField;
   startedAt: string;
+  // Datos de campos configurables (apellido, rubro, ubicación, servicio, personalizado).
+  extra?: Record<string, string>;
+  plan?: ProposalPlan;
+  campaignId?: string;
+  campaignName?: string;
+}
+
+// Campaña de origen de la conversación (copia liviana para mostrar y decidir;
+// la configuración vigente se lee de la base).
+export interface ConversationCampaignInfo {
+  campaignId: string | null;
+  campaignName: string | null;
+  goal: import("@/lib/campaigns").CampaignGoal | null;
+  method: import("@/lib/campaigns").AttributionMethod;
+  confidence: number;
+  confirmed: boolean;
 }
 
 export interface BookingSession {
@@ -515,6 +562,10 @@ export interface Conversation {
   bookingSession?: BookingSession;
   // Borrador de una solicitud de propuesta en curso (ver modules/ai/proposal).
   proposalDraft?: ProposalDraft;
+  // Campaña de origen (se resuelve una sola vez, con el primer mensaje).
+  campaign?: ConversationCampaignInfo;
+  // La campaña ya registró a esta persona: no se reabre su flujo de datos.
+  campaignLeadCaptured?: boolean;
 }
 
 export type WhatsAppEvent =

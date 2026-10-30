@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, Clock } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CampaignBadge } from "@/components/whatsapp/campaign-badge";
 import { ConversationLabelBadge, ConversationStatusBadge } from "@/components/whatsapp/conversation-badges";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { Conversation } from "@/lib/types";
@@ -46,6 +47,7 @@ export function ConversationListItem({ conversation }: { conversation: Conversat
           {conversation.labels.map((label) => (
             <ConversationLabelBadge key={label} label={label} />
           ))}
+          <CampaignBadge campaign={conversation.campaign} />
           {conversation.importedFromHistory && (
             <span className="flex items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
               <Clock className="size-2.5 shrink-0" />

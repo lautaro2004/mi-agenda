@@ -15,6 +15,7 @@ import {
   MessageCircleQuestion,
   MessageSquare,
   MessageSquareText,
+  Megaphone,
   Plug,
   ScrollText,
   Sparkles,
@@ -43,6 +44,7 @@ export const DASHBOARD_NAV = [
     children: [
       { href: "/dashboard/whatsapp/conexion", label: "Conexión", icon: Plug, minRole: "admin" },
       { href: "/dashboard/whatsapp/conversaciones", label: "Conversaciones", icon: MessageSquare },
+      { href: "/dashboard/whatsapp/campanas", label: "Campañas", icon: Megaphone, minRole: "admin" },
     ],
   },
   {

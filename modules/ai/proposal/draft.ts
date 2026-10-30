@@ -1,4 +1,5 @@
-import type { ProposalDraft, ProposalField } from "@/lib/types";
+import { CAMPAIGN_FIELD_LABEL, type CampaignField, type CampaignFieldKey } from "@/lib/campaigns";
+import type { ProposalDraft, ProposalField, ProposalPlan } from "@/lib/types";
 import { normalizeText } from "@/modules/ai/intent/detect";
 
 // Lógica PURA del flujo de solicitud de propuesta: extrae datos de los
@@ -125,14 +126,57 @@ export interface DraftInit {
   // Datos que ya se habían recopilado en otro flujo (ej. el servicio elegido
   // en una reserva que el cliente abandonó): no se pierden ni se vuelven a pedir.
   carry?: { service?: string | null; name?: string | null; email?: string | null; need?: string | null };
+  // Qué datos pedir (de la campaña). Sin plan: need + email + nombre y,
+  // opcionales, empresa / presupuesto / plazo.
+  plan?: ProposalPlan;
+  campaign?: { id: string; name: string };
 }
 
-function emptyDraft(): ProposalDraft {
-  return { pending: "need", extrasAsked: false, startedAt: new Date().toISOString() };
+export const DEFAULT_PLAN: ProposalPlan = { required: ["need", "email", "name"], optional: ["company", "budget", "deadline"] };
+
+// "phone" lo da el propio chat de WhatsApp: nunca se pregunta.
+const NEVER_ASKED = new Set<CampaignFieldKey>(["phone"]);
+
+/** Plan de preguntas a partir de los campos configurados en la campaña. */
+export function planFromFields(fields: CampaignField[], extra: Pick<ProposalPlan, "goal" | "offerMeeting"> = {}): ProposalPlan {
+  const usable = fields.filter((f) => !NEVER_ASKED.has(f.key));
+  const custom = usable.find((f) => f.key === "custom");
+  return {
+    ...extra,
+    required: usable.filter((f) => f.required).map((f) => f.key),
+    optional: usable.filter((f) => !f.required).map((f) => f.key),
+    ...(custom?.label ? { customLabel: custom.label } : {}),
+  };
+}
+
+const planOf = (draft: ProposalDraft): ProposalPlan => draft.plan ?? DEFAULT_PLAN;
+
+function has(draft: ProposalDraft, key: CampaignFieldKey): boolean {
+  switch (key) {
+    case "need": return !!draft.need;
+    case "email": return !!draft.email || !!draft.emailWaived;
+    case "name": return !!draft.name;
+    case "lastName": return !!draft.extra?.lastName || (draft.name ?? "").trim().split(/\s+/).length >= 2;
+    case "company": return !!draft.company;
+    case "budget": return !!draft.budget;
+    case "deadline": return !!draft.deadline;
+    case "phone": return true;
+    default: return !!draft.extra?.[key];
+  }
+}
+
+function emptyDraft(init?: DraftInit): ProposalDraft {
+  return {
+    pending: "need",
+    extrasAsked: false,
+    startedAt: new Date().toISOString(),
+    ...(init?.plan ? { plan: init.plan } : {}),
+    ...(init?.campaign ? { campaignId: init.campaign.id, campaignName: init.campaign.name } : {}),
+  };
 }
 
 export function startDraft(init: DraftInit): ProposalDraft {
-  let draft = emptyDraft();
+  let draft = emptyDraft(init);
   if (isUsableName(init.carry?.name)) draft.name = init.carry!.name!.trim();
   else if (isUsableName(init.profileName)) draft = { ...draft, name: init.profileName.trim(), nameFromProfile: true };
   if (init.carry?.email) draft.email = init.carry.email;
@@ -174,10 +218,13 @@ function absorb(draft: ProposalDraft, message: string, options: AbsorbOptions = 
 }
 
 export function nextField(draft: ProposalDraft): ProposalField {
-  if (!draft.need) return "need";
-  if (!draft.email && !draft.emailWaived) return "email";
-  if (!draft.name) return "name";
-  if (!draft.extrasAsked) return "extras";
+  const plan = planOf(draft);
+  // Se pregunta en el orden en que la campaña definió los campos.
+  for (const key of plan.required) {
+    if (!has(draft, key)) return key;
+  }
+  // Los opcionales se ofrecen UNA vez, juntos, y solo si falta alguno.
+  if (!draft.extrasAsked && plan.optional.some((k) => !has(draft, k))) return "extras";
   return "confirm";
 }
 
@@ -190,12 +237,40 @@ export interface TurnResult {
 }
 
 function sameData(a: ProposalDraft, b: ProposalDraft): boolean {
-  return (["name", "email", "company", "need", "details", "budget", "deadline", "emailWaived"] as const).every((k) => a[k] === b[k]);
+  return (
+    (["name", "email", "company", "need", "details", "budget", "deadline", "emailWaived"] as const).every((k) => a[k] === b[k]) &&
+    JSON.stringify(a.extra ?? {}) === JSON.stringify(b.extra ?? {})
+  );
+}
+
+// "No quiero darlo", "prefiero no decirlo"…: se respeta si el dato es opcional.
+const REFUSAL_RE = /^(no quiero|prefiero no|no te lo|no lo voy|no puedo|no doy|no lo se|no s[eé]|paso|sin datos)\b/i;
+export const isRefusal = (text: string) => REFUSAL_RE.test(normalizeText(text.trim()));
+
+const SHORT_TEXT_MAX: Partial<Record<CampaignFieldKey, number>> = { company: 60, budget: 40, deadline: 40 };
+
+// Respuesta directa a la pregunta de UN campo (el cliente contesta solo el dato).
+function applyDirectAnswer(next: ProposalDraft, key: CampaignFieldKey, text: string): boolean {
+  const value = text.replace(/\s+/g, " ").trim();
+  if (value.length < 2 || isRefusal(value)) return false;
+  switch (key) {
+    case "company": next.company = value.slice(0, SHORT_TEXT_MAX.company); return true;
+    case "budget": next.budget = value.slice(0, SHORT_TEXT_MAX.budget); return true;
+    case "deadline": next.deadline = value.slice(0, SHORT_TEXT_MAX.deadline); return true;
+    case "lastName": {
+      const last = value.split(/\s+/).slice(0, 3).join(" ");
+      next.extra = { ...next.extra, lastName: titleCase(last) };
+      return true;
+    }
+    default:
+      next.extra = { ...next.extra, [key]: value.slice(0, 160) };
+      return true;
+  }
 }
 
 export function applyMessage(draft: ProposalDraft, message: string, opts: { phoneAvailable?: boolean } = {}): TurnResult {
   const text = message.trim();
-  let next = absorb(draft, text);
+  const next = absorb(draft, text);
   let unclear = false;
 
   switch (draft.pending) {
@@ -222,7 +297,7 @@ export function applyMessage(draft: ProposalDraft, message: string, opts: { phon
       break;
     case "extras":
       next.extrasAsked = true;
-      if (!SKIP_RE.test(normalizeText(text))) {
+      if (!SKIP_RE.test(normalizeText(text)) && !isRefusal(text)) {
         const structured = next.company !== draft.company || next.budget !== draft.budget || next.deadline !== draft.deadline;
         if (!structured && text) next.details = [draft.details, text].filter(Boolean).join(" · ").slice(0, 500);
       }
@@ -236,8 +311,14 @@ export function applyMessage(draft: ProposalDraft, message: string, opts: { phon
       if (sameData(draft, next)) unclear = true;
       break;
     }
-    default:
+    case "confirm":
       break;
+    default: {
+      // Campos configurados por la campaña (rubro, ubicación, apellido, etc.).
+      const key = draft.pending as CampaignFieldKey;
+      if (!has(next, key) && !applyDirectAnswer(next, key, text)) unclear = true;
+      break;
+    }
   }
 
   const changed = !sameData(draft, next);
@@ -259,8 +340,30 @@ export function questionFor(field: ProposalField, draft: ProposalDraft, opts: { 
       return `${lead}¿A qué email puede escribirte el equipo con la propuesta?`;
     case "name":
       return `${lead}¿Con qué nombre te anoto?`;
-    case "extras":
-      return `${lead}Si querés, sumá el nombre de tu empresa, un presupuesto estimado o el plazo que manejás. Es opcional: si no, respondé *listo*.`;
+    case "extras": {
+      const missing = (draft.plan ?? DEFAULT_PLAN).optional.filter((k) => !has(draft, k));
+      const labels = missing.map((k) => (k === "custom" ? (draft.plan?.customLabel ?? CAMPAIGN_FIELD_LABEL.custom) : CAMPAIGN_FIELD_LABEL[k]).toLowerCase().replace(/\?$/, ""));
+      const list = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} o ${labels.at(-1)}` : (labels[0] ?? "algún dato más");
+      return `${lead}Si querés, sumá ${list}. Es opcional: si no, respondé *listo*.`;
+    }
+    case "service":
+      return `${lead}¿Qué servicio te interesa?`;
+    case "lastName":
+      return `${lead}¿Y tu apellido?`;
+    case "company":
+      return `${lead}¿Cómo se llama tu empresa o negocio?`;
+    case "industry":
+      return `${lead}¿De qué rubro es tu negocio?`;
+    case "location":
+      return `${lead}¿En qué ciudad o zona estás?`;
+    case "budget":
+      return `${lead}¿Tenés un presupuesto estimado en mente?`;
+    case "deadline":
+      return `${lead}¿Para cuándo lo necesitarías?`;
+    case "custom":
+      return `${lead}${draft.plan?.customLabel ?? "¿Podés darme un dato más?"}`;
+    case "phone":
+      return `${lead}Ya tengo tu número por este chat.`;
     case "edit":
       return "¿Qué querés corregir? Decime el dato nuevo, por ejemplo «mi email es …», «me llamo …», «empresa: …» o «necesito …».";
     case "confirm":
@@ -276,6 +379,15 @@ export function clarificationFor(field: ProposalField): string {
       return "No pude identificar tu nombre. ¿Cómo te llamás?";
     case "need":
       return "Para avanzar necesito saber qué servicio o proyecto necesitás. ¿Me lo contás en una frase?";
+    case "service":
+    case "lastName":
+    case "company":
+    case "industry":
+    case "location":
+    case "budget":
+    case "deadline":
+    case "custom":
+      return "Necesito ese dato para registrar tu solicitud. ¿Me lo pasás?";
     case "edit":
       return "No pude identificar qué dato corregir. Probá con «mi email es …», «me llamo …», «empresa: …» o «necesito …».";
     default:
@@ -283,23 +395,42 @@ export function clarificationFor(field: ProposalField): string {
   }
 }
 
+export function fullName(draft: ProposalDraft): string | undefined {
+  const last = draft.extra?.lastName;
+  if (!draft.name) return undefined;
+  return last && !draft.name.toLowerCase().includes(last.toLowerCase()) ? `${draft.name} ${last}` : draft.name;
+}
+
+function extraLines(draft: ProposalDraft): string[] {
+  const out: string[] = [];
+  const e = draft.extra ?? {};
+  if (e.service) out.push(`Servicio de interés: ${e.service}`);
+  if (e.industry) out.push(`Rubro: ${e.industry}`);
+  if (e.location) out.push(`Ubicación: ${e.location}`);
+  if (e.custom) out.push(`${(draft.plan?.customLabel ?? "Dato adicional").replace(/[¿?]/g, "").trim()}: ${e.custom}`);
+  return out;
+}
+
 export function buildSummary(draft: ProposalDraft): string {
   const lines = [
-    draft.name ? `• Nombre: ${draft.name}` : null,
+    fullName(draft) ? `• Nombre: ${fullName(draft)}` : null,
     draft.email ? `• Email: ${draft.email}` : draft.emailWaived ? "• Contacto: por este chat de WhatsApp" : null,
     draft.company ? `• Empresa: ${draft.company}` : null,
     draft.need ? `• Necesidad: ${draft.need}` : null,
     draft.budget ? `• Presupuesto estimado: ${draft.budget}` : null,
     draft.deadline ? `• Plazo: ${draft.deadline}` : null,
+    ...extraLines(draft).map((l) => `• ${l}`),
     draft.details ? `• Detalles: ${draft.details}` : null,
   ].filter((l): l is string => l != null);
-  return `Esto es lo que voy a registrar para que el equipo prepare tu propuesta:\n\n${lines.join("\n")}\n\n¿Está bien? Respondé *sí* para registrarlo o decime qué querés corregir.`;
+  return `Esto es lo que voy a registrar para que el equipo ${draft.plan?.goal === "proposal" || !draft.plan ? "prepare tu propuesta" : "se comunique con vos"}:\n\n${lines.join("\n")}\n\n¿Está bien? Respondé *sí* para registrarlo o decime qué querés corregir.`;
 }
 
 // Resumen que se guarda en el interesado (lo ve el equipo y, si hay Nodo, el CRM).
 export function buildLeadSummary(draft: ProposalDraft): string {
   return [
-    "Solicitud de propuesta por WhatsApp.",
+    draft.campaignName ? `Campaña: ${draft.campaignName}.` : null,
+    draft.plan?.goal === "lead" ? "Contacto captado por WhatsApp." : "Solicitud de propuesta por WhatsApp.",
+    ...extraLines(draft).map((l) => `${l}.`),
     draft.company ? `Empresa: ${draft.company}.` : null,
     draft.budget ? `Presupuesto estimado: ${draft.budget}.` : null,
     draft.deadline ? `Plazo: ${draft.deadline}.` : null,

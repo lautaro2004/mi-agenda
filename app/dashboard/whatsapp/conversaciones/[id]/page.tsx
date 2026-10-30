@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CampaignBadge } from "@/components/whatsapp/campaign-badge";
 import { MessageBubble } from "@/components/whatsapp/message-bubble";
 import { ConversationLabelBadge } from "@/components/whatsapp/conversation-badges";
 import { ConversationTriagePanel } from "@/components/whatsapp/conversation-triage-panel";
@@ -85,6 +86,11 @@ export default function ConversationDetailPage() {
               <p className="text-sm text-muted-foreground">{conversation.contactPhone}</p>
             ) : (
               <p className="text-sm text-muted-foreground">Número no disponible todavía</p>
+            )}
+            {conversation.campaign?.campaignName && (
+              <div className="mt-1.5">
+                <CampaignBadge campaign={conversation.campaign} detailed />
+              </div>
             )}
           </div>
 

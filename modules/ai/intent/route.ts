@@ -1,11 +1,13 @@
 import type { ConversationFlowState } from "@/lib/types";
+import type { CampaignGoal } from "@/lib/campaigns";
 
 import { PROPOSAL_FLOW_STATES, type ConversationIntent } from "./detect";
 
-// Decide QUÉ flujo atiende el mensaje a partir de la intención detectada y el
-// estado de la conversación. Es una función pura (sin efectos): todas las
-// transiciones entre flujos —incluida la salida segura de una reserva— se
-// definen y se prueban acá, no dispersas en el router.
+// Decide QUÉ flujo atiende el mensaje a partir de la intención detectada, el
+// estado de la conversación y —si la hay— el objetivo de la campaña de
+// origen. Es una función pura (sin efectos): todas las transiciones entre
+// flujos —incluida la salida segura de una reserva— se definen y se prueban
+// acá, no dispersas en el router.
 export type Route =
   | "human"
   | "proposal_start"
@@ -33,9 +35,20 @@ export interface RouteInput {
   flowState: ConversationFlowState;
   intent: ConversationIntent;
   isQuestion: boolean;
+  /** Objetivo de la campaña de origen (null/undefined: sin campaña). */
+  campaignGoal?: CampaignGoal | null;
+  /** La campaña ya recopiló los datos de esta persona: no se vuelve a abrir el flujo. */
+  campaignCaptured?: boolean;
+  /** Es el primer mensaje de la persona en la conversación. */
+  isFirstMessage?: boolean;
+  /** Tema de la consulta general (precios, horarios…): esas se responden, no abren un flujo. */
+  inquiryTopic?: string | null;
 }
 
-export function decideRoute({ flowState, intent, isQuestion }: RouteInput): Route {
+// Objetivos cuyo flujo propio es recopilar datos (nunca ofrecer horarios).
+const COLLECTING_GOALS = new Set<CampaignGoal>(["lead_capture", "proposal_request", "human_handoff"]);
+
+export function decideRoute({ flowState, intent, isQuestion, campaignGoal, campaignCaptured, isFirstMessage, inquiryTopic }: RouteInput): Route {
   if (intent === "human_handoff") return "human";
 
   if (PROPOSAL_FLOW_STATES.has(flowState)) {
@@ -59,8 +72,17 @@ export function decideRoute({ flowState, intent, isQuestion }: RouteInput): Rout
     return "booking_continue";
   }
 
-  // Sin flujo activo: solo se inicia lo que el cliente pidió.
+  // Sin flujo activo: solo se inicia lo que el cliente pidió…
   if (intent === "booking") return "booking_start";
   if (intent === "proposal_request") return "proposal_start";
+
+  // …salvo que la campaña de origen tenga como objetivo recopilar datos: el
+  // primer mensaje descriptivo ("quiero una página web para mi negocio") abre
+  // directamente ese flujo, sin reservas. Una pregunta se responde; un
+  // mensaje posterior ambiguo ("ok", "gracias") no reabre nada.
+  const answersOwnTopic = intent === "general_inquiry" && !!inquiryTopic && inquiryTopic !== "service";
+  if (campaignGoal && COLLECTING_GOALS.has(campaignGoal) && !campaignCaptured && isFirstMessage && !isQuestion && !answersOwnTopic) {
+    return "proposal_start";
+  }
   return "standard";
 }

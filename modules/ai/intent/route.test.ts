@@ -51,4 +51,33 @@ describe("decideRoute", () => {
     expect(looksLikeQuestion("¿cuánto sale?")).toBe(true);
     expect(looksLikeQuestion("cuánto tardan")).toBe(true);
   });
+
+  describe("con campaña de origen", () => {
+    const base = { flowState: "IDLE" as const, isQuestion: false, isFirstMessage: true };
+    it("captación / propuesta: el primer mensaje descriptivo abre el flujo de datos, nunca reservas", () => {
+      expect(decideRoute({ ...base, intent: "other", campaignGoal: "proposal_request" })).toBe("proposal_start");
+      expect(decideRoute({ ...base, intent: "other", campaignGoal: "lead_capture" })).toBe("proposal_start");
+      expect(decideRoute({ ...base, intent: "general_inquiry", inquiryTopic: "service", campaignGoal: "proposal_request" })).toBe("proposal_start");
+    });
+    it("una pregunta o un tema puntual (precios, horarios) se responde", () => {
+      expect(decideRoute({ ...base, intent: "general_inquiry", isQuestion: true, campaignGoal: "lead_capture" })).toBe("standard");
+      expect(decideRoute({ ...base, intent: "general_inquiry", inquiryTopic: "pricing", campaignGoal: "lead_capture" })).toBe("standard");
+    });
+    it("no reabre el flujo si ya se capturó, ni con mensajes posteriores ambiguos", () => {
+      expect(decideRoute({ ...base, intent: "other", campaignGoal: "lead_capture", campaignCaptured: true })).toBe("standard");
+      expect(decideRoute({ ...base, isFirstMessage: false, intent: "other", campaignGoal: "lead_capture" })).toBe("standard");
+    });
+    it("reservas, consultas y sin campaña: no se fuerza ningún flujo", () => {
+      expect(decideRoute({ ...base, intent: "other", campaignGoal: "booking" })).toBe("standard");
+      expect(decideRoute({ ...base, intent: "other", campaignGoal: "general_inquiry" })).toBe("standard");
+      expect(decideRoute({ ...base, intent: "other" })).toBe("standard");
+    });
+    it("el usuario puede cambiar de intención: pide reunión explícita en campaña de propuesta", () => {
+      expect(decideRoute({ ...base, intent: "booking", campaignGoal: "proposal_request" })).toBe("booking_start");
+      expect(decideRoute({ ...base, flowState: "COLLECTING_PROPOSAL", intent: "booking", campaignGoal: "proposal_request" })).toBe("booking_switch");
+    });
+    it("atención humana siempre se respeta", () => {
+      expect(decideRoute({ ...base, intent: "human_handoff", campaignGoal: "proposal_request" })).toBe("human");
+    });
+  });
 });
