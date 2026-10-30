@@ -167,7 +167,9 @@ export function applyRules(
       };
     }
 
+    case "proposal":
     case "other":
+      // La propuesta comercial la maneja su propio flujo (modules/ai/proposal).
       return null;
   }
 }

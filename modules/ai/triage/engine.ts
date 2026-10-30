@@ -1,6 +1,6 @@
 import type { Conversation, ConversationFlowState, MessageCategory } from "@/lib/types";
 
-import { classify } from "./classifier";
+import { classify, type ClassifyOptions } from "./classifier";
 import type { TriageDecision } from "./types";
 
 // Detects time slots in AI response text (e.g. "10:00", "16hs")
@@ -10,11 +10,11 @@ const CONFIRMATION_QUESTION_RE = /confirm[aá]s|confirmar|¿(correcto|te parece|
 // Detects AI confirming a booking was made
 const BOOKING_CONFIRMED_RE = /reservad|confirmad|agendad|listo.*turno|turno.*listo|te esperamos/i;
 
-export function triageMessage(message: string, conversation: Conversation): TriageDecision {
+export function triageMessage(message: string, conversation: Conversation, options: ClassifyOptions = {}): TriageDecision {
   const state = conversation.flowState;
   const recentMessages = conversation.messages.slice(-6);
 
-  const classification = classify(message, state, recentMessages);
+  const classification = classify(message, state, recentMessages, options);
 
   return {
     shouldRespond: !classification.ignored,
@@ -57,6 +57,11 @@ export function computeNextState(
       if (BOOKING_CONFIRMED_RE.test(aiResponseText)) return "BOOKED";
       return "WAITING_CONFIRMATION";
     }
+
+    // El flujo de propuesta maneja sus propias transiciones (proposal/flow.ts).
+    case "COLLECTING_PROPOSAL":
+    case "WAITING_PROPOSAL_CONFIRMATION":
+      return current;
 
     default:
       return "IDLE";

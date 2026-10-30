@@ -51,7 +51,9 @@ export function normalizeCaptureInput(input: CaptureLeadInput) {
   const errors: string[] = [];
   if (name.length < 2) errors.push("nombre");
   if (need.length < 3) errors.push("necesidad");
-  if (!phoneKey(phone)) errors.push("teléfono");
+  // Alcanza con un medio de contacto: teléfono o email (un contacto de WhatsApp
+  // sin teléfono resoluble igual puede dejar su email).
+  if (!phoneKey(phone) && !email) errors.push("teléfono o email");
   return { name, need, summary, phone, email, errors };
 }
 

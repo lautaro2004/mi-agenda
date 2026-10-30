@@ -6,6 +6,7 @@ export type MessageIntent =
   | "location"
   | "service"
   | "appointment"
+  | "proposal"
   | "human"
   | "other";
 

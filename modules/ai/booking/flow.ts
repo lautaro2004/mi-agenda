@@ -21,6 +21,8 @@ const ES_STOP_WORDS = new Set([
   "si", "mi", "tu", "o", "yo", "como", "más", "pero", "le", "ya", "muy",
   "hay", "fue", "ser", "son", "han", "tiene", "tienen", "puedo", "hola",
   "quiero", "necesito", "turno", "cita", "reservar", "sacar", "hacer",
+  // Pedidos de propuesta/mail: nunca identifican un servicio reservable.
+  "mail", "email", "correo", "propuesta", "presupuesto",
 ]);
 
 function tokenize(text: string): string[] {
@@ -38,12 +40,16 @@ function overlap(a: string[], b: string[]): number {
   return a.filter((w) => setB.has(w)).length;
 }
 
+// Mencionar un servicio NO es elegirlo: se reconoce solo por su nombre o
+// categoría. La descripción NO cuenta (antes, palabras sueltas como
+// "propuesta" calzaban con la descripción de un servicio y se tomaba como
+// elegido sin que el cliente lo hubiera pedido).
 function matchService(message: string, services: Service[]): Service | null {
   const tokens = tokenize(message);
   let best: { service: Service; score: number } | null = null;
   for (const s of services) {
-    const st = tokenize(`${s.name} ${s.description} ${s.category}`);
-    const score = overlap(tokens, st) + overlap(st, tokens);
+    const st = tokenize(`${s.name} ${s.category}`);
+    const score = overlap(tokens, st);
     if (score > 0 && (!best || score > best.score)) best = { service: s, score };
   }
   return best?.service ?? null;

@@ -6,6 +6,10 @@ import { applyRules } from "@/modules/ai/rule-engine";
 import { computeNextState, triageMessage } from "@/modules/ai/triage/engine";
 import type { AIResponse, MessageIntent } from "@/modules/ai/types";
 import { handleBookingFlow } from "@/modules/ai/booking/flow";
+import { decideRoute, looksLikeQuestion } from "@/modules/ai/intent/route";
+import { questionFor } from "@/modules/ai/proposal/draft";
+import { handleProposalFlow, startProposalFlow } from "@/modules/ai/proposal/flow";
+import { isBookableService } from "@/modules/business/service";
 import { buildPrompt } from "@/modules/ai/prompt/builder";
 import { buildBusinessContext } from "@/modules/employee/context";
 import { resolveStrategy } from "@/modules/employee/strategy/resolve";
@@ -21,25 +25,13 @@ const ESCALATION_RESPONSE =
 // queda en modo manual para que la siga una persona).
 const HANDOFF_RULE_RESPONSE = "¡Claro! Dejo la conversación para que una persona del equipo la continúe por este mismo chat.";
 
-// These states require the booking flow to handle responses (user is mid-selection/confirmation)
-const STICKY_BOOKING_STATES = new Set<ConversationFlowState>([
-  "WAITING_SLOT_SELECTION",
-  "WAITING_CONFIRMATION",
-  "WAITING_PAYMENT_PROOF",
-]);
-
-// In these states the booking flow is active but can be interrupted by explicit business questions
-const ACTIVE_BOOKING_STATES = new Set<ConversationFlowState>([
-  "COLLECTING_INTENT",
-  "OFFERING_SLOTS",
-]);
-
 const CATEGORY_TO_INTENT: Record<MessageCategory, MessageIntent> = {
   APPOINTMENT: "appointment",
   PRICING: "pricing",
   SERVICE: "service",
   SCHEDULE: "schedule",
   HUMAN: "human",
+  PROPOSAL: "proposal",
   IRRELEVANT: "other",
 };
 
@@ -148,6 +140,53 @@ async function callLLM(
   };
 }
 
+// Respuesta "estándar" (consulta general): el modelo con los datos del
+// negocio, o la regla fija como respaldo. No cambia el estado de ningún flujo.
+async function standardResponse(
+  conversationId: string,
+  message: string,
+  intent: MessageIntent,
+  context: BusinessContext,
+  conversation: Conversation,
+): Promise<AIResponse> {
+  aiLogger.log({ type: "intent_detected", conversationId, intent, preview: message.slice(0, 80) });
+  const ruleResult = applyRules(message, intent, context);
+  const llmResponse = getAIProvider("whatsapp_reply")
+    ? await callLLM(conversationId, message, intent, context, conversation).catch((error) => {
+        if (!ruleResult) throw error;
+        console.error("[AI] El modelo falló, se responde con la regla:", error instanceof Error ? error.message : error);
+        return null;
+      })
+    : null;
+  if (llmResponse) return llmResponse;
+  if (ruleResult) {
+    aiLogger.log({ type: "rule_match", conversationId, intent, rule: ruleResult.rule });
+    aiLogger.log({ type: "response_generated", conversationId, source: "rule", escalate: ruleResult.escalateToHuman ?? false });
+    return {
+      text: ruleResult.text,
+      intent,
+      source: "rule",
+      escalateToHuman: ruleResult.escalateToHuman ?? false,
+      labelHint: ruleResult.labelHint,
+    };
+  }
+  return callLLM(conversationId, message, intent, context, conversation);
+}
+
+// Después de responder una pregunta suelta, se invita a retomar el flujo que
+// estaba en curso (sin perder lo ya recopilado).
+function flowReminder(conversation: Conversation): string {
+  if (conversation.flowState === "COLLECTING_PROPOSAL" && conversation.proposalDraft) {
+    return `\n\nRetomando tu solicitud de propuesta: ${questionFor(conversation.proposalDraft.pending, conversation.proposalDraft)}`;
+  }
+  if (conversation.flowState === "WAITING_PROPOSAL_CONFIRMATION") {
+    return "\n\nCuando quieras, respondé *sí* para registrar tu solicitud de propuesta o decime qué querés corregir.";
+  }
+  if (conversation.flowState === "WAITING_SLOT_SELECTION") return "\n\nCuando quieras, seguimos con tu reserva: elegí uno de los horarios que te pasé 😊";
+  if (conversation.flowState === "WAITING_CONFIRMATION") return "\n\nCuando quieras, seguimos con tu reserva: respondé *sí* para confirmar o *no* para cancelar.";
+  return "";
+}
+
 export async function processMessage(params: {
   conversationId: string;
   businessId: string;
@@ -162,7 +201,7 @@ export async function processMessage(params: {
   if (conversation.manualMode || conversation.flowState === "HUMAN_HANDOFF") return null;
 
   // ── TRIAGE ─────────────────────────────────────────────────────────────────
-  const triage = triageMessage(message, conversation);
+  const triage = triageMessage(message, conversation, { hasBookableServices: context.services.some(isBookableService) });
   const { classification, stateBefore } = triage;
 
   if (!triage.shouldRespond) {
@@ -189,78 +228,84 @@ export async function processMessage(params: {
   const intent = CATEGORY_TO_INTENT[classification.category];
 
   // ── ROUTING ─────────────────────────────────────────────────────────────────
+  // Qué flujo atiende el mensaje lo decide decideRoute() (modules/ai/intent):
+  // una reserva solo arranca con un pedido de reserva, y desde cualquier flujo
+  // se puede salir hacia otro sin perder datos ni ejecutar nada sin confirmar.
+  const route = decideRoute({
+    flowState: conversation.flowState,
+    intent: classification.intent,
+    isQuestion: looksLikeQuestion(message),
+  });
 
   let aiResponse: AIResponse;
-  const inStickyBooking = STICKY_BOOKING_STATES.has(conversation.flowState);
-  const inActiveBooking = ACTIVE_BOOKING_STATES.has(conversation.flowState);
 
-  // 1. HUMAN escalation always wins (regardless of booking flow state).
-  // Con IA disponible, el mensaje de cierre lo redacta el modelo (resume lo
-  // que entendió y explica qué sigue); si no, la regla fija.
-  if (classification.category === "HUMAN") {
-    const ruleResult = applyRules(message, "human", context);
-    const ruleResponse: AIResponse = ruleResult
-      ? { text: ruleResult.text, intent: "human", source: "rule", escalateToHuman: true, labelHint: ruleResult.labelHint }
-      : { text: HANDOFF_RULE_RESPONSE, intent: "human", source: "rule", escalateToHuman: true, labelHint: "human_required" };
-    aiResponse = ruleResult?.rule === "faq_match" || !getAIProvider("whatsapp_reply")
-      ? ruleResponse
-      : await callLLM(conversationId, message, "human", context, conversation, { name: "handoff", data: {} }).catch((error) => {
-          console.error("[AI] Error redactando la derivación, se usa la regla:", error instanceof Error ? error.message : error);
-          return ruleResponse;
-        });
-  }
-  // 2. Sticky booking states: slot selection and confirmation must go to booking flow
-  else if (inStickyBooking) {
-    aiResponse = await handleBookingFlow(message, conversation, context);
-  }
-  // 3. In active booking flow: interruptible by explicit business questions
-  else if (inActiveBooking && ["PRICING", "SERVICE", "SCHEDULE"].includes(classification.category)) {
-    const ruleResult = applyRules(message, intent, context);
-    if (ruleResult && !ruleResult.escalateToHuman) {
-      aiResponse = { text: ruleResult.text, intent, source: ruleResult.rule as AIResponse["source"], escalateToHuman: false, labelHint: ruleResult.labelHint };
-    } else {
-      // No rule matched during booking — continue booking flow
+  switch (route) {
+    // HUMAN escalation always wins (regardless of flow state).
+    // Con IA disponible, el mensaje de cierre lo redacta el modelo (resume lo
+    // que entendió y explica qué sigue); si no, la regla fija.
+    case "human": {
+      const ruleResult = applyRules(message, "human", context);
+      const ruleResponse: AIResponse = ruleResult
+        ? { text: ruleResult.text, intent: "human", source: "rule", escalateToHuman: true, labelHint: ruleResult.labelHint }
+        : { text: HANDOFF_RULE_RESPONSE, intent: "human", source: "rule", escalateToHuman: true, labelHint: "human_required" };
+      aiResponse = ruleResult?.rule === "faq_match" || !getAIProvider("whatsapp_reply")
+        ? ruleResponse
+        : await callLLM(conversationId, message, "human", context, conversation, { name: "handoff", data: {} }).catch((error) => {
+            console.error("[AI] Error redactando la derivación, se usa la regla:", error instanceof Error ? error.message : error);
+            return ruleResponse;
+          });
+      break;
+    }
+
+    // Solicitud de propuesta. Desde una reserva en curso se conserva el
+    // servicio que el cliente había elegido (no se vuelve a preguntar) y la
+    // reserva NO se ejecuta: queda sin confirmar.
+    case "proposal_switch":
+      aiResponse = startProposalFlow(message, conversation, { service: conversation.bookingSession?.service ?? null });
+      break;
+    case "proposal_start":
+      aiResponse = startProposalFlow(message, conversation);
+      break;
+    case "proposal_continue":
+      aiResponse = await handleProposalFlow(message, conversation);
+      break;
+
+    // De una propuesta a una reserva explícita: la reserva arranca de cero
+    // (el borrador de la propuesta queda guardado por si el cliente vuelve).
+    case "booking_switch":
+      conversationRepository.setFlowState(businessId, conversationId, "IDLE");
+      aiResponse = await handleBookingFlow(message, { ...conversation, flowState: "IDLE" }, context);
+      break;
+    case "booking_start":
+    case "booking_continue":
       aiResponse = await handleBookingFlow(message, conversation, context);
+      break;
+
+    // Reserva activa: una consulta de negocio la interrumpe sin romperla.
+    case "booking_interruptible": {
+      const ruleResult = ["PRICING", "SERVICE", "SCHEDULE"].includes(classification.category) ? applyRules(message, intent, context) : null;
+      if (ruleResult && !ruleResult.escalateToHuman) {
+        aiResponse = { text: ruleResult.text, intent, source: ruleResult.rule as AIResponse["source"], escalateToHuman: false, labelHint: ruleResult.labelHint };
+      } else {
+        aiResponse = await handleBookingFlow(message, conversation, context);
+      }
+      break;
     }
-  }
-  // 4. Appointment intent or active booking flow → booking handler
-  else if (classification.category === "APPOINTMENT" || inActiveBooking) {
-    aiResponse = await handleBookingFlow(message, conversation, context);
-  }
-  // 5. Standard. Con IA disponible responde el modelo (con los servicios,
-  // precios y FAQ en el prompt): las reglas fijas daban respuestas planas
-  // que cortaban la conversación ("Estos son nuestros servicios y precios:
-  // …"). Las reglas quedan como respaldo sin IA o si el modelo falla.
-  else {
-    aiLogger.log({ type: "intent_detected", conversationId, intent, preview: message.slice(0, 80) });
-    const ruleResult = applyRules(message, intent, context);
-    const llmResponse = getAIProvider("whatsapp_reply")
-      ? await callLLM(conversationId, message, intent, context, conversation).catch((error) => {
-          if (!ruleResult) throw error;
-          console.error("[AI] El modelo falló, se responde con la regla:", error instanceof Error ? error.message : error);
-          return null;
-        })
-      : null;
-    if (llmResponse) {
-      aiResponse = llmResponse;
-    } else if (ruleResult) {
-      aiLogger.log({ type: "rule_match", conversationId, intent, rule: ruleResult.rule });
-      aiLogger.log({
-        type: "response_generated",
-        conversationId,
-        source: "rule",
-        escalate: ruleResult.escalateToHuman ?? false,
-      });
-      aiResponse = {
-        text: ruleResult.text,
-        intent,
-        source: "rule",
-        escalateToHuman: ruleResult.escalateToHuman ?? false,
-        labelHint: ruleResult.labelHint,
-      };
-    } else {
-      aiResponse = await callLLM(conversationId, message, intent, context, conversation);
+
+    // Pregunta en medio de una reserva o una propuesta: se responde y el flujo
+    // queda exactamente donde estaba.
+    case "answer_keep": {
+      const answer = await standardResponse(conversationId, message, intent, context, conversation);
+      aiResponse = { ...answer, text: `${answer.text}${flowReminder(conversation)}`, escalateToHuman: answer.escalateToHuman };
+      break;
     }
+
+    // Standard. Con IA disponible responde el modelo (con los servicios,
+    // precios y FAQ en el prompt): las reglas fijas daban respuestas planas
+    // que cortaban la conversación. Las reglas quedan como respaldo sin IA o
+    // si el modelo falla. Consultar o nombrar un servicio NO inicia una reserva.
+    default:
+      aiResponse = await standardResponse(conversationId, message, intent, context, conversation);
   }
 
   // ── STATE TRANSITION + AUDIT ────────────────────────────────────────────────
@@ -271,7 +316,7 @@ export async function processMessage(params: {
     computeNextState(stateBefore, classification.category, aiResponse.text);
 
   // Only run computeNextState if booking flow didn't already update the state
-  if (!inStickyBooking && !inActiveBooking && classification.category !== "APPOINTMENT") {
+  if (route === "standard") {
     const computed = computeNextState(stateBefore, classification.category, aiResponse.text);
     if (computed !== stateAfter) {
       conversationRepository.setFlowState(businessId, conversationId, computed);

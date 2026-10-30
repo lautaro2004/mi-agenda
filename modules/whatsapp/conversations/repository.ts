@@ -6,6 +6,7 @@ import type {
   ConversationMessage,
   ConversationStatus,
   ConversationTriage,
+  ProposalDraft,
 } from "@/lib/types";
 import { whatsappEvents } from "@/modules/whatsapp/events";
 
@@ -120,6 +121,20 @@ class ConversationRepository {
     if (!conversation) return undefined;
     const next = { ...conversation };
     delete next.bookingSession;
+    return this.save(next);
+  }
+
+  setProposalDraft(businessId: string, id: string, draft: ProposalDraft): Conversation | undefined {
+    const conversation = this.conversations.get(keyOf(businessId, id));
+    if (!conversation) return undefined;
+    return this.save({ ...conversation, proposalDraft: draft });
+  }
+
+  clearProposalDraft(businessId: string, id: string): Conversation | undefined {
+    const conversation = this.conversations.get(keyOf(businessId, id));
+    if (!conversation) return undefined;
+    const next = { ...conversation };
+    delete next.proposalDraft;
     return this.save(next);
   }
 

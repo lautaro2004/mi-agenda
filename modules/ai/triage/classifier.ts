@@ -1,29 +1,12 @@
 import type { ConversationFlowState, ConversationMessage, MessageCategory } from "@/lib/types";
+import { BOOKING_FLOW_STATES, PROPOSAL_FLOW_STATES, detectConversationIntent, type IntentResult } from "@/modules/ai/intent/detect";
 
 import type { ClassificationResult } from "./types";
 
-const PATTERNS: { category: MessageCategory; re: RegExp }[] = [
-  {
-    category: "HUMAN",
-    re: /hablar con|hablar a|person[ao]\b|human[ao]\b|dueñ[ao]|encargad[ao]|alguien de|quiero hablar|necesito hablar|operador|manager|jef[ae]|atención humana|no (quiero|bot)/i,
-  },
-  {
-    category: "APPOINTMENT",
-    re: /turno|reserv[aáo]|agendar|sacar.{0,10}turno|quiero.{0,10}(turno|cita)|pedir turno|hacer.{0,10}cita|cancel.{0,10}(turno|cita)|fecha disponible|hora disponible|cuándo (puedo|podría|podes|pueden)/i,
-  },
-  {
-    category: "PRICING",
-    re: /precio|costo|cuánto (sale|cuesta|cobran|cobras|cobra|vale|valen)|tarifa|valor|presupuest|\$|gratis|gratuito/i,
-  },
-  {
-    category: "SCHEDULE",
-    re: /horario|qué (hora|horas|días)|a qué hora|cuándo (abren|cierran|atienden|están|abre|cierra)|están abiertos|días de atención|fin de semana|abierto|cerrado|trabajan/i,
-  },
-  {
-    category: "SERVICE",
-    re: /qué (servicios|hacen|ofrecen|hacés|realizan)|qué hac[eé]|tienen (servicio|tratamiento|opción)|servicio|tratamiento/i,
-  },
-];
+// La clasificación de contenido sale de UNA sola fuente: la detección de
+// intenciones con contexto (modules/ai/intent/detect.ts). Acá solo se decide
+// qué mensajes se ignoran (emojis, "ok" sin contexto) y cómo se rotula la
+// categoría para el panel.
 
 // Emoji-only: matches strings that contain only emoji, punctuation, or whitespace
 export const EMOJI_ONLY_RE = /^[\p{Emoji}\p{Emoji_Presentation}\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\s!.]+$/u;
@@ -39,18 +22,15 @@ const CONFIRMATION_RE =
   /^(si|sí|dale|ok|okay|confirmo|confirmado|listo|va|por supuesto|claro|exacto|afirmativo|sip)[\s!.]*$/i;
 const CANCELLATION_RE = /^(no|cancelar|olvidá|no gracias|no quiero|cambio de idea)[\s!.]*$/i;
 
+export interface ClassifyOptions {
+  hasBookableServices?: boolean;
+}
+
 function detectIgnoreReason(text: string): string | null {
   if (!text.trim()) return "Mensaje vacío";
   if (MEDIA_PLACEHOLDER_RE.test(text.trim())) return "Medio no soportado";
   if (EMOJI_ONLY_RE.test(text.trim())) return "Solo emoji o reacción";
   if (ACK_RE.test(text.trim())) return "Confirmación sin flujo activo";
-  return null;
-}
-
-function matchPattern(text: string): { category: MessageCategory; confidence: number } | null {
-  for (const { category, re } of PATTERNS) {
-    if (re.test(text)) return { category, confidence: 0.85 };
-  }
   return null;
 }
 
@@ -60,51 +40,82 @@ function lastAiMessageHasQuestion(recent: ConversationMessage[]): boolean {
   return last.text.includes("?") || /cuál|qué|cómo|cuándo|dónde|querés|preferís|te va|elegís/i.test(last.text);
 }
 
+function categoryOf(detected: IntentResult): MessageCategory {
+  switch (detected.intent) {
+    case "booking":
+      return "APPOINTMENT";
+    case "proposal_request":
+      return "PROPOSAL";
+    case "human_handoff":
+      return "HUMAN";
+    case "general_inquiry":
+      if (detected.topic === "pricing") return "PRICING";
+      if (detected.topic === "schedule") return "SCHEDULE";
+      if (detected.topic === "service") return "SERVICE";
+      return "IRRELEVANT";
+    default:
+      return "IRRELEVANT";
+  }
+}
+
 export function classify(
   message: string,
   state: ConversationFlowState,
   recentMessages: ConversationMessage[],
+  options: ClassifyOptions = {},
 ): ClassificationResult {
   const text = message.trim();
+  const detected = detectConversationIntent({
+    message: text,
+    flowState: state,
+    recentMessages: recentMessages.map((m) => ({ sender: m.sender, text: m.text })),
+    hasBookableServices: options.hasBookableServices,
+  });
+  const base = { intent: detected.intent, topic: detected.topic };
 
-  // ── Active booking flow: short messages are valid responses ──────────────
-  if (state === "WAITING_SLOT_SELECTION") {
-    if (SLOT_SELECTION_RE.test(text)) {
-      return { category: "APPOINTMENT", confidence: 0.95, ignored: false };
+  // Pedir atención humana se respeta en cualquier estado.
+  if (detected.intent === "human_handoff") {
+    return { category: "HUMAN", confidence: detected.confidence, ignored: false, ...base };
+  }
+
+  // ── Solicitud de propuesta en curso: nunca se ignora ─────────────────────
+  if (PROPOSAL_FLOW_STATES.has(state)) {
+    if (detected.intent === "booking") return { category: "APPOINTMENT", confidence: 0.85, ignored: false, ...base };
+    return { category: "PROPOSAL", confidence: detected.intent === "proposal_request" ? 0.95 : 0.8, ignored: false, ...base };
+  }
+
+  // ── Reserva en curso: las respuestas cortas son válidas ──────────────────
+  if (BOOKING_FLOW_STATES.has(state)) {
+    // El cliente cambió de objetivo (ej. pide una propuesta por mail).
+    if (detected.intent === "proposal_request") return { category: "PROPOSAL", confidence: 0.85, ignored: false, ...base };
+
+    if (state === "WAITING_SLOT_SELECTION") {
+      return { category: "APPOINTMENT", confidence: SLOT_SELECTION_RE.test(text) ? 0.95 : 0.75, ignored: false, ...base };
     }
-    return { category: "APPOINTMENT", confidence: 0.75, ignored: false };
-  }
-
-  if (state === "WAITING_CONFIRMATION") {
-    if (CONFIRMATION_RE.test(text) || CANCELLATION_RE.test(text)) {
-      return { category: "APPOINTMENT", confidence: 0.95, ignored: false };
+    if (state === "WAITING_CONFIRMATION") {
+      const answered = CONFIRMATION_RE.test(text) || CANCELLATION_RE.test(text);
+      return { category: "APPOINTMENT", confidence: answered ? 0.95 : 0.7, ignored: false, ...base };
     }
-    return { category: "APPOINTMENT", confidence: 0.7, ignored: false };
+    // COLLECTING_INTENT / OFFERING_SLOTS / WAITING_PAYMENT_PROOF
+    const category = categoryOf(detected);
+    const keep = category === "PRICING" || category === "SERVICE" || category === "SCHEDULE";
+    return { category: keep ? category : "APPOINTMENT", confidence: keep ? detected.confidence : 0.6, ignored: false, ...base };
   }
 
-  if (state === "COLLECTING_INTENT" || state === "OFFERING_SLOTS") {
-    // Never ignore during active flow — try to match a category but default to APPOINTMENT
-    const matched = matchPattern(text);
-    if (matched) return { ...matched, ignored: false };
-    return { category: "APPOINTMENT", confidence: 0.6, ignored: false };
-  }
-
-  // ── IDLE / BOOKED: full classification with ignore rules ─────────────────
+  // ── IDLE / BOOKED ─────────────────────────────────────────────────────────
   const ignoreReason = detectIgnoreReason(text);
-
   if (ignoreReason) {
-    // Exception: if the last AI message asked a question, this short reply is contextual
-    if (lastAiMessageHasQuestion(recentMessages)) {
-      const matched = matchPattern(text);
-      if (matched) return { ...matched, ignored: false };
-      return { category: "APPOINTMENT", confidence: 0.55, ignored: false };
+    // Un "sí" que acepta lo que el asistente ofreció (propuesta o reserva).
+    if (detected.intent === "proposal_request" || detected.intent === "booking") {
+      return { category: categoryOf(detected), confidence: detected.confidence, ignored: false, ...base };
     }
-    return { category: "IRRELEVANT", confidence: 0.9, ignored: true, ignoreReason };
+    // Responde a una pregunta del asistente: se deja que el modelo lo
+    // resuelva con el historial. Antes se asumía una reserva.
+    if (lastAiMessageHasQuestion(recentMessages)) {
+      return { category: "IRRELEVANT", confidence: 0.5, ignored: false, ...base };
+    }
+    return { category: "IRRELEVANT", confidence: 0.9, ignored: true, ignoreReason, ...base };
   }
 
-  const matched = matchPattern(text);
-  if (matched) return { ...matched, ignored: false };
-
-  // No pattern match and no ignore reason: let Gemini decide
-  return { category: "IRRELEVANT", confidence: 0.4, ignored: false };
+  return { category: categoryOf(detected), confidence: Math.min(detected.confidence, 0.9), ignored: false, ...base };
 }

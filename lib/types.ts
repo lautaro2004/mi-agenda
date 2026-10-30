@@ -327,6 +327,8 @@ export type ConversationFlowState =
   | "WAITING_CONFIRMATION"
   | "BOOKED"
   | "WAITING_PAYMENT_PROOF"
+  | "COLLECTING_PROPOSAL"
+  | "WAITING_PROPOSAL_CONFIRMATION"
   | "HUMAN_HANDOFF";
 
 export const FLOW_STATE_META: Record<ConversationFlowState, { label: string; className: string }> = {
@@ -337,6 +339,8 @@ export const FLOW_STATE_META: Record<ConversationFlowState, { label: string; cla
   WAITING_CONFIRMATION: { label: "Esperando confirmación", className: "bg-orange-500/10 text-orange-600 dark:text-orange-400" },
   BOOKED: { label: "Turno reservado", className: "bg-green-500/10 text-green-600 dark:text-green-400" },
   WAITING_PAYMENT_PROOF: { label: "Esperando comprobante", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  COLLECTING_PROPOSAL: { label: "Recopilando datos de propuesta", className: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
+  WAITING_PROPOSAL_CONFIRMATION: { label: "Confirmando solicitud de propuesta", className: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
   HUMAN_HANDOFF: { label: "Transferido a humano", className: "bg-red-500/10 text-red-600 dark:text-red-400" },
 };
 
@@ -348,6 +352,7 @@ export type MessageCategory =
   | "SERVICE"
   | "SCHEDULE"
   | "HUMAN"
+  | "PROPOSAL"
   | "IRRELEVANT";
 
 export const MESSAGE_CATEGORY_META: Record<MessageCategory, { label: string }> = {
@@ -356,6 +361,7 @@ export const MESSAGE_CATEGORY_META: Record<MessageCategory, { label: string }> =
   SERVICE: { label: "Servicio" },
   SCHEDULE: { label: "Horarios" },
   HUMAN: { label: "Atención humana" },
+  PROPOSAL: { label: "Propuesta" },
   IRRELEVANT: { label: "Irrelevante" },
 };
 
@@ -381,6 +387,26 @@ export type BookingStep =
   | "reschedule_date"
   | "reschedule_slot"
   | "reschedule_confirm";
+
+// Qué se preguntó en último lugar en la solicitud de propuesta.
+export type ProposalField = "need" | "email" | "name" | "extras" | "confirm" | "edit";
+
+export interface ProposalDraft {
+  name?: string;
+  // El nombre salió del perfil de WhatsApp (se muestra en el resumen para corregirlo).
+  nameFromProfile?: boolean;
+  email?: string;
+  // El cliente pidió recibirla por el chat en vez de por email.
+  emailWaived?: boolean;
+  company?: string;
+  need?: string;
+  details?: string;
+  budget?: string;
+  deadline?: string;
+  extrasAsked: boolean;
+  pending: ProposalField;
+  startedAt: string;
+}
 
 export interface BookingSession {
   step: BookingStep;
@@ -487,6 +513,8 @@ export interface Conversation {
   flowState: ConversationFlowState;
   lastTriage?: ConversationTriage;
   bookingSession?: BookingSession;
+  // Borrador de una solicitud de propuesta en curso (ver modules/ai/proposal).
+  proposalDraft?: ProposalDraft;
 }
 
 export type WhatsAppEvent =
