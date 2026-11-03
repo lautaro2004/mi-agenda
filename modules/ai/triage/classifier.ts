@@ -14,7 +14,11 @@ export const EMOJI_ONLY_RE = /^[\p{Emoji}\p{Emoji_Presentation}\u{1F000}-\u{1FFF
 export const MEDIA_PLACEHOLDER_RE = /^\[.+\]$/;
 // Short acknowledgements / greetings / reactions with no business content
 export const ACK_RE =
-  /^(si|sí|no|ok|okay|dale|genial|perfecto|gracias|hola|buenas|buenos días|buenas tardes|buenas noches|re|re bien|joya|listo|np|ok gracias|de nada|👍|👋|❤️|😊|😂|✓)[\s!.]*$/i;
+  /^(si|sí|no|ok|okay|dale|genial|perfecto|gracias|re|re bien|joya|listo|np|ok gracias|de nada|👍|👋|❤️|😊|😂|✓)[\s!.]*$/i;
+// Un saludo SÍ se responde: es alguien que escribe por primera vez y espera
+// una respuesta (antes se ignoraba y el cliente se quedaba sin contestación).
+export const GREETING_RE =
+  /^(hola+|holis|buenas|buen d[ií]a|buenos d[ií]as|buenas tardes|buenas noches|hey|hi|hello|qu[eé] tal)(\s+(que tal|como estas|c[oó]mo est[aá]s|todo bien))?[\s!.,?¿]*$/i;
 
 const SLOT_SELECTION_RE =
   /\b\d{1,2}(:\d{2})?\s*(hs|h|am|pm)?\b|el (primero|segundo|último|tercero)|la (primera|segunda|última)|primera|última opción/i;
@@ -30,6 +34,7 @@ function detectIgnoreReason(text: string): string | null {
   if (!text.trim()) return "Mensaje vacío";
   if (MEDIA_PLACEHOLDER_RE.test(text.trim())) return "Medio no soportado";
   if (EMOJI_ONLY_RE.test(text.trim())) return "Solo emoji o reacción";
+  if (GREETING_RE.test(text.trim())) return null;
   if (ACK_RE.test(text.trim())) return "Confirmación sin flujo activo";
   return null;
 }
