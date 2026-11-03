@@ -111,6 +111,8 @@ model Business {
   siteLayouts           SiteLayout[]
   siteNav               SiteNav?
   whatsappCampaigns     WhatsappCampaign[]
+  siteEvents            SiteEvent[]
+  siteTracking          SiteTracking?
   whatsappAttributions  WhatsappCampaignAttribution[]
   memberships           Membership[]
   invitations           Invitation[]
@@ -189,6 +191,8 @@ model Inquiry {
   // ── Campaña de WhatsApp de origen (ver modules/whatsapp/campaigns). Snapshot
   // del nombre y del método para conservar el historial aunque la campaña se
   // edite o archive. requestKind: "proposal" | "lead" | "handoff".
+  // Origen web de la consulta (formulario del sitio): { first, last } con utm_*, referrerHost y landing. Sin datos personales.
+  attribution       Json?
   campaignId        String?
   campaignName      String?
   attributionMethod String?
@@ -1461,5 +1465,45 @@ model WhatsappCampaignAttribution {
 
   @@unique([businessId, conversationRef])
   @@index([campaignId])
+  @@schema("nexo")
+}
+
+// Eventos propios del sitio público (vistas, clics, envíos). Sin datos
+// personales: no se guarda IP, ni user agent, ni cookies; sessionId es un
+// valor aleatorio de la pestaña (sessionStorage) solo para contar sesiones.
+model SiteEvent {
+  id           String   @id @default(cuid())
+  businessId   String
+  // page_view | cta_click | form_submit
+  type         String
+  path         String
+  sessionId    String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  utmTerm      String?
+  // Solo el host del referrer (ej. "instagram.com"), nunca la URL completa.
+  referrerHost String?
+  createdAt    DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+  @@index([businessId, type, createdAt])
+  @@schema("nexo")
+}
+
+// Píxeles y etiquetas del sitio público. Solo IDs validados por formato: no
+// se acepta código ni scripts arbitrarios (ver lib/site-tracking.ts).
+model SiteTracking {
+  businessId  String   @id
+  gtmId       String?
+  metaPixelId String?
+  ga4Id       String?
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
   @@schema("nexo")
 }

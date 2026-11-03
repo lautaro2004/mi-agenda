@@ -1,5 +1,6 @@
 "use client";
 
+import { getStoredAttribution } from "@/lib/site-attribution-client";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -68,7 +69,7 @@ export function LeadForm({ slug, config, submitLabel, tone }: LeadFormProps) {
       const res = await fetch(`/api/public/${slug}/inquiry`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, form: "leads" }),
+        body: JSON.stringify({ ...values, form: "leads", attribution: getStoredAttribution(slug) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -77,6 +78,8 @@ export function LeadForm({ slug, config, submitLabel, tone }: LeadFormProps) {
       }
       setSent(true);
       reset(defaultValues as LeadSubmission);
+      // Conversión para los píxeles (si la persona aceptó): sin datos personales.
+      window.dispatchEvent(new CustomEvent("nexo:lead"));
     } catch {
       setFormError("No pudimos enviar tus datos. Probá de nuevo.");
     }

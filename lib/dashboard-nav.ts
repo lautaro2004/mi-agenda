@@ -1,4 +1,5 @@
 import {
+  Activity,
   BarChart3,
   Bot,
   Boxes,
@@ -37,6 +38,7 @@ export const DASHBOARD_NAV = [
   { href: "/dashboard/turnos", label: "Turnos", icon: CalendarCheck2 },
   { href: "/dashboard/consultas", label: "Consultas", icon: MessageSquareText },
   { href: "/dashboard/estadisticas", label: "Estadísticas", icon: BarChart3, minRole: "admin" },
+  { href: "/dashboard/trafico", label: "Tráfico del sitio", icon: Activity, minRole: "admin" },
   {
     href: "/dashboard/whatsapp",
     label: "WhatsApp",

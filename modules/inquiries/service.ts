@@ -1,7 +1,10 @@
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { notifyInquiryReceived } from "@/modules/notifications/service";
 import { syncInquiryToNodo } from "@/modules/inquiries/nodo-sync";
 import type { InquiryStatus } from "@/lib/schemas";
+import type { Attribution } from "@/lib/site-tracking";
 import type { InquiryQualificationStatus, InquirySource } from "@/lib/types";
 
 export interface CreateInquiryInput {
@@ -17,6 +20,8 @@ export interface CreateInquiryInput {
   conversationRef?: string;
   // Solo "pending" al nacer (calificación activa); sin valor = sin calificar.
   qualificationStatus?: Extract<InquiryQualificationStatus, "pending">;
+  // Origen web (utm_*, host del referrer). Sin datos personales.
+  attribution?: Attribution | null;
 }
 
 // Único punto de escritura de una consulta pública (las del asistente
@@ -47,6 +52,7 @@ export async function createInquiry(input: CreateInquiryInput) {
       ...(input.qualificationStatus ? { qualificationStatus: input.qualificationStatus } : {}),
       ...(input.channel ? { channel: input.channel } : {}),
       ...(input.conversationRef ? { conversationRef: input.conversationRef } : {}),
+      ...(input.attribution ? { attribution: input.attribution as unknown as Prisma.InputJsonValue } : {}),
     },
   });
 

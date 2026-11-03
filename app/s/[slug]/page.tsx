@@ -12,6 +12,8 @@ import { getBrandColor, readableTextOn, sanitizeHexColor } from "@/lib/brand-col
 import { resolveLeadsCopy } from "@/lib/landing-copy";
 import { getLandingCopy } from "@/modules/business/landing-copy";
 import { getLeadFormConfig } from "@/modules/business/lead-form";
+import { getTrackingConfig } from "@/modules/analytics/site-events";
+import { SiteTracker } from "@/components/public-site/site-tracker";
 import { DEFAULT_LEAD_FORM } from "@/lib/lead-form";
 import { LeadsMobileCta } from "@/components/public-site/leads/leads-mobile-cta";
 import { cn } from "@/lib/utils";
@@ -143,6 +145,7 @@ export default async function PublicSitePage({ params }: PageProps) {
   const template = resolveSiteTemplate(business.siteTemplate, intent);
   // Solo la plantilla de captación usa el formulario configurable. Lectura
   // resiliente (getLeadFormConfig nunca lanza: cae en el estándar).
+  const trackingConfig = await getTrackingConfig(business.id);
   const leadFormConfig = template === "leads" ? await getLeadFormConfig(business.id) : null;
   // En intent "meeting" el servicio reservable (ej. "Reunión inicial") no se
   // muestra como card comercial — se ofrece como CTA de conversión en su
@@ -323,6 +326,7 @@ export default async function PublicSitePage({ params }: PageProps) {
       style={brandColor ? ({ "--brand-primary": brandColor } as CSSProperties) : undefined}
     >
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <SiteTracker slug={slug} tracking={trackingConfig} />
 
       <BookingModalProvider
         slug={slug}
