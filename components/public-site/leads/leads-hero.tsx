@@ -3,6 +3,7 @@ import { ArrowDown, Check, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Business, Service } from "@/lib/types";
+import { DEFAULT_BADGE_TEXT, DEFAULT_HERO, type HeroConfig } from "@/lib/lead-form";
 
 interface LeadsHeroProps {
   business: Business;
@@ -16,6 +17,8 @@ interface LeadsHeroProps {
   // Contraste del texto sobre el color de marca (ver readableTextOn).
   tone: "light" | "dark";
   whatsappHref: string | null;
+  // Textos y elementos flotantes configurables (sin valor = como siempre).
+  hero?: HeroConfig;
 }
 
 // Hero de la plantilla de captación: franja del color de marca del negocio
@@ -23,11 +26,12 @@ interface LeadsHeroProps {
 // visual a la derecha: la imagen real del negocio con sus servicios reales
 // como tarjetas flotantes. Nunca inventa datos (ni cifras, ni reseñas).
 // El botón principal baja al formulario (#contacto, panel final).
-export function LeadsHero({ business, title, subtitle, ctaLabel, services, imageUrl, tone, whatsappHref }: LeadsHeroProps) {
-  const highlights = services.slice(0, 3);
+export function LeadsHero({ business, title, subtitle, ctaLabel, services, imageUrl, tone, whatsappHref, hero = DEFAULT_HERO }: LeadsHeroProps) {
+  const highlights = hero.showChecklist ? services.slice(0, 3) : [];
   const light = tone === "light";
   // "Otro" es el rubro por defecto: mostrarlo como etiqueta no aporta nada.
-  const category = business.category && business.category !== "Otro" ? business.category : null;
+  const category = hero.showCategory && business.category && business.category !== "Otro" ? business.category : null;
+  const brandName = hero.brandName || business.name;
 
   return (
     <section className="px-3 pt-3 sm:px-4">
@@ -57,11 +61,11 @@ export function LeadsHero({ business, title, subtitle, ctaLabel, services, image
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
           <div className="leads-rise">
             <div className="flex flex-wrap items-center gap-2.5">
-              {business.logoUrl && (
+              {hero.showLogo && business.logoUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={business.logoUrl} alt="" className="size-8 rounded-lg bg-white object-contain p-0.5" />
               )}
-              <span className="text-sm font-medium">{business.name}</span>
+              {brandName && <span className="text-sm font-medium">{brandName}</span>}
               {category && (
                 <span
                   className={cn(
@@ -128,7 +132,7 @@ export function LeadsHero({ business, title, subtitle, ctaLabel, services, image
                 {ctaLabel}
                 <ArrowDown className="size-4" data-icon="inline-end" />
               </Button>
-              {whatsappHref && (
+              {whatsappHref && hero.showWhatsappButton && (
                 <Button
                   size="lg"
                   variant="ghost"
@@ -146,7 +150,7 @@ export function LeadsHero({ business, title, subtitle, ctaLabel, services, image
             </div>
           </div>
 
-          <HeroVisual business={business} services={services} imageUrl={imageUrl} hasWhatsapp={!!whatsappHref} />
+          <HeroVisual business={business} services={services} imageUrl={imageUrl} hasWhatsapp={!!whatsappHref} hero={hero} />
         </div>
       </div>
     </section>
@@ -161,13 +165,19 @@ function HeroVisual({
   services,
   imageUrl,
   hasWhatsapp,
+  hero,
 }: {
   business: Business;
   services: Service[];
   imageUrl: string | null;
   hasWhatsapp: boolean;
+  hero: HeroConfig;
 }) {
   const cardServices = services.slice(0, 3);
+  // Ítems de la tarjeta: los escritos por el negocio o, sin ellos, sus servicios.
+  const cardItems = hero.card.items.length > 0 ? hero.card.items : cardServices.map((s) => s.name);
+  const cardTitle = hero.card.title || business.name;
+  const badgeText = hero.badge.text || (hasWhatsapp ? DEFAULT_BADGE_TEXT : "");
 
   if (!imageUrl) {
     if (cardServices.length === 0) return null;
@@ -202,26 +212,26 @@ function HeroVisual({
         <img src={imageUrl} alt="" className="aspect-[4/5] w-full object-cover sm:aspect-[5/5]" />
       </div>
 
-      {cardServices.length > 0 && (
+      {hero.card.show && cardItems.length > 0 && (
         <div className="leads-float absolute -bottom-2 -left-3 w-56 -rotate-2 rounded-2xl bg-white p-4 text-neutral-950 shadow-[0_18px_40px_-15px_rgba(0,0,0,0.45)] sm:-left-10">
-          <p className="text-xs text-neutral-500">{business.name}</p>
+          {cardTitle && <p className="text-xs text-neutral-500">{cardTitle}</p>}
           <ul className="mt-2 flex flex-col gap-1.5">
-            {cardServices.map((service) => (
-              <li key={service.id} className="flex items-center gap-2 text-sm font-medium">
+            {cardItems.map((item, index) => (
+              <li key={`${index}-${item}`} className="flex items-center gap-2 text-sm font-medium">
                 <span className="size-1.5 shrink-0 rounded-full bg-[var(--brand-primary,var(--primary))]" />
-                <span className="truncate">{service.name}</span>
+                <span className="truncate">{item}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {hasWhatsapp && (
+      {hero.badge.show && badgeText && (
         <div className="leads-float absolute top-6 -right-3 flex [animation-delay:-2.5s] items-center gap-2 rounded-full bg-white py-2 pr-4 pl-2 text-sm font-medium text-neutral-950 shadow-[0_14px_30px_-12px_rgba(0,0,0,0.45)] sm:-right-6">
           <span className="flex size-7 items-center justify-center rounded-full bg-[#25D366] text-white">
-            <MessageCircle className="size-3.5" />
+            {hasWhatsapp ? <MessageCircle className="size-3.5" /> : <Check className="size-3.5" />}
           </span>
-          Respondemos por WhatsApp
+          {badgeText}
         </div>
       )}
     </div>

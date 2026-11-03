@@ -40,6 +40,50 @@ const customQuestion = z
     path: ["options"],
   });
 
+// ── Hero de la plantilla de captación ──────────────────────────────────────
+// Textos y elementos flotantes editables. Todo opcional: sin esta sección (o
+// con un campo vacío) el hero se ve exactamente como antes. Un texto vacío
+// = usar el valor automático (nombre del negocio, servicios reales).
+const heroText = (max: number) => z.string().trim().max(max, `Máximo ${max} caracteres`);
+
+export const MAX_HERO_CARD_ITEMS = 4;
+
+export const heroConfigSchema = z.object({
+  // Texto junto al logo (arriba del título). Vacío = nombre del negocio.
+  brandName: heroText(60).default(""),
+  showLogo: z.boolean().default(true),
+  showCategory: z.boolean().default(true),
+  // Lista con tildes bajo el subtítulo (servicios reales del negocio).
+  showChecklist: z.boolean().default(true),
+  showWhatsappButton: z.boolean().default(true),
+  // Tarjeta flotante abajo a la izquierda de la imagen.
+  card: z
+    .object({
+      show: z.boolean().default(true),
+      title: heroText(60).default(""),
+      // Vacío = los servicios del negocio.
+      items: z.array(heroText(60).min(1, "Ítem vacío")).max(MAX_HERO_CARD_ITEMS, `Máximo ${MAX_HERO_CARD_ITEMS} ítems`).default([]),
+    })
+    .default({ show: true, title: "", items: [] }),
+  // Burbuja flotante arriba a la derecha de la imagen.
+  badge: z
+    .object({
+      show: z.boolean().default(true),
+      text: heroText(40).default(""),
+    })
+    .default({ show: true, text: "" }),
+});
+
+export type HeroConfig = z.infer<typeof heroConfigSchema>;
+
+export const DEFAULT_HERO: HeroConfig = heroConfigSchema.parse({});
+
+export const DEFAULT_BADGE_TEXT = "Respondemos por WhatsApp";
+
+export function resolveHero(config: LeadFormConfig | null | undefined): HeroConfig {
+  return config?.hero ?? DEFAULT_HERO;
+}
+
 export const leadFormConfigSchema = z.object({
   fields: z.object({
     customerEmail: fieldConfig,
@@ -51,6 +95,8 @@ export const leadFormConfigSchema = z.object({
     .array(customQuestion)
     .max(MAX_CUSTOM_QUESTIONS, `Máximo ${MAX_CUSTOM_QUESTIONS} preguntas propias`)
     .default([]),
+  // Opcional: las configuraciones guardadas antes de esta sección siguen válidas.
+  hero: heroConfigSchema.optional(),
 });
 
 export type LeadFormConfig = z.infer<typeof leadFormConfigSchema>;

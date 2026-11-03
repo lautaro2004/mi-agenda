@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Mail, MessageSquareText, Phone } from "lucide-react";
+import { Mail, MessageSquareText, Phone, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { LeadQualificationCard } from "@/components/dashboard/lead-qualification-card";
@@ -15,6 +15,8 @@ import { requestJson } from "@/lib/api-client";
 import { buildWhatsappHref } from "@/lib/whatsapp-link";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Inquiry } from "@/lib/types";
+
+type SyncStatus = "synced" | "no_workspace" | "not_configured" | "held" | "error" | "not_found";
 
 const STATUS_LABEL: Record<Inquiry["status"], string> = {
   NEW: "Nueva",
@@ -43,6 +45,64 @@ const QUALIFICATION_BADGE: Record<NonNullable<Inquiry["qualificationStatus"]>, "
 export default function InquiriesPage() {
   const [inquiries, setInquiries] = React.useState<Inquiry[] | null>(null);
   const [loadError, setLoadError] = React.useState(false);
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [campaignFilter, setCampaignFilter] = React.useState<string>("all");
+  const [sending, setSending] = React.useState(false);
+
+  const campaignOptions = React.useMemo(() => {
+    const names = new Set<string>();
+    for (const i of inquiries ?? []) if (i.campaignName) names.add(i.campaignName);
+    return [...names].sort();
+  }, [inquiries]);
+
+  const visible = React.useMemo(() => {
+    if (!inquiries) return inquiries;
+    if (campaignFilter === "all") return inquiries;
+    if (campaignFilter === "none") return inquiries.filter((i) => !i.campaignName);
+    return inquiries.filter((i) => i.campaignName === campaignFilter);
+  }, [inquiries, campaignFilter]);
+
+  const pendingVisible = (visible ?? []).filter((i) => !i.nodoLeadId);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllPending() {
+    setSelected(new Set(pendingVisible.slice(0, 50).map((i) => i.id)));
+  }
+
+  async function sendSelected() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setSending(true);
+    try {
+      const { results } = await requestJson<{ results: Array<{ id: string; status: SyncStatus }> }>(
+        "/api/business/inquiries/nodo-sync",
+        { method: "POST", body: JSON.stringify({ ids }) }
+      );
+      const ok = results.filter((r) => r.status === "synced").length;
+      const failed = results.filter((r) => r.status === "error").length;
+      const held = results.filter((r) => r.status === "held").length;
+      const notConfigured = results.some((r) => r.status === "not_configured" || r.status === "no_workspace");
+      if (ok > 0) toast.success(`${ok} enviado${ok === 1 ? "" : "s"} a Nodo CRM.`);
+      if (failed > 0) toast.error(`${failed} no se pudieron enviar. Probá de nuevo en un rato.`);
+      if (held > 0) toast.info(`${held} quedaron retenidas: todavía no están calificadas.`);
+      if (notConfigured && ok === 0) toast.error("Tu negocio no tiene Nodo CRM conectado.");
+      const fresh = await requestJson<{ inquiries: Inquiry[] }>("/api/business/inquiries");
+      setInquiries(fresh.inquiries);
+      setSelected(new Set(results.filter((r) => r.status !== "synced").map((r) => r.id)));
+    } catch {
+      toast.error("No pudimos enviar las consultas a Nodo.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   React.useEffect(() => {
     requestJson<{ inquiries: Inquiry[] }>("/api/business/inquiries")
@@ -104,18 +164,64 @@ export default function InquiriesPage() {
         </div>
       )}
 
+      {inquiries && inquiries.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
+          <Select value={campaignFilter} onValueChange={(v) => setCampaignFilter(v ?? "all")}>
+            <SelectTrigger className="w-56" aria-label="Filtrar por campaña">
+              <SelectValue>
+                {(v: string) => (v === "all" ? "Todas las campañas" : v === "none" ? "Sin campaña" : v)}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las campañas</SelectItem>
+              <SelectItem value="none">Sin campaña</SelectItem>
+              {campaignOptions.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button type="button" variant="outline" size="sm" onClick={selectAllPending} disabled={pendingVisible.length === 0}>
+            Elegir las que faltan enviar ({pendingVisible.length})
+          </Button>
+          {selected.size > 0 && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              Limpiar
+            </Button>
+          )}
+          <Button type="button" size="sm" className="ml-auto" onClick={sendSelected} disabled={selected.size === 0 || sending}>
+            <Send className="size-4" />
+            {sending ? "Enviando…" : `Enviar a Nodo (${selected.size})`}
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-3">
-        {inquiries?.map((inquiry) => {
+        {visible?.map((inquiry) => {
           const whatsappHref = buildWhatsappHref(inquiry.customerWhatsapp);
           return (
             <div key={inquiry.id} className="rounded-xl border border-border bg-card p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-primary"
+                      checked={selected.has(inquiry.id)}
+                      onChange={() => toggle(inquiry.id)}
+                      aria-label={`Elegir a ${inquiry.customerName}`}
+                    />
                     <p className="font-medium text-foreground">{inquiry.customerName}</p>
                     <Badge variant={STATUS_BADGE[inquiry.status]}>{STATUS_LABEL[inquiry.status]}</Badge>
                     <Badge variant="outline">{inquiry.channel === "whatsapp" ? "WhatsApp · asistente" : "Sitio web"}</Badge>
+                    {inquiry.campaignName && <Badge variant="secondary">Campaña: {inquiry.campaignName}</Badge>}
                     {inquiry.nodoLeadId && <Badge variant="outline">En Nodo CRM</Badge>}
+                    {!inquiry.nodoLeadId && inquiry.nodoSyncError && (
+                      <Badge variant="outline" title={inquiry.nodoSyncError}>
+                        Falló el envío a Nodo
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {formatRelativeTime(inquiry.createdAt)}

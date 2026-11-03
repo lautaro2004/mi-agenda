@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
+import { resolveTimeZone } from "@/lib/time-zone";
 import { defaultSchedule } from "@/lib/mock-data";
 import { WEEK_DAYS } from "@/lib/types";
 import { SOCIAL_FIELD, SOCIAL_PLATFORMS, normalizeSocialUrl } from "@/lib/social";
@@ -38,6 +39,7 @@ function toClientBusiness(
     linkedinUrl: row?.linkedinUrl ?? "",
     slug: row?.slug ?? null,
     siteTemplate: (row?.siteTemplate as Business["siteTemplate"]) ?? null,
+    timeZone: resolveTimeZone(row?.timeZone),
     depositRequired: row?.depositRequired ?? false,
     depositType: (row?.depositType as Business["depositType"]) ?? null,
     depositFixedAmount: row?.depositFixedAmount ?? null,

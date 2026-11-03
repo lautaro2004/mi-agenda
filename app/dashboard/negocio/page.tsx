@@ -27,6 +27,7 @@ import {
 import { PageHeader } from "@/components/dashboard/page-header";
 import { BusinessPreviewCard } from "@/components/dashboard/business-preview-card";
 import { DepositSettingsCard } from "@/components/dashboard/deposit-settings-card";
+import { TimeZoneCard } from "@/components/dashboard/time-zone-card";
 import { EmailNotificationsCard } from "@/components/dashboard/email-notifications-card";
 import { GoogleIntegrationCard } from "@/components/dashboard/google-integration-card";
 import { LogoUploader } from "@/components/onboarding/logo-uploader";
@@ -333,6 +334,7 @@ export default function BusinessSettingsPage() {
         </form>
 
         <DepositSettingsCard business={state.business} onSaved={() => void refresh()} />
+        <TimeZoneCard />
 
         <EmailNotificationsCard />
 

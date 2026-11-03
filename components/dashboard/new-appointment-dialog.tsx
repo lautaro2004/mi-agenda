@@ -5,6 +5,8 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 
+import { todayInZone } from "@/lib/time-zone";
+import { useBusinessTimeZone } from "@/lib/use-business-time-zone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,11 +38,12 @@ interface NewAppointmentDialogProps {
   onCreated: (appointment: Appointment) => void;
 }
 
-function todayIso(): string {
-  return new Date().toISOString().split("T")[0];
+function todayIso(timeZone?: string): string {
+  return todayInZone(timeZone);
 }
 
 export function NewAppointmentDialog({ trigger, services, onCreated }: NewAppointmentDialogProps) {
+  const timeZone = useBusinessTimeZone();
   const [open, setOpen] = React.useState(false);
   const [slots, setSlots] = React.useState<string[] | null>(null);
   const [loadingSlots, setLoadingSlots] = React.useState(false);
@@ -65,7 +68,7 @@ export function NewAppointmentDialog({ trigger, services, onCreated }: NewAppoin
       customerName: "",
       customerPhone: "",
       customerEmail: "",
-      date: todayIso(),
+      date: todayIso(timeZone),
       startTime: "",
       notes: "",
       resourceId: undefined,
@@ -141,7 +144,7 @@ export function NewAppointmentDialog({ trigger, services, onCreated }: NewAppoin
         customerName: "",
         customerPhone: "",
         customerEmail: "",
-        date: todayIso(),
+        date: todayIso(timeZone),
         startTime: "",
         notes: "",
         resourceId: undefined,
@@ -235,7 +238,7 @@ export function NewAppointmentDialog({ trigger, services, onCreated }: NewAppoin
                 <Input
                   id="appointment-date"
                   type="date"
-                  min={todayIso()}
+                  min={todayIso(timeZone)}
                   aria-invalid={!!errors.date}
                   {...register("date")}
                 />

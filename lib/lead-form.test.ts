@@ -113,3 +113,22 @@ describe("configuración guardada", () => {
     expect(resolveLeadFormConfig(null)).toEqual(DEFAULT_LEAD_FORM);
   });
 });
+
+describe("hero configurable", () => {
+  it("una configuración vieja sin hero sigue siendo válida", () => {
+    const parsed = leadFormConfigSchema.safeParse({ fields: DEFAULT_LEAD_FORM.fields, custom: [] });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.hero).toBeUndefined();
+  });
+  it("hero parcial toma los valores por defecto", () => {
+    const parsed = leadFormConfigSchema.parse({ fields: DEFAULT_LEAD_FORM.fields, hero: { brandName: "LM Rappi", badge: { show: false } } });
+    expect(parsed.hero?.brandName).toBe("LM Rappi");
+    expect(parsed.hero?.badge.show).toBe(false);
+    expect(parsed.hero?.card.show).toBe(true);
+    expect(parsed.hero?.showChecklist).toBe(true);
+  });
+  it("rechaza más de 4 ítems en la tarjeta", () => {
+    const parsed = leadFormConfigSchema.safeParse({ fields: DEFAULT_LEAD_FORM.fields, hero: { card: { items: ["a", "b", "c", "d", "e"] } } });
+    expect(parsed.success).toBe(false);
+  });
+});

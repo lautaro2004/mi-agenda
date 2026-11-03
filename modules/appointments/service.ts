@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { todayInZone } from "@/lib/time-zone";
+import { getBusinessTimeZone } from "@/modules/business/time-zone";
 import type { BusinessSchedule } from "@/lib/types";
 import { getSlotsForDate } from "@/modules/ai/booking/flow";
 import { getActiveServiceResources } from "@/modules/business/resource";
@@ -354,6 +356,8 @@ export async function getAvailableSlots(
   serviceId?: string | null,
   excludeAppointmentId?: string,
 ): Promise<string[]> {
+  // `date` llega como medianoche UTC del día pedido (ver parseo en las rutas): su
+  // parte de fecha UTC ES el día local pedido, no hay que convertir zonas acá.
   const dateStr = date.toISOString().split("T")[0];
   const allSlots = getSlotsForDate(date, schedule);
   if (!allSlots.length) return [];
@@ -454,7 +458,7 @@ export async function findPendingPaymentAppointments(businessId: string, phone: 
 }
 
 export async function getAppointmentStats(businessId: string) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInZone(await getBusinessTimeZone(businessId));
 
   const [todayCount, upcoming, pendingPaymentReview] = await Promise.all([
     prisma.appointment.count({

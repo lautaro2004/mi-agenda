@@ -63,6 +63,9 @@ export interface Business {
   // resolveSiteTemplate() en lib/booking-intent.ts). Un valor explícito es
   // una anulación manual desde Configuración > Sitio.
   siteTemplate: SiteTemplate | null;
+  // Zona horaria IANA del negocio (ver lib/time-zone.ts).
+  timeZone?: string;
+
   // ── Seña / depósito (ver modules/business/deposit.ts) ──────────────────
   depositRequired: boolean;
   depositType: DepositType | null;
@@ -879,6 +882,10 @@ export interface Inquiry {
   nodoLeadId?: string | null;
   nodoSyncedAt?: string | null;
   nodoSyncError?: string | null;
+  campaignId?: string | null;
+  campaignName?: string | null;
+  attributionMethod?: string | null;
+  requestKind?: string | null;
 }
 
 // Slug del nivel base "Agenda interna" (no es un plan comercial). Vive acá y no

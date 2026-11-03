@@ -16,6 +16,7 @@ import { SlotPicker } from "@/components/public-site/booking/slot-picker";
 import { PAYMENT_PROOF_LIMITS } from "@/lib/payment-proof-limits";
 import { manualAppointmentSchema, type ManualAppointmentValues } from "@/lib/schemas";
 import { isBookableService, type Business, type Service } from "@/lib/types";
+import { todayInZone } from "@/lib/time-zone";
 
 interface BookingWidgetProps {
   slug: string;
@@ -33,6 +34,7 @@ interface BookingWidgetProps {
     | "depositAccountHolder"
     | "depositTaxId"
     | "depositInstructions"
+    | "timeZone"
   >;
   whatsappHref?: string | null;
   // Preselección opcional (ej. venís de "Reservar" en una card de servicio
@@ -57,8 +59,8 @@ interface ConfirmedBooking {
   pendingApproval?: boolean;
 }
 
-function todayIso(): string {
-  return new Date().toISOString().split("T")[0];
+function todayIso(timeZone?: string): string {
+  return todayInZone(timeZone);
 }
 
 function formatDate(dateStr: string): string {
@@ -113,7 +115,7 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
       customerName: "",
       customerPhone: "",
       customerEmail: "",
-      date: todayIso(),
+      date: todayIso(business.timeZone),
       startTime: "",
       notes: "",
       resourceId: undefined,
@@ -182,7 +184,7 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
       customerName: "",
       customerPhone: "",
       customerEmail: "",
-      date: todayIso(),
+      date: todayIso(business.timeZone),
       startTime: "",
       notes: "",
       resourceId: undefined,
@@ -330,7 +332,7 @@ export function BookingWidget({ slug, services, business, whatsappHref, initialS
         <div className="grid grid-cols-2 gap-4">
           <Field data-invalid={!!errors.date}>
             <FieldLabel htmlFor="booking-date">Fecha</FieldLabel>
-            <Input id="booking-date" type="date" min={todayIso()} {...register("date")} />
+            <Input id="booking-date" type="date" min={todayIso(business.timeZone)} {...register("date")} />
             <FieldError errors={[errors.date]} />
           </Field>
 

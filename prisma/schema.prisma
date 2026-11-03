@@ -59,6 +59,10 @@ model Business {
   // apagada (ver modules/inquiries/whatsapp-lead.ts).
   whatsappAiEnabled Boolean @default(true)
 
+  // Zona horaria IANA del negocio (ver lib/time-zone.ts). Define qué es "hoy"
+  // y "ahora" para turnos, disponibilidad y el asistente. Default: Argentina.
+  timeZone String @default("America/Argentina/Buenos_Aires")
+
   // Calificación de leads con IA (Consultas → Calificación). Con esto
   // prendido, las consultas de WhatsApp nacen "pending" y la IA las califica
   // contra leadIdealProfile analizando el chat (ver

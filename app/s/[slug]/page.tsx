@@ -199,6 +199,7 @@ export default async function PublicSitePage({ params }: PageProps) {
         title={leadsCopy.heroTitle}
         subtitle={leadsCopy.heroSubtitle}
         ctaLabel={leadsCopy.ctaLabel}
+        hero={leadFormConfig?.hero}
         services={visibleServices}
         imageUrl={
           // Portada → primera foto de la galería → foto del primer

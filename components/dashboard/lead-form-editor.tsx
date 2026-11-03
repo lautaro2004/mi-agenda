@@ -10,12 +10,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { requestJson } from "@/lib/api-client";
 import {
+  DEFAULT_BADGE_TEXT,
+  DEFAULT_HERO,
   DEFAULT_LEAD_FORM,
   MAX_CUSTOM_QUESTIONS,
+  MAX_HERO_CARD_ITEMS,
   MAX_QUESTION_OPTIONS,
   leadFormConfigSchema,
   newQuestionId,
   type FieldMode,
+  type HeroConfig,
   type LeadCustomQuestion,
   type LeadFormConfig,
   type StandardLeadField,
@@ -61,6 +65,12 @@ export function LeadFormEditor() {
     setDraft((d) => d && { ...d, fields: { ...d.fields, [key]: { ...d.fields[key], ...patch } } });
   }
 
+  const hero: HeroConfig = draft.hero ?? DEFAULT_HERO;
+
+  function setHero(patch: Partial<HeroConfig>) {
+    setDraft((d) => d && { ...d, hero: { ...(d.hero ?? DEFAULT_HERO), ...patch } });
+  }
+
   function setQuestion(id: string, patch: Partial<LeadCustomQuestion>) {
     setDraft((d) => d && { ...d, custom: d.custom.map((q) => (q.id === id ? { ...q, ...patch } : q)) });
   }
@@ -86,6 +96,12 @@ export function LeadFormEditor() {
         options: q.type === "select" ? [...new Set(q.options.map((o) => o.trim()).filter(Boolean))] : [],
       })),
     };
+    if (cleaned.hero) {
+      cleaned.hero = {
+        ...cleaned.hero,
+        card: { ...cleaned.hero.card, items: cleaned.hero.card.items.map((i) => i.trim()).filter(Boolean) },
+      };
+    }
     const parsed = leadFormConfigSchema.safeParse(cleaned);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Revisá el formulario.");
@@ -108,7 +124,7 @@ export function LeadFormEditor() {
   }
 
   async function reset() {
-    if (!window.confirm("¿Volver al formulario estándar? Se borran tus preguntas propias.")) return;
+    if (!window.confirm("¿Volver al formulario estándar? Se borran tus preguntas propias y los cambios del encabezado.")) return;
     setBusy(true);
     try {
       const { config } = await requestJson<{ config: LeadFormConfig }>("/api/business/lead-form", { method: "DELETE" });
@@ -274,6 +290,97 @@ export function LeadFormEditor() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="mt-8 border-t border-border pt-6">
+        <h4 className="text-sm font-semibold text-foreground">Encabezado de la página</h4>
+        <p className="mt-1 max-w-prose text-xs text-muted-foreground">
+          Cambiá los textos y sacá lo que no quieras mostrar. Si dejás un texto vacío se usa el automático (el nombre de
+          tu negocio y tus servicios).
+        </p>
+
+        <div className="mt-4 space-y-4 rounded-xl border border-border p-4">
+          <div>
+            <label className="text-xs font-medium text-foreground" htmlFor="hero-brand">
+              Título junto al logo
+            </label>
+            <Input
+              id="hero-brand"
+              className="mt-1.5 max-w-sm"
+              placeholder="Nombre de tu negocio"
+              maxLength={60}
+              value={hero.brandName}
+              onChange={(e) => setHero({ brandName: e.target.value })}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(
+              [
+                ["showLogo", "Mostrar el logo"],
+                ["showCategory", "Mostrar el rubro"],
+                ["showChecklist", "Lista de servicios con tildes"],
+                ["showWhatsappButton", "Botón “Escribir por WhatsApp”"],
+              ] as const
+            ).map(([key, text]) => (
+              <label key={key} className="flex items-center gap-2 text-sm text-foreground">
+                <Switch checked={hero[key]} onCheckedChange={(v) => setHero({ [key]: v })} />
+                {text}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-border p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Switch checked={hero.card.show} onCheckedChange={(show) => setHero({ card: { ...hero.card, show } })} />
+            Tarjeta flotante (abajo a la izquierda de la imagen)
+          </label>
+          {hero.card.show && (
+            <div className="mt-3 space-y-3">
+              <Input
+                aria-label="Título de la tarjeta"
+                placeholder="Título (por defecto, el nombre de tu negocio)"
+                maxLength={60}
+                value={hero.card.title}
+                onChange={(e) => setHero({ card: { ...hero.card, title: e.target.value } })}
+              />
+              <Input
+                aria-label="Ítems de la tarjeta separados por coma"
+                placeholder="Por defecto, tus servicios. O escribí: Asesoramiento, Evaluación, Alta"
+                value={hero.card.items.join(", ")}
+                onChange={(e) =>
+                  setHero({
+                    card: {
+                      ...hero.card,
+                      items: e.target.value
+                        .split(",")
+                        .map((o) => o.trimStart())
+                        .slice(0, MAX_HERO_CARD_ITEMS),
+                    },
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">Ítems separados por coma, hasta {MAX_HERO_CARD_ITEMS}.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 rounded-xl border border-border p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Switch checked={hero.badge.show} onCheckedChange={(show) => setHero({ badge: { ...hero.badge, show } })} />
+            Burbuja flotante (arriba a la derecha de la imagen)
+          </label>
+          {hero.badge.show && (
+            <Input
+              aria-label="Texto de la burbuja"
+              className="mt-3 max-w-sm"
+              placeholder={DEFAULT_BADGE_TEXT}
+              maxLength={40}
+              value={hero.badge.text}
+              onChange={(e) => setHero({ badge: { ...hero.badge, text: e.target.value } })}
+            />
+          )}
+        </div>
       </div>
 
       {dirty && (

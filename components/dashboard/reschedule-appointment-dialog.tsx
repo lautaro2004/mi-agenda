@@ -27,6 +27,8 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { ResourcePicker, type ResourceOption } from "@/components/dashboard/resource-picker";
 import { requestJson } from "@/lib/api-client";
 import type { Appointment } from "@/lib/types";
+import { todayInZone } from "@/lib/time-zone";
+import { useBusinessTimeZone } from "@/lib/use-business-time-zone";
 import { rescheduleAppointmentSchema, type RescheduleAppointmentValues } from "@/lib/schemas";
 
 interface RescheduleAppointmentDialogProps {
@@ -35,8 +37,8 @@ interface RescheduleAppointmentDialogProps {
   onRescheduled: (appointment: Appointment) => void;
 }
 
-function todayIso(): string {
-  return new Date().toISOString().split("T")[0];
+function todayIso(timeZone?: string): string {
+  return todayInZone(timeZone);
 }
 
 // Mismo motor y el mismo selector de recursos (ResourcePicker) que "Agendar
@@ -48,6 +50,7 @@ export function RescheduleAppointmentDialog({
   appointment,
   onRescheduled,
 }: RescheduleAppointmentDialogProps) {
+  const timeZone = useBusinessTimeZone();
   const [open, setOpen] = React.useState(false);
   const [slots, setSlots] = React.useState<string[] | null>(null);
   const [loadingSlots, setLoadingSlots] = React.useState(false);
@@ -187,7 +190,7 @@ export function RescheduleAppointmentDialog({
                 <Input
                   id="reschedule-date"
                   type="date"
-                  min={todayIso()}
+                  min={todayIso(timeZone)}
                   aria-invalid={!!errors.date}
                   {...register("date")}
                 />

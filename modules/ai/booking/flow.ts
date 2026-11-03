@@ -10,6 +10,8 @@ import type { AIResponse } from "@/modules/ai/types";
 import type { BusinessContext } from "@/modules/ai/providers/base";
 import { conversationRepository, type ConversationRef } from "@/modules/whatsapp/conversations/repository";
 import { isBookableService } from "@/modules/business/service";
+import { getBusinessTimeZone } from "@/modules/business/time-zone";
+import { todayInZone } from "@/lib/time-zone";
 
 import type { BookingSession, BookingStep } from "./types";
 
@@ -91,9 +93,12 @@ interface DateResult {
   weekday: WeekDay;
 }
 
-export function parseUserDate(message: string): DateResult | null {
+export function parseUserDate(message: string, timeZone?: string, now: Date = new Date()): DateResult | null {
   const text = message.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const today = startOfDay(new Date());
+  // "Hoy" es el día calendario en la zona del negocio (no el del servidor, que
+  // corre en UTC y pasa a "mañana" a las 21 h de Argentina).
+  const [ty, tm, td] = todayInZone(timeZone, now).split("-").map(Number);
+  const today = new Date(ty, tm - 1, td);
 
   if (/\bhoy\b/.test(text)) {
     return { date: today, label: "hoy", weekday: JS_DAY_TO_WEEKDAY[today.getDay()] };
@@ -305,7 +310,7 @@ async function handleNeedDate(
   conversationId: ConversationRef,
   context: BusinessContext,
 ): Promise<AIResponse> {
-  const parsed = parseUserDate(message);
+  const parsed = parseUserDate(message, await getBusinessTimeZone(context.business.id));
 
   if (!parsed) {
     updateState(conversationId, "COLLECTING_INTENT", { ...session, step: "need_date" });
@@ -629,7 +634,7 @@ async function handleRescheduleDate(
   conversationId: ConversationRef,
   context: BusinessContext,
 ): Promise<AIResponse> {
-  const parsed = parseUserDate(message);
+  const parsed = parseUserDate(message, await getBusinessTimeZone(context.business.id));
 
   if (!parsed) {
     updateState(conversationId, "COLLECTING_INTENT", { ...session, step: "reschedule_date" });
