@@ -14,6 +14,8 @@ export function TrackingSettings() {
   const [draft, setDraft] = React.useState<TrackingConfig>(EMPTY_TRACKING);
   const [paste, setPaste] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  // Resultado de la última detección: visible en pantalla (no solo un aviso que se va).
+  const [detected, setDetected] = React.useState<{ ok: boolean; text: string } | null>(null);
 
   React.useEffect(() => {
     requestJson<{ config: TrackingConfig }>("/api/business/site-tracking")
@@ -26,19 +28,26 @@ export function TrackingSettings() {
 
   function detect(text: string) {
     setPaste(text);
-    if (!text.trim()) return;
-    const ids = extractTrackingIds(text);
-    const found = [ids.gtmId && "GTM", ids.metaPixelId && "píxel de Meta", ids.ga4Id && "GA4"].filter(Boolean);
-    if (found.length === 0) {
-      toast.error("No encontramos ningún ID en ese texto. Podés cargarlo a mano abajo.");
+    if (!text.trim()) {
+      setDetected(null);
       return;
     }
+    const ids = extractTrackingIds(text);
+    const found = [
+      ids.metaPixelId && `píxel de Meta (${ids.metaPixelId})`,
+      ids.gtmId && `GTM (${ids.gtmId})`,
+      ids.ga4Id && `GA4 (${ids.ga4Id})`,
+    ].filter(Boolean);
+    if (found.length === 0) {
+      setDetected({ ok: false, text: "No encontramos ningún ID en ese texto. Cargalo a mano en los campos de abajo." });
+      return;
+    }
+    setDetected({ ok: true, text: `Detectamos: ${found.join(", ")}. Apretá “Guardar” para aplicarlo.` });
     setDraft((d) => ({
       gtmId: ids.gtmId ?? d.gtmId,
       metaPixelId: ids.metaPixelId ?? d.metaPixelId,
       ga4Id: ids.ga4Id ?? d.ga4Id,
     }));
-    toast.success(`Detectamos: ${found.join(", ")}. Revisá y guardá.`);
   }
 
   async function save() {
@@ -60,6 +69,7 @@ export function TrackingSettings() {
       setSaved(config);
       setDraft(config);
       setPaste("");
+      setDetected(null);
       toast.success("Seguimiento guardado.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No pudimos guardar.");
@@ -91,6 +101,11 @@ export function TrackingSettings() {
           value={paste}
           onChange={(e) => detect(e.target.value)}
         />
+        {detected && (
+          <p className={detected.ok ? "mt-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400" : "mt-1.5 text-xs font-medium text-destructive"}>
+            {detected.text}
+          </p>
+        )}
         <p className="mt-1.5 text-xs text-muted-foreground">
           Solo leemos el ID. El código que pegues no se guarda ni se ejecuta: el sitio usa siempre el snippet estándar de
           cada plataforma con tu ID.
@@ -119,16 +134,25 @@ export function TrackingSettings() {
         <li>Si el píxel de Meta ya está dentro de GTM, no lo cargues también acá.</li>
       </ul>
 
-      {dirty && (
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => { setDraft(saved ?? EMPTY_TRACKING); setPaste(""); }}>
+      <div className="mt-4 flex items-center justify-end gap-2">
+        {dirty && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              setDraft(saved ?? EMPTY_TRACKING);
+              setPaste("");
+              setDetected(null);
+            }}
+          >
             Cancelar
           </Button>
-          <Button size="sm" disabled={busy} onClick={save}>
-            {busy ? "Guardando…" : "Guardar"}
-          </Button>
-        </div>
-      )}
+        )}
+        <Button size="sm" disabled={busy || !dirty} onClick={save}>
+          {busy ? "Guardando…" : dirty ? "Guardar" : "Guardado"}
+        </Button>
+      </div>
     </section>
   );
 }
