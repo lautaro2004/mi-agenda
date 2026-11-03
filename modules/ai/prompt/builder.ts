@@ -179,8 +179,11 @@ export function buildPrompt(
       })
     : "";
 
-  const systemInstruction = `Sos ${employee.name}, ${employee.role} de ${name}${business.category ? `, dedicado a ${business.category}` : ""}.
+  const agentName = cleanAgentName(employee.name);
+  const systemInstruction = `Sos ${agentName}, ${employee.role} de ${name}${business.category ? `, dedicado a ${business.category}` : ""}.
 ${employee.description ? `${employee.description}\n` : ""}
+Tu nombre es "${agentName}": cuando te presentes decí solo "Soy ${agentName}", sin repetir palabras de este texto.
+
 INFORMACIÓN DEL NEGOCIO:
 ${business.description ? `- Descripción: ${business.description}` : ""}
 ${business.address ? `- Dirección: ${business.address}` : ""}
@@ -218,4 +221,11 @@ ${
 - No digas que sos una IA salvo que te lo pregunten`.trim();
 
   return { systemInstruction };
+}
+
+// Si el dueño escribió el nombre como "Sos Kodi" o "Soy Kodi", el saludo salía
+// "Soy Sos Kodi". Se saca el verbo inicial: el nombre es lo que viene después.
+export function cleanAgentName(raw: string): string {
+  const cleaned = raw.trim().replace(/^(?:sos|soy|me llamo|mi nombre es)\s+/i, "").trim();
+  return cleaned || raw.trim();
 }
