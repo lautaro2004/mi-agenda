@@ -387,6 +387,10 @@ class WhatsAppConnectionManager {
 
     const connection = this.getConnection(businessId);
     if (!connection.aiEnabled) return;
+    // Horario de la IA: dentro del horario laboral configurado atiende una
+    // persona (la conversación queda para el equipo, no se pierde).
+    const { aiAllowedNow } = await import("@/modules/whatsapp/ai-schedule");
+    if (!(await aiAllowedNow(businessId))) return;
 
     if (!conversation || conversation.manualMode) return;
 

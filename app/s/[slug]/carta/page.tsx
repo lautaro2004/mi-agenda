@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { redirectQuery } from "@/lib/slug";
+import { notFound, permanentRedirect } from "next/navigation";
 
-import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug, getRedirectTargetSlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 // Misma fuente que /s/[slug] (getBusinessState) — nunca un query aparte.
@@ -41,10 +43,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 // nativo con fallback HTML puro, "pantalla completa"/"descargar" son links
 // directos al PDF — no hace falta useState ni JS en el cliente para nada de
 // esto.
-export default async function MenuPage({ params }: PageProps) {
+export default async function MenuPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const business = await loadMenu(slug);
-  if (!business) notFound();
+  if (!business) {
+    // QR impresos con el slug anterior: siguen llegando a la carta.
+    const target = await getRedirectTargetSlug(slug);
+    if (target) permanentRedirect(`/s/${target}/carta${redirectQuery(await searchParams)}`);
+    notFound();
+  }
 
   const pdfUrl = business.menuPdfUrl!;
 

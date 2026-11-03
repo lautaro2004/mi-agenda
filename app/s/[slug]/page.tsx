@@ -1,9 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
 
-import { notFound } from "next/navigation";
+import { redirectQuery } from "@/lib/slug";
+import { notFound, permanentRedirect } from "next/navigation";
 
-import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug, getRedirectTargetSlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { getActiveServiceResources } from "@/modules/business/resource";
 import { listActiveGalleryBlocks } from "@/modules/business/gallery";
@@ -61,6 +62,7 @@ import { LeadsFinalCta } from "@/components/public-site/leads/leads-final-cta";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 // Único punto de lectura del sitio público: Business + SeoConfig + Services +
@@ -119,10 +121,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function PublicSitePage({ params }: PageProps) {
+export default async function PublicSitePage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const site = await loadSite(slug);
-  if (!site) notFound();
+  if (!site) {
+    // Slug anterior de un negocio que cambió su URL: redirige al actual.
+    const target = await getRedirectTargetSlug(slug);
+    if (target) permanentRedirect(`/s/${target}${redirectQuery(await searchParams)}`);
+    notFound();
+  }
 
   const { business, services, faqs, schedule, galleryBlocks, landingCopy } = site;
   const seo = site.seo ?? buildFallbackSeoConfig(business);

@@ -15,6 +15,7 @@ import { LandingCopyEditor } from "@/components/dashboard/landing-copy-editor";
 import { LeadFormEditor } from "@/components/dashboard/lead-form-editor";
 import { SiteSectionsEditor } from "@/components/dashboard/site-sections-editor";
 import { SiteNavEditor } from "@/components/dashboard/site-nav-editor";
+import { SlugEditor } from "@/components/dashboard/slug-editor";
 import { requestJson } from "@/lib/api-client";
 import { ASSET_LIMITS } from "@/lib/asset-limits";
 import { HEX_COLOR_RE } from "@/lib/brand-color";
@@ -299,7 +300,9 @@ export default function SitioPage() {
           <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center">
             <div>
               <p className="text-xs font-medium text-muted-foreground">Tu sitio público</p>
-              <p className="mt-1 font-mono text-sm text-foreground">/s/{state.slug}</p>
+              <div className="mt-1">
+                <SlugEditor slug={state.slug} onChanged={(slug) => setState((prev) => (prev ? { ...prev, slug } : prev))} />
+              </div>
             </div>
             <Button variant="outline" render={<Link href={`/s/${state.slug}`} target="_blank" />} nativeButton={false}>
               Ver sitio público

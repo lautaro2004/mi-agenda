@@ -1,5 +1,6 @@
 "use client";
 
+import { AiScheduleCard } from "@/components/whatsapp/ai-schedule-card";
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -204,6 +205,8 @@ export default function WhatsAppConnectionPage() {
               </p>
             )}
           </div>
+
+          <AiScheduleCard aiEnabled={connection.aiEnabled} />
 
           {/* Limitación real del hosting actual: la conexión de WhatsApp (Baileys)
               necesita un proceso siempre encendido, y en el entorno serverless se

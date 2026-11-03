@@ -59,6 +59,9 @@ model Business {
   // apagada (ver modules/inquiries/whatsapp-lead.ts).
   whatsappAiEnabled Boolean @default(true)
 
+  // Horario de la IA de WhatsApp (ver lib/ai-schedule.ts). null = siempre.
+  whatsappAiSchedule Json?
+
   // Zona horaria IANA del negocio (ver lib/time-zone.ts). Define qué es "hoy"
   // y "ahora" para turnos, disponibilidad y el asistente. Default: Argentina.
   timeZone String @default("America/Argentina/Buenos_Aires")
@@ -113,6 +116,7 @@ model Business {
   whatsappCampaigns     WhatsappCampaign[]
   siteEvents            SiteEvent[]
   siteTracking          SiteTracking?
+  slugRedirects         SiteSlugRedirect[]
   whatsappAttributions  WhatsappCampaignAttribution[]
   memberships           Membership[]
   invitations           Invitation[]
@@ -1505,5 +1509,19 @@ model SiteTracking {
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@schema("nexo")
+}
+
+// Slugs anteriores de un negocio: /s/<oldSlug> redirige al slug actual para no
+// romper links ya compartidos. Un slug viejo queda reservado (nadie más puede
+// tomarlo) mientras exista la redirección.
+model SiteSlugRedirect {
+  oldSlug    String   @id
+  businessId String
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
   @@schema("nexo")
 }

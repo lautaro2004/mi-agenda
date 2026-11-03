@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
 import { isPublicWebEnabled } from "@/modules/billing/subscription";
+import { slugSchema } from "@/lib/slug";
 
 // Ej: "Mango IT" -> "mango-it". Determinístico, sin dependencias externas.
 function slugify(name: string): string {
@@ -68,3 +69,65 @@ export const getPublicBusinessIdBySlug = cache(async (slug: string): Promise<str
   if (!businessId) return null;
   return (await isPublicWebEnabled(businessId)) ? businessId : null;
 });
+
+// Slug actual al que debe redirigir un slug viejo (null si no hay redirección).
+export const getRedirectTargetSlug = cache(async (oldSlug: string): Promise<string | null> => {
+  try {
+    const row = await prisma.siteSlugRedirect.findUnique({
+      where: { oldSlug },
+      select: { business: { select: { slug: true } } },
+    });
+    return row?.business.slug ?? null;
+  } catch {
+    return null;
+  }
+});
+
+export type ChangeSlugResult =
+  | { ok: true; slug: string }
+  | { ok: false; reason: "invalid" | "taken"; message: string };
+
+// Cambia la URL pública. El slug viejo pasa a redirigir al nuevo (los links ya
+// compartidos siguen funcionando) y queda reservado. Si el negocio vuelve a un
+// slug propio anterior, se borra esa redirección.
+export async function changeSlug(businessId: string, input: string): Promise<ChangeSlugResult> {
+  const parsed = slugSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, reason: "invalid", message: parsed.error.issues[0]?.message ?? "Slug inválido" };
+  }
+  const next = parsed.data;
+
+  const current = await prisma.business.findUnique({ where: { id: businessId }, select: { slug: true } });
+  if (!current) return { ok: false, reason: "invalid", message: "Negocio no encontrado." };
+  if (current.slug === next) return { ok: true, slug: next };
+
+  const [owner, redirect] = await Promise.all([
+    prisma.business.findUnique({ where: { slug: next }, select: { id: true } }),
+    prisma.siteSlugRedirect.findUnique({ where: { oldSlug: next }, select: { businessId: true } }),
+  ]);
+  if (owner && owner.id !== businessId) return { ok: false, reason: "taken", message: "Esa URL ya está en uso, probá con otra." };
+  if (redirect && redirect.businessId !== businessId) {
+    return { ok: false, reason: "taken", message: "Esa URL perteneció a otro negocio y está reservada." };
+  }
+
+  try {
+    await prisma.$transaction([
+      prisma.siteSlugRedirect.deleteMany({ where: { businessId, oldSlug: next } }),
+      prisma.business.update({ where: { id: businessId }, data: { slug: next } }),
+      ...(current.slug
+        ? [
+            prisma.siteSlugRedirect.upsert({
+              where: { oldSlug: current.slug },
+              update: { businessId },
+              create: { oldSlug: current.slug, businessId },
+            }),
+          ]
+        : []),
+    ]);
+  } catch (error) {
+    // Choque de unicidad por una carrera entre dos cambios simultáneos.
+    console.error("[slug] No se pudo cambiar el slug:", error instanceof Error ? error.message : error);
+    return { ok: false, reason: "taken", message: "No pudimos cambiar la URL. Probá con otra." };
+  }
+  return { ok: true, slug: next };
+}

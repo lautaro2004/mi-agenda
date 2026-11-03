@@ -1,8 +1,9 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { redirectQuery } from "@/lib/slug";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
 
-import { getPublicBusinessIdBySlug } from "@/modules/business/slug";
+import { getPublicBusinessIdBySlug, getRedirectTargetSlug } from "@/modules/business/slug";
 import { getBusinessState } from "@/modules/business/service";
 import { buildFallbackSeoConfig, getSeoConfig } from "@/modules/business/seo";
 import { getBrandColor, sanitizeHexColor } from "@/lib/brand-color";
@@ -22,7 +23,7 @@ import { buildSocialLinks } from "@/lib/social";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ servicio?: string }>;
+  searchParams: Promise<{ servicio?: string; [key: string]: string | string[] | undefined }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -52,7 +53,11 @@ export default async function ReservarPage({ params, searchParams }: PageProps) 
   const { servicio } = await searchParams;
 
   const businessId = await getPublicBusinessIdBySlug(slug);
-  if (!businessId) notFound();
+  if (!businessId) {
+    const target = await getRedirectTargetSlug(slug);
+    if (target) permanentRedirect(`/s/${target}/reservar${redirectQuery(await searchParams)}`);
+    notFound();
+  }
 
   const { business, services, faqs, schedule } = await getBusinessState(businessId);
   const bookableServices = services.filter(isBookableService);
