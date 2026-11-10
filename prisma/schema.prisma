@@ -1525,3 +1525,30 @@ model SiteSlugRedirect {
   @@index([businessId])
   @@schema("nexo")
 }
+
+// Pedidos de ayuda que mandan las personas desde Nodo (los ve Superadmin).
+// Sin relación Prisma a propósito: la FK vive en la migración y el nombre del
+// negocio se resuelve al listar.
+model SupportTicket {
+  id         String    @id @default(cuid())
+  businessId String
+  userId     String
+  userName   String
+  userEmail  String
+  product    String    @default("nodo")
+  subject    String?
+  message    String
+  pagePath   String?
+  userAgent  String?
+  // open | in_progress | resolved
+  status     String    @default("open")
+  adminNote  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+  resolvedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([businessId])
+  @@index([userId, createdAt])
+  @@schema("nexo")
+}
